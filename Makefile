@@ -1,4 +1,4 @@
-.PHONY: test test-unit test-integration test-all coverage clean
+.PHONY: test test-unit test-integration test-all coverage clean release-patch release-minor release-major
 
 # Run unit tests only
 test-unit:
@@ -48,5 +48,33 @@ build:
 # Install the binary
 install: build
 	cp bin/db-migrator $(GOPATH)/bin/
+
+# Release commands
+release-patch:
+	@echo "Creating patch release..."
+	@current_version=$$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0"); \
+	new_version=$$(echo $$current_version | awk -F. '{$$3 = $$3 + 1; print $$1"."$$2"."$$3}'); \
+	echo "Bumping from $$current_version to $$new_version"; \
+	git tag $$new_version; \
+	git push origin $$new_version; \
+	echo "Released $$new_version"
+
+release-minor:
+	@echo "Creating minor release..."
+	@current_version=$$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0"); \
+	new_version=$$(echo $$current_version | awk -F. '{$$2 = $$2 + 1; $$3 = 0; print $$1"."$$2"."$$3}'); \
+	echo "Bumping from $$current_version to $$new_version"; \
+	git tag $$new_version; \
+	git push origin $$new_version; \
+	echo "Released $$new_version"
+
+release-major:
+	@echo "Creating major release..."
+	@current_version=$$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0"); \
+	new_version=$$(echo $$current_version | awk -F. '{$$1 = $$1 + 1; $$2 = 0; $$3 = 0; print $$1"."$$2"."$$3}' | sed 's/^v/v/'); \
+	echo "Bumping from $$current_version to $$new_version"; \
+	git tag $$new_version; \
+	git push origin $$new_version; \
+	echo "Released $$new_version"
 
 .DEFAULT_GOAL := test
