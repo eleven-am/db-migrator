@@ -1,8 +1,9 @@
 package testing
 
 import (
-	"github.com/eleven-am/db-migrator/internal/parser"
 	"strings"
+
+	"github.com/eleven-am/db-migrator/internal/parser"
 )
 
 // CreateTestModel creates a test model for testing
@@ -24,12 +25,9 @@ func CreateTestField(name, dbType string, tags ...string) parser.FieldDefinition
 		DBDef:  make(map[string]string),
 	}
 
-	// Set type in dbdef
 	field.DBDef["type"] = dbType
 
-	// Parse tags
 	for _, tag := range tags {
-		// Add tags as flags (empty value) in DBDef map
 		field.DBDef[tag] = ""
 	}
 

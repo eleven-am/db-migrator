@@ -2,10 +2,11 @@ package cmd
 
 import (
 	"fmt"
-	generator2 "github.com/eleven-am/db-migrator/internal/generator"
-	"github.com/eleven-am/db-migrator/internal/parser"
 	"os"
 	"path/filepath"
+
+	generator2 "github.com/eleven-am/db-migrator/internal/generator"
+	"github.com/eleven-am/db-migrator/internal/parser"
 
 	"github.com/spf13/cobra"
 )
@@ -30,13 +31,11 @@ func init() {
 }
 
 func runGenerate(cmd *cobra.Command, args []string) error {
-	// Convert to absolute path
 	absPath, err := filepath.Abs(generatePackage)
 	if err != nil {
 		return fmt.Errorf("failed to resolve package path: %w", err)
 	}
 
-	// Parse the structs
 	fmt.Printf("Parsing structs from: %s\n", absPath)
 	sp := parser.NewStructParser()
 	structs, err := sp.ParseDirectory(absPath)
@@ -50,18 +49,15 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("Found %d structs with dbdef tags\n", len(structs))
 
-	// Generate schema
 	sg := generator2.NewSchemaGenerator()
 	schema, err := sg.GenerateSchema(structs)
 	if err != nil {
 		return fmt.Errorf("failed to generate schema: %w", err)
 	}
 
-	// Generate SQL
 	sqlGen := generator2.NewSQLGenerator()
 	sql := sqlGen.GenerateSchema(schema)
 
-	// Write to file
 	outputPath, err := filepath.Abs(generateOutput)
 	if err != nil {
 		return fmt.Errorf("failed to resolve output path: %w", err)

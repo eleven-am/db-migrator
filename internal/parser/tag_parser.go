@@ -23,7 +23,6 @@ func (p *TagParser) ParseDBDefTag(tagValue string) map[string]string {
 		return attributes
 	}
 
-	// Split by semicolon to get individual attributes
 	parts := strings.Split(tagValue, ";")
 
 	for _, part := range parts {
@@ -32,15 +31,12 @@ func (p *TagParser) ParseDBDefTag(tagValue string) map[string]string {
 			continue
 		}
 
-		// Check if it's a key:value pair or just a flag
 		if strings.Contains(part, ":") {
 			kv := strings.SplitN(part, ":", 2)
 			if len(kv) == 2 {
 				key := strings.TrimSpace(kv[0])
 				value := strings.TrimSpace(kv[1])
-				
-				// For multiple values with same key (e.g., multiple indexes), 
-				// append with semicolon separator
+
 				if existing, exists := attributes[key]; exists {
 					attributes[key] = existing + ";" + value
 				} else {
@@ -48,7 +44,6 @@ func (p *TagParser) ParseDBDefTag(tagValue string) map[string]string {
 				}
 			}
 		} else {
-			// It's a flag (like "primary_key", "not_null", "unique")
 			attributes[part] = ""
 		}
 	}
@@ -64,7 +59,6 @@ func (p *TagParser) ValidateDBDefTag(tagValue string) error {
 
 	attributes := p.ParseDBDefTag(tagValue)
 
-	// Validate known attributes
 	for key, value := range attributes {
 		switch key {
 		case "type":
@@ -88,12 +82,10 @@ func (p *TagParser) ValidateDBDefTag(tagValue string) error {
 				return fmt.Errorf("invalid prev hint '%s': %w", value, err)
 			}
 		case "primary_key", "not_null", "unique", "auto_increment":
-			// These are flags - no value validation needed
 			if value != "" {
 				return fmt.Errorf("flag attribute '%s' should not have a value", key)
 			}
 		default:
-			// Unknown attribute - warn but don't error
 			fmt.Printf("Warning: unknown dbdef attribute '%s'\n", key)
 		}
 	}
@@ -107,47 +99,34 @@ func (p *TagParser) validateType(typeValue string) error {
 		return fmt.Errorf("type cannot be empty")
 	}
 
-	// Common PostgreSQL types
 	validTypes := map[string]bool{
-		// Integer types
 		"smallint": true, "integer": true, "bigint": true,
 		"smallserial": true, "serial": true, "bigserial": true,
 
-		// Numeric types
 		"decimal": true, "numeric": true, "real": true, "double precision": true,
 
-		// Character types
 		"char": true, "varchar": true, "text": true,
 
-		// Date/time types
 		"timestamp": true, "timestamptz": true, "date": true, "time": true, "timetz": true,
 		"interval": true,
 
-		// Boolean
 		"boolean": true, "bool": true,
 
-		// Binary
 		"bytea": true,
 
-		// JSON
 		"json": true, "jsonb": true,
 
-		// UUID and CUID
-		"uuid": true,
-		"cuid": true,
+		"uuid":  true,
+		"cuid":  true,
 		"cuid2": true,
 
-		// Arrays (basic form)
 		"text[]": true, "integer[]": true, "uuid[]": true,
 
-		// Network types
 		"inet": true, "cidr": true, "macaddr": true,
 
-		// Geometric types
 		"point": true, "line": true, "lseg": true, "box": true, "path": true, "polygon": true, "circle": true,
 	}
 
-	// Check for parameterized types like varchar(255), decimal(10,2)
 	baseType := typeValue
 	if idx := strings.Index(typeValue, "("); idx != -1 {
 		baseType = typeValue[:idx]
@@ -166,7 +145,6 @@ func (p *TagParser) validateDefault(defaultValue string) error {
 		return fmt.Errorf("default value cannot be empty")
 	}
 
-	// Common PostgreSQL default functions
 	commonDefaults := []string{
 		"now()", "current_timestamp", "current_date", "current_time",
 		"gen_random_uuid()", "uuid_generate_v4()",
@@ -181,19 +159,16 @@ func (p *TagParser) validateDefault(defaultValue string) error {
 		}
 	}
 
-	// Check for quoted string literals
 	if (strings.HasPrefix(defaultValue, "'") && strings.HasSuffix(defaultValue, "'")) ||
 		(strings.HasPrefix(defaultValue, "\"") && strings.HasSuffix(defaultValue, "\"")) {
 		return nil
 	}
 
-	// Check for numeric literals
 	if strings.ContainsAny(defaultValue, "0123456789") &&
 		!strings.ContainsAny(defaultValue, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ") {
 		return nil
 	}
 
-	// For complex expressions, we'll trust the user
 	fmt.Printf("Warning: complex default expression '%s' - please verify manually\n", defaultValue)
 	return nil
 }
@@ -204,7 +179,6 @@ func (p *TagParser) validateForeignKey(fkValue string) error {
 		return fmt.Errorf("foreign key reference cannot be empty")
 	}
 
-	// Format should be: table.column
 	parts := strings.Split(fkValue, ".")
 	if len(parts) != 2 {
 		return fmt.Errorf("foreign key must be in format 'table.column', got: %s", fkValue)
@@ -229,8 +203,6 @@ func (p *TagParser) validateCheck(checkValue string) error {
 		return fmt.Errorf("check constraint cannot be empty")
 	}
 
-	// Basic validation - just ensure it's not empty
-	// Complex constraint validation would require SQL parsing
 	return nil
 }
 
@@ -240,7 +212,6 @@ func (p *TagParser) validatePrev(prevValue string) error {
 		return fmt.Errorf("prev hint cannot be empty")
 	}
 
-	// Should be a valid identifier
 	if !isValidIdentifier(prevValue) {
 		return fmt.Errorf("prev hint must be a valid identifier: %s", prevValue)
 	}
@@ -254,13 +225,11 @@ func isValidIdentifier(s string) bool {
 		return false
 	}
 
-	// First character must be letter or underscore
 	first := s[0]
 	if !((first >= 'a' && first <= 'z') || (first >= 'A' && first <= 'Z') || first == '_') {
 		return false
 	}
 
-	// Remaining characters can be letters, digits, or underscores
 	for i := 1; i < len(s); i++ {
 		c := s[i]
 		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||

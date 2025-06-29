@@ -18,13 +18,11 @@ func NewDependencySorter(schema *DatabaseSchema) *DependencySorter {
 
 // SortTables returns tables sorted by dependencies (tables with no dependencies first)
 func (ds *DependencySorter) SortTables() ([]SchemaTable, error) {
-	// Build dependency graph
 	dependencies := make(map[string][]string)
 	for tableName, table := range ds.tables {
 		dependencies[tableName] = ds.getTableDependencies(table)
 	}
 
-	// Topological sort
 	sorted := make([]SchemaTable, 0, len(ds.tables))
 	visited := make(map[string]bool)
 	visiting := make(map[string]bool)
@@ -40,9 +38,8 @@ func (ds *DependencySorter) SortTables() ([]SchemaTable, error) {
 
 		visiting[tableName] = true
 
-		// Visit dependencies first
 		for _, dep := range dependencies[tableName] {
-			if dep != tableName { // Skip self-references
+			if dep != tableName {
 				if err := visit(dep); err != nil {
 					return err
 				}
@@ -56,7 +53,6 @@ func (ds *DependencySorter) SortTables() ([]SchemaTable, error) {
 		return nil
 	}
 
-	// Visit all tables
 	for tableName := range ds.tables {
 		if err := visit(tableName); err != nil {
 			return nil, err
@@ -76,7 +72,6 @@ func (ds *DependencySorter) getTableDependencies(table SchemaTable) []string {
 		}
 	}
 
-	// Convert to slice
 	result := make([]string, 0, len(deps))
 	for dep := range deps {
 		result = append(result, dep)

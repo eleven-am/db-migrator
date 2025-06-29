@@ -3,14 +3,14 @@ package cmd
 import (
 	"database/sql"
 	"fmt"
-	"github.com/eleven-am/db-migrator/internal/generator"
-	"github.com/eleven-am/db-migrator/internal/introspect"
-	"github.com/eleven-am/db-migrator/internal/parser"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/eleven-am/db-migrator/internal/generator"
+	"github.com/eleven-am/db-migrator/internal/introspect"
+	"github.com/eleven-am/db-migrator/internal/parser"
 
 	_ "github.com/lib/pq" // PostgreSQL driver
 	"github.com/spf13/cobra"
@@ -64,27 +64,22 @@ func init() {
 }
 
 func runMigrate(cmd *cobra.Command, args []string) error {
-	// Determine DSN based on provided flags
 	var dsn string
 	if dbURL != "" {
-		// Use URL if provided
 		dsn = dbURL
 	} else if dbUser != "" && dbName != "" {
-		// Build DSN from individual flags
 		dsn = fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
 			dbHost, dbPort, dbUser, dbPassword, dbName, dbSSLMode)
 	} else {
 		return fmt.Errorf("either --url or both --user and --dbname must be provided")
 	}
 
-	// Step 1: Ensure database exists if requested
 	if createDBIfNotExists {
 		if err := ensureDBExists(dsn); err != nil {
 			return err
 		}
 	}
 
-	// Step 2: Parse current Go structs
 	fmt.Println("Parsing Go structs...")
 	structParser := parser.NewStructParser()
 	models, err := structParser.ParseDirectory(packagePath)
@@ -94,20 +89,17 @@ func runMigrate(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("Found %d models in %s\n", len(models), packagePath)
 
-	// Step 3: Connect to database
 	db, err := sql.Open("postgres", dsn)
 	if err != nil {
 		return fmt.Errorf("failed to connect to database: %w", err)
 	}
 	defer db.Close()
 
-	// Use signature-based comparison
 	fmt.Println("Using signature-based comparison...")
 
 	enhancedGen := generator.NewEnhancedGenerator()
 	introspector := introspect.NewPostgreSQLIntrospector(db)
 
-	// Generate expected indexes and foreign keys from Go structs
 	var allStructIndexes []generator.IndexDefinition
 	var allStructForeignKeys []generator.ForeignKeyDefinition
 
@@ -125,7 +117,6 @@ func runMigrate(cmd *cobra.Command, args []string) error {
 		allStructForeignKeys = append(allStructForeignKeys, foreignKeys...)
 	}
 
-	// Get existing indexes and foreign keys from database
 	var allDBIndexes []generator.IndexDefinition
 	var allDBForeignKeys []generator.ForeignKeyDefinition
 
@@ -135,7 +126,6 @@ func runMigrate(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("failed to get indexes for %s: %w", model.TableName, err)
 		}
 
-		// Convert introspect types to generator types
 		for _, dbIdx := range dbIndexes {
 			genIdx := generator.IndexDefinition{
 				Name:       dbIdx.Name,
@@ -156,7 +146,6 @@ func runMigrate(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("failed to get foreign keys for %s: %w", model.TableName, err)
 		}
 
-		// Convert introspect types to generator types
 		for _, dbFK := range dbForeignKeys {
 			genFK := generator.ForeignKeyDefinition{
 				Name:              dbFK.Name,
@@ -173,13 +162,11 @@ func runMigrate(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Compare schemas using signature-based approach
 	comparison, err := enhancedGen.CompareSchemas(allStructIndexes, allStructForeignKeys, allDBIndexes, allDBForeignKeys)
 	if err != nil {
 		return fmt.Errorf("failed to compare schemas: %w", err)
 	}
 
-	// Check for dangerous operations
 	if !enhancedGen.IsSafeOperation(comparison) && !allowDestructive {
 		fmt.Println("\nPOTENTIALLY DESTRUCTIVE OPERATIONS DETECTED:")
 
@@ -202,7 +189,6 @@ func runMigrate(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Generate safe SQL
 	upStatements, downStatements, err := enhancedGen.GenerateSafeSQL(comparison, allowDestructive)
 	if err != nil {
 		return fmt.Errorf("failed to generate SQL: %w", err)
@@ -217,20 +203,17 @@ func runMigrate(cmd *cobra.Command, args []string) error {
 		downSQL = strings.Join(downStatements, "\n\n")
 	}
 
-	// Print summary
 	fmt.Printf("\nSchema comparison summary:\n")
 	fmt.Printf("  Indexes to create: %d\n", len(comparison.IndexesToCreate))
 	fmt.Printf("  Indexes to drop: %d\n", len(comparison.IndexesToDrop))
 	fmt.Printf("  Foreign keys to create: %d\n", len(comparison.ForeignKeysToCreate))
 	fmt.Printf("  Foreign keys to drop: %d\n", len(comparison.ForeignKeysToDrop))
 
-	// Check if no changes detected
 	if upSQL == "" && downSQL == "" {
 		fmt.Println("No changes detected. Database is up to date!")
 		return nil
 	}
 
-	// Step 4: Handle output
 	if dryRun {
 		fmt.Println("\n=== UP Migration ===")
 		fmt.Println(upSQL)
@@ -239,11 +222,9 @@ func runMigrate(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Step 5: Execute SQL directly if --push flag is set
 	if pushToDB {
 		fmt.Println("\nExecuting migration on database...")
 
-		// Execute each UP statement
 		for i, stmt := range upStatements {
 			fmt.Printf("Executing statement %d/%d...\n", i+1, len(upStatements))
 			if _, err := db.Exec(stmt); err != nil {
@@ -255,7 +236,6 @@ func runMigrate(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Create migration files
 	timestamp := time.Now().UTC().Format("20060102150405")
 
 	if migrationName == "" {
@@ -266,18 +246,15 @@ func runMigrate(cmd *cobra.Command, args []string) error {
 	upFile := filepath.Join(outputDir, fmt.Sprintf("%s.up.sql", baseName))
 	downFile := filepath.Join(outputDir, fmt.Sprintf("%s.down.sql", baseName))
 
-	// Ensure output directory exists
-	if err := os.MkdirAll(outputDir, 0755); err != nil {
+	if err = os.MkdirAll(outputDir, 0755); err != nil {
 		return fmt.Errorf("failed to create output directory: %w", err)
 	}
 
-	// Write UP migration
-	if err := ioutil.WriteFile(upFile, []byte(upSQL), 0644); err != nil {
+	if err = os.WriteFile(upFile, []byte(upSQL), 0644); err != nil {
 		return fmt.Errorf("failed to write UP migration: %w", err)
 	}
 
-	// Write DOWN migration
-	if err := ioutil.WriteFile(downFile, []byte(downSQL), 0644); err != nil {
+	if err = os.WriteFile(downFile, []byte(downSQL), 0644); err != nil {
 		return fmt.Errorf("failed to write DOWN migration: %w", err)
 	}
 

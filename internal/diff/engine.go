@@ -2,9 +2,10 @@ package diff
 
 import (
 	"fmt"
-	"github.com/eleven-am/db-migrator/internal/generator"
 	"reflect"
 	"strings"
+
+	"github.com/eleven-am/db-migrator/internal/generator"
 )
 
 // Engine performs schema comparison and generates migration changes
@@ -38,19 +39,15 @@ func (e *Engine) Compare() (*DiffResult, error) {
 		Changes: make([]Change, 0),
 	}
 
-	// Extract rename hints from struct tags
 	e.extractRenameHints()
 
-	// Compare tables
 	tableDiffs := e.compareTables()
 
-	// Convert table diffs to changes
 	for _, diff := range tableDiffs {
 		changes := e.processTableDiff(diff)
 		result.Changes = append(result.Changes, changes...)
 	}
 
-	// Check for unsafe changes
 	for _, change := range result.Changes {
 		if change.IsUnsafe {
 			result.HasUnsafeChanges = true
@@ -58,7 +55,6 @@ func (e *Engine) Compare() (*DiffResult, error) {
 		}
 	}
 
-	// Generate summary
 	result.Summary = e.generateSummary(result)
 
 	return result, nil
@@ -66,45 +62,36 @@ func (e *Engine) Compare() (*DiffResult, error) {
 
 // extractRenameHints looks for rename hints in the new schema
 func (e *Engine) extractRenameHints() {
-	// This would parse "prev:" hints from dbdef tags
-	// For now, we'll rely on manually added hints
 }
 
 // compareTables compares all tables between schemas
 func (e *Engine) compareTables() []TableDiff {
 	diffs := make([]TableDiff, 0)
 
-	// Get sorted table names to ensure consistent ordering
 	tableNames := e.newSchema.GetTableNames()
 
-	// Check for new and modified tables
 	for _, tableName := range tableNames {
 		newTable := e.newSchema.Tables[tableName]
 		oldTable, exists := e.oldSchema.Tables[tableName]
 
 		if !exists {
-			// Table might be new or renamed
 			if renamed := e.checkTableRenamed(tableName); renamed != nil {
 				diffs = append(diffs, *renamed)
 			} else {
-				// New table
 				diffs = append(diffs, TableDiff{
 					TableName: tableName,
 					NewTable:  &newTable,
 				})
 			}
 		} else {
-			// Table exists - check for changes
 			if diff := e.compareTable(oldTable, newTable); diff != nil {
 				diffs = append(diffs, *diff)
 			}
 		}
 	}
 
-	// Check for dropped tables
 	for tableName, oldTable := range e.oldSchema.Tables {
 		if _, exists := e.newSchema.Tables[tableName]; !exists {
-			// Check if it was renamed
 			wasRenamed := false
 			for _, hint := range e.hints {
 				if hint.Type == "table" && hint.OldName == tableName {
@@ -114,7 +101,6 @@ func (e *Engine) compareTables() []TableDiff {
 			}
 
 			if !wasRenamed {
-				// Table was dropped
 				diffs = append(diffs, TableDiff{
 					TableName: tableName,
 					OldTable:  &oldTable,
@@ -158,21 +144,18 @@ func (e *Engine) compareTable(oldTable, newTable generator.SchemaTable) *TableDi
 
 	hasChanges := false
 
-	// Compare columns
 	columnChanges := e.compareColumns(oldTable, newTable)
 	if len(columnChanges) > 0 {
 		diff.ColumnChanges = columnChanges
 		hasChanges = true
 	}
 
-	// Compare indexes
 	indexChanges := e.compareIndexes(oldTable, newTable)
 	if len(indexChanges) > 0 {
 		diff.IndexChanges = indexChanges
 		hasChanges = true
 	}
 
-	// Compare constraints
 	constraintChanges := e.compareConstraints(oldTable, newTable)
 	if len(constraintChanges) > 0 {
 		diff.ConstraintChanges = constraintChanges
@@ -189,7 +172,6 @@ func (e *Engine) compareTable(oldTable, newTable generator.SchemaTable) *TableDi
 func (e *Engine) compareColumns(oldTable, newTable generator.SchemaTable) []ColumnChange {
 	changes := make([]ColumnChange, 0)
 
-	// Build column maps
 	oldColumns := make(map[string]generator.SchemaColumn)
 	for _, col := range oldTable.Columns {
 		oldColumns[col.Name] = col
@@ -200,10 +182,8 @@ func (e *Engine) compareColumns(oldTable, newTable generator.SchemaTable) []Colu
 		newColumns[col.Name] = col
 	}
 
-	// Check for new and modified columns
 	for _, newCol := range newTable.Columns {
 		if oldCol, exists := oldColumns[newCol.Name]; exists {
-			// Column exists - check for changes
 			if !e.columnsEqual(oldCol, newCol) {
 				changes = append(changes, ColumnChange{
 					Type:       ChangeTypeAlterColumn,
@@ -213,7 +193,6 @@ func (e *Engine) compareColumns(oldTable, newTable generator.SchemaTable) []Colu
 				})
 			}
 		} else {
-			// New column or renamed
 			if renamed := e.checkColumnRenamed(oldTable.Name, newCol.Name); renamed != nil {
 				changes = append(changes, *renamed)
 			} else {
@@ -226,10 +205,8 @@ func (e *Engine) compareColumns(oldTable, newTable generator.SchemaTable) []Colu
 		}
 	}
 
-	// Check for dropped columns
 	for _, oldCol := range oldTable.Columns {
 		if _, exists := newColumns[oldCol.Name]; !exists {
-			// Check if it was renamed
 			wasRenamed := false
 			for _, hint := range e.hints {
 				if hint.Type == "column" && hint.OldName == oldCol.Name {
@@ -255,7 +232,6 @@ func (e *Engine) compareColumns(oldTable, newTable generator.SchemaTable) []Colu
 func (e *Engine) checkColumnRenamed(tableName, newColumnName string) *ColumnChange {
 	for _, hint := range e.hints {
 		if hint.Type == "column" && hint.NewName == newColumnName {
-			// Find the old column
 			if oldTable, exists := e.oldSchema.Tables[tableName]; exists {
 				for _, oldCol := range oldTable.Columns {
 					if oldCol.Name == hint.OldName {
@@ -282,7 +258,6 @@ func (e *Engine) checkColumnRenamed(tableName, newColumnName string) *ColumnChan
 
 // columnsEqual checks if two columns are identical
 func (e *Engine) columnsEqual(col1, col2 generator.SchemaColumn) bool {
-	// Compare all relevant fields
 	if col1.Type != col2.Type {
 		return false
 	}
@@ -299,7 +274,6 @@ func (e *Engine) columnsEqual(col1, col2 generator.SchemaColumn) bool {
 		return false
 	}
 
-	// Compare default values
 	if (col1.DefaultValue == nil) != (col2.DefaultValue == nil) {
 		return false
 	}
@@ -307,7 +281,6 @@ func (e *Engine) columnsEqual(col1, col2 generator.SchemaColumn) bool {
 		return false
 	}
 
-	// Compare foreign keys
 	if (col1.ForeignKey == nil) != (col2.ForeignKey == nil) {
 		return false
 	}
@@ -320,7 +293,6 @@ func (e *Engine) columnsEqual(col1, col2 generator.SchemaColumn) bool {
 		}
 	}
 
-	// Compare check constraints
 	if (col1.CheckConstraint == nil) != (col2.CheckConstraint == nil) {
 		return false
 	}
@@ -335,7 +307,6 @@ func (e *Engine) columnsEqual(col1, col2 generator.SchemaColumn) bool {
 func (e *Engine) compareIndexes(oldTable, newTable generator.SchemaTable) []IndexChange {
 	changes := make([]IndexChange, 0)
 
-	// Build index maps
 	oldIndexes := make(map[string]generator.SchemaIndex)
 	for _, idx := range oldTable.Indexes {
 		oldIndexes[idx.Name] = idx
@@ -346,10 +317,8 @@ func (e *Engine) compareIndexes(oldTable, newTable generator.SchemaTable) []Inde
 		newIndexes[idx.Name] = idx
 	}
 
-	// Check for new and modified indexes
 	for _, newIdx := range newTable.Indexes {
 		if oldIdx, exists := oldIndexes[newIdx.Name]; exists {
-			// Index exists - check for changes
 			if !e.indexesEqual(oldIdx, newIdx) {
 				changes = append(changes, IndexChange{
 					Type:      ChangeTypeAlterIndex,
@@ -359,7 +328,6 @@ func (e *Engine) compareIndexes(oldTable, newTable generator.SchemaTable) []Inde
 				})
 			}
 		} else {
-			// New index
 			changes = append(changes, IndexChange{
 				Type:      ChangeTypeCreateIndex,
 				IndexName: newIdx.Name,
@@ -368,7 +336,6 @@ func (e *Engine) compareIndexes(oldTable, newTable generator.SchemaTable) []Inde
 		}
 	}
 
-	// Check for dropped indexes
 	for _, oldIdx := range oldTable.Indexes {
 		if _, exists := newIndexes[oldIdx.Name]; !exists {
 			changes = append(changes, IndexChange{
@@ -406,7 +373,6 @@ func (e *Engine) indexesEqual(idx1, idx2 generator.SchemaIndex) bool {
 func (e *Engine) compareConstraints(oldTable, newTable generator.SchemaTable) []ConstraintChange {
 	changes := make([]ConstraintChange, 0)
 
-	// Build constraint maps
 	oldConstraints := make(map[string]generator.SchemaConstraint)
 	for _, con := range oldTable.Constraints {
 		oldConstraints[con.Name] = con
@@ -417,13 +383,11 @@ func (e *Engine) compareConstraints(oldTable, newTable generator.SchemaTable) []
 		newConstraints[con.Name] = con
 	}
 
-	// Check for new and modified constraints
 	for _, newCon := range newTable.Constraints {
 		if oldCon, exists := oldConstraints[newCon.Name]; exists {
-			// Constraint exists - check for changes
 			if !e.constraintsEqual(oldCon, newCon) {
 				changes = append(changes, ConstraintChange{
-					Type:           ChangeTypeDropConstraint, // Drop and recreate
+					Type:           ChangeTypeDropConstraint,
 					ConstraintName: oldCon.Name,
 					OldConstraint:  &oldCon,
 				})
@@ -434,7 +398,6 @@ func (e *Engine) compareConstraints(oldTable, newTable generator.SchemaTable) []
 				})
 			}
 		} else {
-			// New constraint
 			changes = append(changes, ConstraintChange{
 				Type:           ChangeTypeAddConstraint,
 				ConstraintName: newCon.Name,
@@ -443,7 +406,6 @@ func (e *Engine) compareConstraints(oldTable, newTable generator.SchemaTable) []
 		}
 	}
 
-	// Check for dropped constraints
 	for _, oldCon := range oldTable.Constraints {
 		if _, exists := newConstraints[oldCon.Name]; !exists {
 			changes = append(changes, ConstraintChange{
@@ -475,16 +437,13 @@ func (e *Engine) constraintsEqual(con1, con2 generator.SchemaConstraint) bool {
 func (e *Engine) processTableDiff(diff TableDiff) []Change {
 	changes := make([]Change, 0)
 
-	// Handle table-level changes
 	if diff.OldTable == nil && diff.NewTable != nil {
-		// New table
 		changes = append(changes, Change{
 			Type:      ChangeTypeCreateTable,
 			TableName: diff.TableName,
 			NewValue:  diff.NewTable,
 		})
 	} else if diff.OldTable != nil && diff.NewTable == nil {
-		// Dropped table
 		changes = append(changes, Change{
 			Type:        ChangeTypeDropTable,
 			TableName:   diff.TableName,
@@ -493,7 +452,6 @@ func (e *Engine) processTableDiff(diff TableDiff) []Change {
 			SafetyNotes: "Dropping table will permanently delete all data",
 		})
 	} else if diff.IsRenamed {
-		// Renamed table
 		changes = append(changes, Change{
 			Type:      ChangeTypeRenameTable,
 			TableName: diff.OldName,
@@ -501,19 +459,16 @@ func (e *Engine) processTableDiff(diff TableDiff) []Change {
 		})
 	}
 
-	// Handle column changes
 	for _, colChange := range diff.ColumnChanges {
 		change := e.processColumnChange(diff.TableName, colChange)
 		changes = append(changes, change)
 	}
 
-	// Handle index changes
 	for _, idxChange := range diff.IndexChanges {
 		change := e.processIndexChange(diff.TableName, idxChange)
 		changes = append(changes, change)
 	}
 
-	// Handle constraint changes
 	for _, conChange := range diff.ConstraintChanges {
 		change := e.processConstraintChange(diff.TableName, conChange)
 		changes = append(changes, change)
@@ -545,7 +500,6 @@ func (e *Engine) processColumnChange(tableName string, colChange ColumnChange) C
 		change.OldValue = colChange.OldColumn
 		change.NewValue = colChange.NewColumn
 
-		// Check if alteration is unsafe
 		if e.isUnsafeColumnChange(colChange.OldColumn, colChange.NewColumn) {
 			change.IsUnsafe = true
 			change.SafetyNotes = e.getColumnChangeSafetyNotes(colChange.OldColumn, colChange.NewColumn)
@@ -562,15 +516,12 @@ func (e *Engine) processColumnChange(tableName string, colChange ColumnChange) C
 
 // isUnsafeColumnChange checks if a column change could cause data loss
 func (e *Engine) isUnsafeColumnChange(oldCol, newCol *generator.SchemaColumn) bool {
-	// Type changes that could lose data
 	if oldCol.Type != newCol.Type {
-		// Check for unsafe type conversions
 		if e.isUnsafeTypeChange(oldCol.Type, newCol.Type) {
 			return true
 		}
 	}
 
-	// Making nullable column NOT NULL without default
 	if oldCol.IsNullable && !newCol.IsNullable && newCol.DefaultValue == nil {
 		return true
 	}
@@ -580,7 +531,6 @@ func (e *Engine) isUnsafeColumnChange(oldCol, newCol *generator.SchemaColumn) bo
 
 // isUnsafeTypeChange checks if changing from one type to another could lose data
 func (e *Engine) isUnsafeTypeChange(oldType, newType string) bool {
-	// Define safe type conversions
 	safeConversions := map[string][]string{
 		"VARCHAR":   {"TEXT"},
 		"CHAR":      {"VARCHAR", "TEXT"},
@@ -590,16 +540,13 @@ func (e *Engine) isUnsafeTypeChange(oldType, newType string) bool {
 		"TIMESTAMP": {"TIMESTAMPTZ"},
 	}
 
-	// Normalize types
 	oldType = strings.ToUpper(strings.Split(oldType, "(")[0])
 	newType = strings.ToUpper(strings.Split(newType, "(")[0])
 
-	// Same type is always safe
 	if oldType == newType {
 		return false
 	}
 
-	// Check if conversion is in safe list
 	if safeTypes, exists := safeConversions[oldType]; exists {
 		for _, safe := range safeTypes {
 			if safe == newType {
@@ -642,8 +589,6 @@ func (e *Engine) processIndexChange(tableName string, idxChange IndexChange) Cha
 		change.OldValue = idxChange.OldIndex
 
 	case ChangeTypeAlterIndex:
-		// Indexes can't be altered, must drop and recreate
-		// This will be handled as two separate changes
 		change.Type = ChangeTypeDropIndex
 		change.OldValue = idxChange.OldIndex
 	}

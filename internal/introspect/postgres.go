@@ -10,14 +10,14 @@ import (
 
 // Column represents a database column definition
 type Column struct {
-	Name         string
-	Type         string
-	IsNullable   bool
-	DefaultValue *string
-	IsPrimaryKey bool
-	IsUnique     bool
+	Name            string
+	Type            string
+	IsNullable      bool
+	DefaultValue    *string
+	IsPrimaryKey    bool
+	IsUnique        bool
 	IsAutoIncrement bool
-	ForeignKey   *ForeignKeyInfo
+	ForeignKey      *ForeignKeyInfo
 }
 
 // ForeignKeyInfo represents foreign key constraint information
@@ -40,15 +40,15 @@ type Index struct {
 
 // IndexDefinition represents an enhanced index definition with signature-based matching
 type IndexDefinition struct {
-	Name         string
-	TableName    string
-	Columns      []string
-	IsUnique     bool
-	IsPrimary    bool
-	Method       string // btree, hash, gist, etc.
-	Where        string // partial index condition
-	Definition   string // full CREATE INDEX statement
-	Signature    string // computed signature for comparison
+	Name       string
+	TableName  string
+	Columns    []string
+	IsUnique   bool
+	IsPrimary  bool
+	Method     string
+	Where      string
+	Definition string
+	Signature  string
 }
 
 // ForeignKeyDefinition represents an enhanced foreign key definition
@@ -60,8 +60,8 @@ type ForeignKeyDefinition struct {
 	ReferencedColumns []string
 	OnDelete          string
 	OnUpdate          string
-	Definition        string // full constraint definition
-	Signature         string // computed signature for comparison
+	Definition        string
+	Signature         string
 }
 
 // Table represents a complete database table structure
@@ -75,7 +75,7 @@ type Table struct {
 // Constraint represents a table constraint
 type Constraint struct {
 	Name       string
-	Type       string // CHECK, UNIQUE, PRIMARY KEY, FOREIGN KEY
+	Type       string
 	Definition string
 	Columns    []string
 }
@@ -250,7 +250,7 @@ func (i *PostgreSQLIntrospector) getColumns(tableName string) ([]Column, error) 
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan column: %w", err)
 		}
-		
+
 		if defaultValue.Valid {
 			col.DefaultValue = &defaultValue.String
 		}
@@ -320,7 +320,6 @@ func (i *PostgreSQLIntrospector) getIndexes(tableName string) ([]Index, error) {
 			return nil, fmt.Errorf("failed to scan index: %w", err)
 		}
 
-		// Parse column names from aggregated string
 		if columnsStr != "" {
 			idx.Columns = strings.Split(columnsStr, ",")
 			for i := range idx.Columns {
@@ -394,7 +393,6 @@ func (i *PostgreSQLIntrospector) getConstraints(tableName string) ([]Constraint,
 			return nil, fmt.Errorf("failed to scan constraint: %w", err)
 		}
 
-		// Parse columns from comma-separated string
 		if columnsStr != "" {
 			constraint.Columns = strings.Split(columnsStr, ",")
 			for i := range constraint.Columns {
@@ -407,7 +405,6 @@ func (i *PostgreSQLIntrospector) getConstraints(tableName string) ([]Constraint,
 
 	return constraints, nil
 }
-
 
 // TableExists checks if a table exists in the database
 func (i *PostgreSQLIntrospector) TableExists(tableName string) (bool, error) {
@@ -499,7 +496,6 @@ func (i *PostgreSQLIntrospector) GetEnhancedIndexes(tableName string) ([]IndexDe
 			idx.Where = whereClause.String
 		}
 
-		// Parse columns
 		if columnsStr != "" {
 			idx.Columns = strings.Split(columnsStr, ",")
 			for i := range idx.Columns {
@@ -507,7 +503,6 @@ func (i *PostgreSQLIntrospector) GetEnhancedIndexes(tableName string) ([]IndexDe
 			}
 		}
 
-		// Generate signature for comparison using normalizer
 		normalizer := NewSQLNormalizer()
 		idx.Signature = normalizer.GenerateCanonicalSignature(
 			idx.TableName,
@@ -575,7 +570,6 @@ func (i *PostgreSQLIntrospector) GetEnhancedForeignKeys(tableName string) ([]For
 			return nil, fmt.Errorf("failed to scan enhanced foreign key: %w", err)
 		}
 
-		// Parse columns
 		if columnsStr != "" {
 			fk.Columns = strings.Split(columnsStr, ",")
 			for i := range fk.Columns {
@@ -583,7 +577,6 @@ func (i *PostgreSQLIntrospector) GetEnhancedForeignKeys(tableName string) ([]For
 			}
 		}
 
-		// Parse referenced columns
 		if refColumnsStr != "" {
 			fk.ReferencedColumns = strings.Split(refColumnsStr, ",")
 			for i := range fk.ReferencedColumns {
@@ -591,11 +584,9 @@ func (i *PostgreSQLIntrospector) GetEnhancedForeignKeys(tableName string) ([]For
 			}
 		}
 
-		// Convert action codes to readable names
 		fk.OnDelete = convertActionCode(deleteAction)
 		fk.OnUpdate = convertActionCode(updateAction)
 
-		// Generate signature for comparison
 		fk.Signature = generateForeignKeySignatureInternal(fk)
 
 		foreignKeys = append(foreignKeys, fk)
@@ -608,18 +599,15 @@ func (i *PostgreSQLIntrospector) GetEnhancedForeignKeys(tableName string) ([]For
 func generateForeignKeySignatureInternal(fk ForeignKeyDefinition) string {
 	normalizer := NewSQLNormalizer()
 	var parts []string
-	
-	// Table and columns (normalized)
+
 	parts = append(parts, "table:"+strings.ToLower(strings.TrimSpace(fk.TableName)))
 	normalizedCols := normalizer.NormalizeColumnList(fk.Columns, true)
 	parts = append(parts, "cols:"+strings.Join(normalizedCols, ","))
-	
-	// Referenced table and columns (normalized)
+
 	parts = append(parts, "ref_table:"+strings.ToLower(strings.TrimSpace(fk.ReferencedTable)))
 	normalizedRefCols := normalizer.NormalizeColumnList(fk.ReferencedColumns, true)
 	parts = append(parts, "ref_cols:"+strings.Join(normalizedRefCols, ","))
-	
-	// Actions (normalized and defaulted)
+
 	onDelete := strings.ToUpper(strings.TrimSpace(fk.OnDelete))
 	if onDelete == "" {
 		onDelete = "NO ACTION"
@@ -628,10 +616,10 @@ func generateForeignKeySignatureInternal(fk ForeignKeyDefinition) string {
 	if onUpdate == "" {
 		onUpdate = "NO ACTION"
 	}
-	
+
 	parts = append(parts, "on_delete:"+onDelete)
 	parts = append(parts, "on_update:"+onUpdate)
-	
+
 	return strings.Join(parts, "|")
 }
 

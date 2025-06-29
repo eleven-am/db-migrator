@@ -2,8 +2,9 @@ package diff
 
 import (
 	"fmt"
-	generator2 "github.com/eleven-am/db-migrator/internal/generator"
 	"strings"
+
+	generator2 "github.com/eleven-am/db-migrator/internal/generator"
 )
 
 // MigrationSQLGenerator generates SQL statements for schema changes
@@ -53,17 +54,13 @@ func (g *MigrationSQLGenerator) GenerateMigration(result *DiffResult) (upSQL, do
 	var upStatements []string
 	var downStatements []string
 
-	// Check if we need gen_cuid function
 	needsGenCuid := g.checkNeedsGenCuid(result.Changes)
 
-	// Add gen_cuid function if needed
 	if needsGenCuid {
 		upStatements = append(upStatements, g.generateGenCuidFunction())
-		// Add drop function to down migration
 		downStatements = append([]string{"DROP FUNCTION IF EXISTS gen_cuid();"}, downStatements...)
 	}
 
-	// Process changes in the correct order for UP migration
 	orderedChanges := g.orderChangesForUpMigration(result.Changes)
 
 	for _, change := range orderedChanges {
@@ -76,12 +73,10 @@ func (g *MigrationSQLGenerator) GenerateMigration(result *DiffResult) (upSQL, do
 			upStatements = append(upStatements, up)
 		}
 		if down != "" {
-			// Down statements are added in reverse order
 			downStatements = append([]string{down}, downStatements...)
 		}
 	}
 
-	// Add safety comments for unsafe changes
 	if result.HasUnsafeChanges {
 		upSQL = "-- WARNING: This migration contains potentially unsafe changes that could result in data loss\n"
 		upSQL += "-- Please review carefully before applying\n\n"
@@ -95,20 +90,8 @@ func (g *MigrationSQLGenerator) GenerateMigration(result *DiffResult) (upSQL, do
 
 // orderChangesForUpMigration orders changes for safe execution
 func (g *MigrationSQLGenerator) orderChangesForUpMigration(changes []Change) []Change {
-	// Order of operations for UP migration:
-	// 1. Create new tables (in dependency order)
-	// 2. Add new columns
-	// 3. Alter existing columns
-	// 4. Rename columns
-	// 5. Rename tables
-	// 6. Create new indexes and constraints (after renames)
-	// 7. Drop constraints and indexes
-	// 8. Drop columns
-	// 9. Drop tables
-
 	ordered := make([]Change, 0, len(changes))
 
-	// Group changes by type
 	groups := map[ChangeType][]Change{
 		ChangeTypeCreateTable:    {},
 		ChangeTypeAddColumn:      {},
@@ -127,20 +110,18 @@ func (g *MigrationSQLGenerator) orderChangesForUpMigration(changes []Change) []C
 		groups[change.Type] = append(groups[change.Type], change)
 	}
 
-	// Sort CREATE TABLE changes by dependencies
 	if len(groups[ChangeTypeCreateTable]) > 0 {
 		groups[ChangeTypeCreateTable] = g.sortTableCreationsByDependencies(groups[ChangeTypeCreateTable])
 	}
 
-	// Add in order
 	typeOrder := []ChangeType{
 		ChangeTypeCreateTable,
 		ChangeTypeAddColumn,
 		ChangeTypeAlterColumn,
 		ChangeTypeRenameColumn,
 		ChangeTypeRenameTable,
-		ChangeTypeCreateIndex,   // After renames
-		ChangeTypeAddConstraint, // After renames
+		ChangeTypeCreateIndex,
+		ChangeTypeAddConstraint,
 		ChangeTypeDropConstraint,
 		ChangeTypeDropIndex,
 		ChangeTypeDropColumn,
@@ -237,7 +218,6 @@ func (g *MigrationSQLGenerator) generateDropColumn(change Change) (upSQL, downSQ
 			column.Name)
 	}
 
-	// For down migration, we need to recreate the column
 	downSQL = fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s;",
 		change.TableName,
 		g.generateColumnDefinition(column))
@@ -260,7 +240,6 @@ func (g *MigrationSQLGenerator) generateAlterColumn(change Change) (upSQL, downS
 	var upStatements []string
 	var downStatements []string
 
-	// Handle type change
 	if oldColumn.Type != newColumn.Type {
 		if change.IsUnsafe {
 			upStatements = append(upStatements,
@@ -274,7 +253,6 @@ func (g *MigrationSQLGenerator) generateAlterColumn(change Change) (upSQL, downS
 				change.TableName, oldColumn.Name, oldColumn.Type, oldColumn.Name, oldColumn.Type))
 	}
 
-	// Handle NULL/NOT NULL change
 	if oldColumn.IsNullable != newColumn.IsNullable {
 		if newColumn.IsNullable {
 			upStatements = append(upStatements,
@@ -297,7 +275,6 @@ func (g *MigrationSQLGenerator) generateAlterColumn(change Change) (upSQL, downS
 		}
 	}
 
-	// Handle default value change
 	if !g.defaultsEqual(oldColumn.DefaultValue, newColumn.DefaultValue) {
 		if newColumn.DefaultValue != nil {
 			upStatements = append(upStatements,
@@ -532,8 +509,7 @@ $$ LANGUAGE plpgsql VOLATILE;`
 
 // sortTableCreationsByDependencies sorts CREATE TABLE changes by foreign key dependencies
 func (g *MigrationSQLGenerator) sortTableCreationsByDependencies(createTableChanges []Change) []Change {
-	// Build dependency map
-	dependencies := make(map[string][]string) // table -> tables it depends on
+	dependencies := make(map[string][]string)
 	tableChanges := make(map[string]Change)
 
 	for _, change := range createTableChanges {
@@ -545,11 +521,9 @@ func (g *MigrationSQLGenerator) sortTableCreationsByDependencies(createTableChan
 		tableChanges[table.Name] = change
 		dependencies[table.Name] = []string{}
 
-		// Find dependencies
 		for _, col := range table.Columns {
 			if col.ForeignKey != nil {
 				refTable := col.ForeignKey.ReferencedTable
-				// Only add dependency if it's also being created
 				if _, exists := tableChanges[refTable]; exists && refTable != table.Name {
 					dependencies[table.Name] = append(dependencies[table.Name], refTable)
 				}
@@ -557,7 +531,6 @@ func (g *MigrationSQLGenerator) sortTableCreationsByDependencies(createTableChan
 		}
 	}
 
-	// Topological sort
 	sorted := make([]Change, 0, len(createTableChanges))
 	visited := make(map[string]bool)
 	visiting := make(map[string]bool)
@@ -568,13 +541,11 @@ func (g *MigrationSQLGenerator) sortTableCreationsByDependencies(createTableChan
 			return true
 		}
 		if visiting[tableName] {
-			// Circular dependency - just add it
 			return false
 		}
 
 		visiting[tableName] = true
 
-		// Visit dependencies first
 		for _, dep := range dependencies[tableName] {
 			visit(dep)
 		}
@@ -589,7 +560,6 @@ func (g *MigrationSQLGenerator) sortTableCreationsByDependencies(createTableChan
 		return true
 	}
 
-	// Visit all tables
 	for tableName := range tableChanges {
 		visit(tableName)
 	}

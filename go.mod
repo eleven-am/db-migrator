@@ -1,15 +1,17 @@
 module github.com/eleven-am/db-migrator
 
-go 1.19
+go 1.22
+
+toolchain go1.24.4
 
 require (
 	github.com/lib/pq v1.10.9
-	github.com/pganalyze/pg_query_go/v6 v6.0.0
-	github.com/spf13/cobra v1.8.0
+	github.com/pganalyze/pg_query_go/v6 v6.1.0
+	github.com/spf13/cobra v1.9.1
 )
 
 require (
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
-	github.com/spf13/pflag v1.0.5 // indirect
-	google.golang.org/protobuf v1.31.0 // indirect
+	github.com/spf13/pflag v1.0.6 // indirect
+	google.golang.org/protobuf v1.36.6 // indirect
 )

@@ -12,41 +12,37 @@ import (
 
 // TestDB provides a test database connection
 type TestDB struct {
-	DB       *sql.DB
-	DBName   string
-	ConnStr  string
-	t        *testing.T
+	DB      *sql.DB
+	DBName  string
+	ConnStr string
+	t       *testing.T
 }
 
 // NewTestDB creates a new test database
 func NewTestDB(t *testing.T) *TestDB {
 	t.Helper()
-	
-	// Connect to postgres to create test database
+
 	baseConnStr := "postgres://localhost/postgres?sslmode=disable"
 	db, err := sql.Open("postgres", baseConnStr)
 	if err != nil {
 		t.Fatalf("Failed to connect to postgres: %v", err)
 	}
-	
-	// Generate unique test database name
+
 	dbName := fmt.Sprintf("test_migrator_%d", time.Now().UnixNano())
-	
-	// Create test database
+
 	_, err = db.Exec(fmt.Sprintf("CREATE DATABASE %s", dbName))
 	if err != nil {
 		db.Close()
 		t.Fatalf("Failed to create test database: %v", err)
 	}
 	db.Close()
-	
-	// Connect to test database
+
 	testConnStr := fmt.Sprintf("postgres://localhost/%s?sslmode=disable", dbName)
 	testDB, err := sql.Open("postgres", testConnStr)
 	if err != nil {
 		t.Fatalf("Failed to connect to test database: %v", err)
 	}
-	
+
 	return &TestDB{
 		DB:      testDB,
 		DBName:  dbName,
@@ -58,8 +54,7 @@ func NewTestDB(t *testing.T) *TestDB {
 // Cleanup drops the test database
 func (tdb *TestDB) Cleanup() {
 	tdb.DB.Close()
-	
-	// Connect to postgres to drop test database
+
 	baseConnStr := "postgres://localhost/postgres?sslmode=disable"
 	db, err := sql.Open("postgres", baseConnStr)
 	if err != nil {
@@ -67,8 +62,7 @@ func (tdb *TestDB) Cleanup() {
 		return
 	}
 	defer db.Close()
-	
-	// Terminate connections to test database
+
 	_, err = db.Exec(fmt.Sprintf(`
 		SELECT pg_terminate_backend(pg_stat_activity.pid)
 		FROM pg_stat_activity
@@ -78,8 +72,7 @@ func (tdb *TestDB) Cleanup() {
 	if err != nil {
 		tdb.t.Logf("Failed to terminate connections: %v", err)
 	}
-	
-	// Drop test database
+
 	_, err = db.Exec(fmt.Sprintf("DROP DATABASE IF EXISTS %s", tdb.DBName))
 	if err != nil {
 		tdb.t.Logf("Failed to drop test database: %v", err)

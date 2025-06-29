@@ -56,7 +56,6 @@ func (p *StructParser) ParseDirectory(dir string) ([]TableDefinition, error) {
 	var allTables []TableDefinition
 
 	for _, file := range matches {
-		// Skip test files
 		if strings.HasSuffix(file, "_test.go") {
 			continue
 		}
@@ -81,19 +80,16 @@ func (p *StructParser) ParseFile(filename string) ([]TableDefinition, error) {
 
 	var tables []TableDefinition
 
-	// Walk the AST looking for struct definitions
 	ast.Inspect(src, func(n ast.Node) bool {
 		switch node := n.(type) {
 		case *ast.TypeSpec:
 			if structType, ok := node.Type.(*ast.StructType); ok {
 				table, err := p.parseStruct(node.Name.Name, structType)
 				if err != nil {
-					// Log error but continue parsing
 					fmt.Printf("Warning: failed to parse struct %s: %v\n", node.Name.Name, err)
 					return true
 				}
 
-				// Only include structs that have database-related fields
 				if p.isDatabaseStruct(table) {
 					tables = append(tables, table)
 				}
@@ -122,13 +118,11 @@ func (p *StructParser) parseStruct(structName string, structType *ast.StructType
 
 		table.Fields = append(table.Fields, fieldDefs...)
 
-		// Merge table-level attributes
 		for k, v := range tableLevelAttrs {
 			table.TableLevel[k] = v
 		}
 	}
 
-	// Override table name if specified in table-level dbdef
 	if tableName, exists := table.TableLevel["table"]; exists {
 		table.TableName = tableName
 	}
@@ -141,9 +135,7 @@ func (p *StructParser) parseField(field *ast.Field) ([]FieldDefinition, map[stri
 	var fields []FieldDefinition
 	tableLevelAttrs := make(map[string]string)
 
-	// Handle embedded structs and anonymous fields
 	if len(field.Names) == 0 {
-		// This is an embedded field - could be table-level metadata
 		if field.Tag != nil {
 			tagValue := strings.Trim(field.Tag.Value, "`")
 			dbdefTag := p.extractTag(tagValue, "dbdef")
@@ -157,15 +149,11 @@ func (p *StructParser) parseField(field *ast.Field) ([]FieldDefinition, map[stri
 		return fields, tableLevelAttrs, nil
 	}
 
-	// Regular named fields
 	for _, name := range field.Names {
-		// Skip private fields (starting with lowercase)
-		// But handle special "_" field for table-level metadata
 		if !ast.IsExported(name.Name) && name.Name != "_" {
 			continue
 		}
 
-		// Handle special "_" field for table-level metadata
 		if name.Name == "_" && field.Tag != nil {
 			tagValue := strings.Trim(field.Tag.Value, "`")
 			dbdefTag := p.extractTag(tagValue, "dbdef")
@@ -175,7 +163,6 @@ func (p *StructParser) parseField(field *ast.Field) ([]FieldDefinition, map[stri
 					tableLevelAttrs[k] = v
 				}
 			}
-			// Skip adding this field to the field list
 			continue
 		}
 
@@ -183,13 +170,11 @@ func (p *StructParser) parseField(field *ast.Field) ([]FieldDefinition, map[stri
 			Name: name.Name,
 		}
 
-		// Parse field type
 		fieldType, isPointer, isArray := p.parseFieldType(field.Type)
 		fieldDef.Type = fieldType
 		fieldDef.IsPointer = isPointer
 		fieldDef.IsArray = isArray
 
-		// Parse struct tags
 		if field.Tag != nil {
 			tagValue := strings.Trim(field.Tag.Value, "`")
 
@@ -197,21 +182,18 @@ func (p *StructParser) parseField(field *ast.Field) ([]FieldDefinition, map[stri
 			fieldDef.DBDefTag = p.extractTag(tagValue, "dbdef")
 			fieldDef.JSONTag = p.extractTag(tagValue, "json")
 
-			// Set database column name
 			if fieldDef.DBTag != "" {
 				fieldDef.DBName = fieldDef.DBTag
 			} else {
 				fieldDef.DBName = p.toSnakeCase(fieldDef.Name)
 			}
 
-			// Parse dbdef attributes
 			if fieldDef.DBDefTag != "" {
 				fieldDef.DBDef = p.tagParser.ParseDBDefTag(fieldDef.DBDefTag)
 			} else {
 				fieldDef.DBDef = make(map[string]string)
 			}
 		} else {
-			// No tags - derive defaults
 			fieldDef.DBName = p.toSnakeCase(fieldDef.Name)
 			fieldDef.DBDef = make(map[string]string)
 		}
@@ -226,34 +208,21 @@ func (p *StructParser) parseField(field *ast.Field) ([]FieldDefinition, map[stri
 func (p *StructParser) parseFieldType(expr ast.Expr) (string, bool, bool) {
 	switch t := expr.(type) {
 	case *ast.Ident:
-		// Simple type: string, int, etc.
 		return t.Name, false, false
 
 	case *ast.StarExpr:
-		// Pointer type: *string, *int, etc.
 		innerType, _, isArray := p.parseFieldType(t.X)
 		return innerType, true, isArray
 
 	case *ast.ArrayType:
-		// Array/slice type: []string, []*int, etc.
 		innerType, isPointer, _ := p.parseFieldType(t.Elt)
 		return innerType, isPointer, true
 
 	case *ast.SelectorExpr:
-		// Qualified type: time.Time, pq.StringArray, etc.
-		if ident, ok := t.X.(*ast.Ident); ok {
-			return fmt.Sprintf("%s.%s", ident.Name, t.Sel.Name), false, false
-		}
-		return t.Sel.Name, false, false
-
-	case *ast.InterfaceType:
-		// Interface type
-		return "interface{}", false, false
-
-	default:
-		// Unknown type - return string representation
-		return fmt.Sprintf("%T", t), false, false
+		pkg := p.exprToString(t.X)
+		return pkg + "." + t.Sel.Name, false, false
 	}
+	return "", false, false
 }
 
 // extractTag extracts a specific tag value from a struct tag string
@@ -289,21 +258,21 @@ func (p *StructParser) deriveTableName(structName string) string {
 		"analysis": "analyses",
 		"basis":    "bases",
 		"datum":    "data",
-		"index":    "indexes", // or "indices" 
+		"index":    "indexes", // or "indices"
 		"matrix":   "matrices",
 		"vertex":   "vertices",
 		"axis":     "axes",
 		"crisis":   "crises",
 		// "person":   "people", // commented out - using regular pluralization
-		"child":    "children",
-		"foot":     "feet",
-		"tooth":    "teeth",
-		"goose":    "geese",
-		"man":      "men",
-		"woman":    "women",
-		"mouse":    "mice",
+		"child": "children",
+		"foot":  "feet",
+		"tooth": "teeth",
+		"goose": "geese",
+		"man":   "men",
+		"woman": "women",
+		"mouse": "mice",
 	}
-	
+
 	if plural, ok := irregularPlurals[snake]; ok {
 		return plural
 	}
@@ -330,21 +299,21 @@ func (p *StructParser) toSnakeCase(s string) string {
 	if result, ok := edgeCases[s]; ok {
 		return result
 	}
-	
+
 	var result strings.Builder
-	
+
 	for i, r := range s {
 		isUpper := r >= 'A' && r <= 'Z'
-		
+
 		// Determine if we need an underscore before this character
 		if i > 0 {
 			prevIsLower := s[i-1] >= 'a' && s[i-1] <= 'z'
 			prevIsDigit := s[i-1] >= '0' && s[i-1] <= '9'
 			prevIsUpper := s[i-1] >= 'A' && s[i-1] <= 'Z'
-			
+
 			// Add underscore in these cases:
 			// 1. Uppercase letter after lowercase letter: aB -> a_b
-			// 2. Uppercase letter after digit: 1A -> 1_a  
+			// 2. Uppercase letter after digit: 1A -> 1_a
 			// 3. Letter after digit (except continuing a number): 2nd -> 2nd, but 42A -> 42_a
 			// 4. Start of new word in acronym: SQLParser -> sql_parser
 			if isUpper && (prevIsLower || prevIsDigit) {
@@ -367,7 +336,7 @@ func (p *StructParser) toSnakeCase(s string) string {
 				}
 			}
 		}
-		
+
 		// Add the character (converting uppercase to lowercase)
 		if isUpper {
 			result.WriteRune(r - 'A' + 'a')
@@ -375,7 +344,7 @@ func (p *StructParser) toSnakeCase(s string) string {
 			result.WriteRune(r)
 		}
 	}
-	
+
 	return result.String()
 }
 
@@ -386,4 +355,15 @@ func isOrdinalSuffix(s string) bool {
 	}
 	suffix := s[:2]
 	return suffix == "st" || suffix == "nd" || suffix == "rd" || suffix == "th"
+}
+
+func (p *StructParser) exprToString(expr ast.Expr) string {
+	switch v := expr.(type) {
+	case *ast.Ident:
+		return v.Name
+	case *ast.SelectorExpr:
+		return p.exprToString(v.X) + "." + v.Sel.Name
+	default:
+		return ""
+	}
 }

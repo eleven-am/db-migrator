@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+
 	"github.com/eleven-am/db-migrator/internal/introspect"
 
 	"github.com/spf13/cobra"
@@ -30,7 +31,6 @@ func init() {
 }
 
 func runIntrospect(cmd *cobra.Command, args []string) error {
-	// Connect to database
 	db, err := sql.Open("postgres", dbURL)
 	if err != nil {
 		return fmt.Errorf("failed to connect to database: %w", err)
@@ -40,7 +40,6 @@ func runIntrospect(cmd *cobra.Command, args []string) error {
 	introspector := introspect.NewPostgreSQLIntrospector(db)
 
 	if tableName != "" {
-		// Introspect specific table
 		table, err := introspector.GetTable(tableName)
 		if err != nil {
 			return fmt.Errorf("failed to introspect table %s: %w", tableName, err)
@@ -56,7 +55,6 @@ func runIntrospect(cmd *cobra.Command, args []string) error {
 			printTable(*table)
 		}
 	} else {
-		// Introspect all tables
 		tables, err := introspector.GetTables()
 		if err != nil {
 			return fmt.Errorf("failed to introspect database: %w", err)

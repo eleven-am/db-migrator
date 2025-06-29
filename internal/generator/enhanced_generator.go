@@ -2,9 +2,10 @@ package generator
 
 import (
 	"fmt"
+	"strings"
+
 	"github.com/eleven-am/db-migrator/internal/introspect"
 	"github.com/eleven-am/db-migrator/internal/parser"
-	"strings"
 )
 
 // EnhancedGenerator provides signature-based schema comparison and generation
@@ -51,7 +52,6 @@ type ForeignKeyDefinition struct {
 func (g *EnhancedGenerator) GenerateIndexDefinitions(tableDefn parser.TableDefinition) ([]IndexDefinition, error) {
 	var indexes []IndexDefinition
 
-	// Generate primary key index
 	primaryKey := g.findPrimaryKey(tableDefn)
 	if primaryKey != "" {
 		pkIndex := IndexDefinition{
@@ -73,7 +73,6 @@ func (g *EnhancedGenerator) GenerateIndexDefinitions(tableDefn parser.TableDefin
 		indexes = append(indexes, pkIndex)
 	}
 
-	// Generate indexes from field-level unique constraints
 	for _, field := range tableDefn.Fields {
 		if g.hasAttribute(field.DBDef, "unique") {
 			uniqueIndex := IndexDefinition{
@@ -96,7 +95,6 @@ func (g *EnhancedGenerator) GenerateIndexDefinitions(tableDefn parser.TableDefin
 		}
 	}
 
-	// Generate indexes from table-level index and unique constraint definitions
 	for key, value := range tableDefn.TableLevel {
 		value = strings.TrimSpace(value)
 		if value == "" {
@@ -110,10 +108,9 @@ func (g *EnhancedGenerator) GenerateIndexDefinitions(tableDefn parser.TableDefin
 		case "unique":
 			isUnique = true
 		default:
-			continue // Not a key we process here, move to the next.
+			continue
 		}
 
-		// Handle one or more definitions separated by semicolons (for both index and unique).
 		definitions := strings.Split(value, ";")
 		for _, defStr := range definitions {
 			defStr = strings.TrimSpace(defStr)
@@ -121,13 +118,11 @@ func (g *EnhancedGenerator) GenerateIndexDefinitions(tableDefn parser.TableDefin
 				continue
 			}
 
-			// Call the new, robust parsing function
 			indexDef, err := g.parseTableLevelIndex(tableDefn.TableName, defStr, isUnique)
 			if err != nil {
 				return nil, fmt.Errorf("failed to parse table-level %s definition '%s': %w", key, defStr, err)
 			}
 
-			// Generate signature using normalizer
 			indexDef.Signature = g.normalizer.GenerateCanonicalSignature(
 				indexDef.TableName,
 				indexDef.Columns,
@@ -149,7 +144,6 @@ func (g *EnhancedGenerator) GenerateForeignKeyDefinitions(tableDefn parser.Table
 
 	for _, field := range tableDefn.Fields {
 		if foreignKeyRef, exists := field.DBDef["foreign_key"]; exists {
-			// Parse foreign key reference: "table.column"
 			parts := strings.Split(foreignKeyRef, ".")
 			if len(parts) != 2 {
 				return nil, fmt.Errorf("invalid foreign key format %s, expected 'table.column'", foreignKeyRef)
@@ -165,7 +159,6 @@ func (g *EnhancedGenerator) GenerateForeignKeyDefinitions(tableDefn parser.Table
 				OnUpdate:          g.getStringOrDefault(field.DBDef, "on_update", "NO ACTION"),
 			}
 
-			// Generate full constraint definition
 			fkDef.Definition = fmt.Sprintf("FOREIGN KEY (%s) REFERENCES %s(%s)",
 				strings.Join(fkDef.Columns, ", "),
 				fkDef.ReferencedTable,
@@ -201,7 +194,6 @@ func (g *EnhancedGenerator) CompareSchemas(
 		ForeignKeysToDrop:   []ForeignKeyDefinition{},
 	}
 
-	// DEBUG: Log all signatures for comparison
 	fmt.Println("\n=== DEBUG: Index Signatures ===")
 	fmt.Println("STRUCT INDEXES:")
 	for _, idx := range structIndexes {
@@ -217,7 +209,6 @@ func (g *EnhancedGenerator) CompareSchemas(
 	}
 	fmt.Println("=== END DEBUG ===")
 
-	// Build signature maps for efficient lookup
 	dbIndexSigs := make(map[string]IndexDefinition)
 	for _, idx := range dbIndexes {
 		dbIndexSigs[idx.Signature] = idx
@@ -238,28 +229,24 @@ func (g *EnhancedGenerator) CompareSchemas(
 		structFKSigs[fk.Signature] = fk
 	}
 
-	// Find indexes to create (in struct but not in database)
 	for sig, structIdx := range structIndexSigs {
 		if _, exists := dbIndexSigs[sig]; !exists {
 			comparison.IndexesToCreate = append(comparison.IndexesToCreate, structIdx)
 		}
 	}
 
-	// Find indexes to drop (in database but not in struct)
 	for sig, dbIdx := range dbIndexSigs {
 		if _, exists := structIndexSigs[sig]; !exists {
 			comparison.IndexesToDrop = append(comparison.IndexesToDrop, dbIdx)
 		}
 	}
 
-	// Find foreign keys to create (in struct but not in database)
 	for sig, structFK := range structFKSigs {
 		if _, exists := dbFKSigs[sig]; !exists {
 			comparison.ForeignKeysToCreate = append(comparison.ForeignKeysToCreate, structFK)
 		}
 	}
 
-	// Find foreign keys to drop (in database but not in struct)
 	for sig, dbFK := range dbFKSigs {
 		if _, exists := structFKSigs[sig]; !exists {
 			comparison.ForeignKeysToDrop = append(comparison.ForeignKeysToDrop, dbFK)
@@ -306,12 +293,10 @@ func (g *EnhancedGenerator) parseTableLevelIndex(tableName, indexDefStr string, 
 	indexDef := IndexDefinition{
 		TableName: tableName,
 		IsUnique:  isUnique,
-		Method:    "btree", // default
+		IsPrimary: false,
+		Method:    "btree",
 	}
 
-	// Step 1: Isolate the optional WHERE clause before parsing columns.
-	// We split on " where:" (with a leading space) to avoid accidentally matching
-	// a column name that contains the word "where".
 	mainDef := indexDefStr
 	whereClause := ""
 	if whereParts := strings.SplitN(mainDef, " where:", 2); len(whereParts) == 2 {
@@ -320,19 +305,16 @@ func (g *EnhancedGenerator) parseTableLevelIndex(tableName, indexDefStr string, 
 	}
 	indexDef.Where = whereClause
 
-	// Step 2: Parse the index name and column(s) from the main definition part.
 	parts := strings.Split(mainDef, ",")
 	if len(parts) < 2 {
 		return IndexDefinition{}, fmt.Errorf("malformed index/unique definition: must have a name and at least one column in %q", indexDefStr)
 	}
 
-	// The first part is the index/constraint name.
 	indexDef.Name = strings.TrimSpace(parts[0])
 	if indexDef.Name == "" {
 		return IndexDefinition{}, fmt.Errorf("malformed index/unique definition: name is missing in %q", indexDefStr)
 	}
 
-	// The remaining parts are column names.
 	var columns []string
 	for _, col := range parts[1:] {
 		trimmedCol := strings.TrimSpace(col)
@@ -350,7 +332,6 @@ func (g *EnhancedGenerator) parseTableLevelIndex(tableName, indexDefStr string, 
 }
 
 func (g *EnhancedGenerator) generateIndexSignature(idx IndexDefinition) string {
-	// Use the normalizer for consistent signature generation
 	return g.normalizer.GenerateCanonicalSignature(
 		idx.TableName,
 		idx.Columns,
@@ -362,20 +343,16 @@ func (g *EnhancedGenerator) generateIndexSignature(idx IndexDefinition) string {
 }
 
 func (g *EnhancedGenerator) generateForeignKeySignature(fk ForeignKeyDefinition) string {
-	// Use the normalizer for consistent signature generation
 	var parts []string
 
-	// Table and columns (normalized)
 	parts = append(parts, "table:"+strings.ToLower(strings.TrimSpace(fk.TableName)))
 	normalizedCols := g.normalizer.NormalizeColumnList(fk.Columns, true)
 	parts = append(parts, "cols:"+strings.Join(normalizedCols, ","))
 
-	// Referenced table and columns (normalized)
 	parts = append(parts, "ref_table:"+strings.ToLower(strings.TrimSpace(fk.ReferencedTable)))
 	normalizedRefCols := g.normalizer.NormalizeColumnList(fk.ReferencedColumns, true)
 	parts = append(parts, "ref_cols:"+strings.Join(normalizedRefCols, ","))
 
-	// Actions (normalized and defaulted)
 	onDelete := strings.ToUpper(strings.TrimSpace(fk.OnDelete))
 	if onDelete == "" {
 		onDelete = "NO ACTION"
@@ -393,7 +370,6 @@ func (g *EnhancedGenerator) generateForeignKeySignature(fk ForeignKeyDefinition)
 
 // IsSafeOperation determines if a schema change operation is safe to perform automatically
 func (g *EnhancedGenerator) IsSafeOperation(comparison *SchemaComparison) bool {
-	// Dropping foreign keys or unique indexes is dangerous
 	if len(comparison.ForeignKeysToDrop) > 0 {
 		return false
 	}
@@ -412,7 +388,6 @@ func (g *EnhancedGenerator) GenerateSafeSQL(comparison *SchemaComparison, allowD
 	var upStatements []string
 	var downStatements []string
 
-	// Always safe: create new indexes and foreign keys
 	for _, idx := range comparison.IndexesToCreate {
 		upSQL := g.generateCreateIndexSQL(idx)
 		downSQL := fmt.Sprintf("DROP INDEX IF EXISTS %s;", idx.Name)
@@ -429,7 +404,6 @@ func (g *EnhancedGenerator) GenerateSafeSQL(comparison *SchemaComparison, allowD
 		downStatements = append(downStatements, downSQL)
 	}
 
-	// Potentially dangerous: drop operations
 	if allowDestructive {
 		for _, idx := range comparison.IndexesToDrop {
 			upSQL := fmt.Sprintf("DROP INDEX IF EXISTS %s;", idx.Name)
@@ -448,7 +422,6 @@ func (g *EnhancedGenerator) GenerateSafeSQL(comparison *SchemaComparison, allowD
 		}
 	}
 
-	// Reverse the down statements to create proper rollback order
 	for i := len(downStatements)/2 - 1; i >= 0; i-- {
 		opp := len(downStatements) - 1 - i
 		downStatements[i], downStatements[opp] = downStatements[opp], downStatements[i]
@@ -477,7 +450,6 @@ func (g *EnhancedGenerator) generateCreateIndexSQL(idx IndexDefinition) string {
 	parts = append(parts, fmt.Sprintf("(%s)", strings.Join(idx.Columns, ", ")))
 
 	if idx.Where != "" {
-		// Ensure WHERE clause is properly formatted
 		whereClause := idx.Where
 		if !strings.HasPrefix(strings.ToUpper(whereClause), "WHERE") {
 			whereClause = fmt.Sprintf("WHERE (%s)", whereClause)

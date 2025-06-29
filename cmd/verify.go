@@ -25,7 +25,6 @@ func init() {
 }
 
 func runVerify(cmd *cobra.Command, args []string) error {
-	// Determine DSN
 	var dsn string
 	if dbURL != "" {
 		dsn = dbURL
@@ -36,14 +35,12 @@ func runVerify(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("either --url or both --user and --dbname must be provided")
 	}
 
-	// Connect to database
 	db, err := sql.Open("postgres", dsn)
 	if err != nil {
 		return fmt.Errorf("failed to connect to database: %w", err)
 	}
 	defer db.Close()
 
-	// Check tables exist
 	tables := []string{
 		"teams", "projects", "users", "pipelines", "triggers",
 		"destinations", "stages", "execution_logs", "audit_logs",
@@ -64,7 +61,7 @@ func runVerify(cmd *cobra.Command, args []string) error {
 				AND table_name = $1
 			)
 		`, table).Scan(&exists)
-		
+
 		if err != nil {
 			fmt.Printf("ERROR: Error checking table %s: %v\n", table, err)
 			allGood = false
@@ -72,7 +69,6 @@ func runVerify(cmd *cobra.Command, args []string) error {
 		}
 
 		if exists {
-			// Count rows
 			var count int
 			db.QueryRow(fmt.Sprintf("SELECT COUNT(*) FROM %s", table)).Scan(&count)
 			fmt.Printf("OK: Table %-20s exists (rows: %d)\n", table, count)
@@ -82,7 +78,6 @@ func runVerify(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Check gen_cuid function
 	var funcExists bool
 	err = db.QueryRow(`
 		SELECT EXISTS (
@@ -90,7 +85,7 @@ func runVerify(cmd *cobra.Command, args []string) error {
 			WHERE proname = 'gen_cuid'
 		)
 	`).Scan(&funcExists)
-	
+
 	fmt.Println()
 	if funcExists {
 		fmt.Println("OK: Function gen_cuid() exists")

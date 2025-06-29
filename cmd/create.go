@@ -21,19 +21,16 @@ var createCmd = &cobra.Command{
 func runCreate(cmd *cobra.Command, args []string) error {
 	name := args[0]
 
-	// Generate timestamp
 	timestamp := time.Now().UTC().Format("20060102150405")
 	baseName := fmt.Sprintf("%s_%s", timestamp, name)
 
 	upFile := filepath.Join(outputDir, fmt.Sprintf("%s.up.sql", baseName))
 	downFile := filepath.Join(outputDir, fmt.Sprintf("%s.down.sql", baseName))
 
-	// Ensure output directory exists
 	if err := os.MkdirAll(outputDir, 0755); err != nil {
 		return fmt.Errorf("failed to create output directory: %w", err)
 	}
 
-	// Create empty migration files
 	upContent := fmt.Sprintf("-- Migration: %s\n-- Created at: %s\n\n", name, time.Now().Format(time.RFC3339))
 	downContent := upContent
 
