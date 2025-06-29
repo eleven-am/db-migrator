@@ -15,6 +15,19 @@ A powerful, struct-driven PostgreSQL database migration tool for Go applications
 ⚡ **Zero False Positives** - Advanced normalization eliminates schema comparison false positives  
 📊 **Comprehensive Testing** - 95%+ test coverage with integration tests  
 
+## Why db-migrator?
+
+### Comparison with Alternatives
+
+| Feature | db-migrator | golang-migrate | Atlas | GORM AutoMigrate |
+|---------|------------|----------------|-------|------------------|
+| Struct-driven | ✅ | ❌ | ❌ | ✅ |
+| Signature matching | ✅ | ❌ | ❌ | ❌ |
+| Down migrations | ✅ | ✅ | ✅ | ❌ |
+| Safety checks | ✅ | ❌ | ✅ | ❌ |
+| False positive elimination | ✅ | ❌ | ❌ | ❌ |
+| Works with sqlx/squirrel | ✅ | ✅ | ✅ | ❌ |
+
 ## Quick Start
 
 ### Installation
@@ -292,6 +305,58 @@ db-migrator migrate --url="postgres://localhost/mydb" --package="./models" --pus
 db-migrator migrate --url="postgres://localhost/mydb" --package="./models" --push --allow-destructive
 ```
 
+## Common Patterns
+
+### Soft Deletes
+
+Add soft delete functionality with partial indexes:
+
+```go
+type Model struct {
+    DeletedAt *time.Time `db:"deleted_at" dbdef:"type:timestamptz"`
+    _ struct{} `dbdef:"index:idx_not_deleted,deleted_at where:deleted_at IS NULL"`
+}
+```
+
+### Audit Fields
+
+Track who created and modified records:
+
+```go  
+type Auditable struct {
+    CreatedBy string    `db:"created_by" dbdef:"type:uuid;not_null;foreign_key:users.id"`
+    UpdatedBy string    `db:"updated_by" dbdef:"type:uuid;not_null;foreign_key:users.id"`
+    CreatedAt time.Time `db:"created_at" dbdef:"type:timestamptz;not_null;default:now()"`
+    UpdatedAt time.Time `db:"updated_at" dbdef:"type:timestamptz;not_null;default:now()"`
+}
+```
+
+### Multi-tenant Patterns
+
+Implement row-level security with tenant isolation:
+
+```go
+type TenantModel struct {
+    _ struct{} `dbdef:"table:products;index:idx_tenant_active,tenant_id,is_active"`
+    
+    TenantID string `db:"tenant_id" dbdef:"type:uuid;not_null;foreign_key:tenants.id"`
+    // Composite unique constraint across tenant
+    _ struct{} `dbdef:"unique:uk_tenant_sku,tenant_id,sku"`
+}
+```
+
+### Versioning
+
+Track record versions for audit trails:
+
+```go
+type Versioned struct {
+    Version   int       `db:"version" dbdef:"type:integer;not_null;default:1"`
+    UpdatedAt time.Time `db:"updated_at" dbdef:"type:timestamptz;not_null;default:now()"`
+    _ struct{} `dbdef:"index:idx_version,entity_id,version"`
+}
+```
+
 ## Advanced Features
 
 ### Partial Indexes
@@ -368,6 +433,33 @@ migrations/
 ```
 
 ## Integration Examples
+
+### With sqlx and squirrel
+
+db-migrator works seamlessly with popular Go database libraries:
+
+```go
+// Define your schema with db-migrator tags
+type User struct {
+    _ struct{} `dbdef:"table:users;index:idx_email,email"`
+    
+    ID        string    `db:"id" dbdef:"type:uuid;primary_key;default:gen_random_uuid()"`
+    Email     string    `db:"email" dbdef:"type:varchar(255);not_null;unique"`
+    TeamID    string    `db:"team_id" dbdef:"type:uuid;not_null;foreign_key:teams.id"`
+    CreatedAt time.Time `db:"created_at" dbdef:"type:timestamptz;not_null;default:now()"`
+}
+
+// Use with sqlx - the db tags work perfectly
+var user User
+err := db.Get(&user, "SELECT * FROM users WHERE id = $1", userID)
+
+// Use with squirrel - clean query building
+query, args, _ := sq.Select("*").
+    From("users").
+    Where(sq.Eq{"team_id": teamID}).
+    OrderBy("created_at DESC").
+    ToSql()
+```
 
 ### With golang-migrate
 
@@ -493,12 +585,24 @@ docker run --name postgres-test -e POSTGRES_PASSWORD=postgres -p 5432:5432 -d po
 make test
 ```
 
+## Current Limitations
+
+- **PostgreSQL only** - MySQL support is on the roadmap
+- **No stored procedures/functions** - Only tables, indexes, and constraints are supported
+- **No custom types** - PostgreSQL domains and custom types not yet supported
+- **Forward-only migrations** - No automatic rollback verification
+- **No check constraints** - Check constraints parsing not implemented
+- **No triggers** - Database triggers are not managed
+
 ## Roadmap
 
 - [ ] MySQL support
 - [ ] Schema validation rules
 - [ ] Migration rollback verification
 - [ ] Parallel migration execution
+- [ ] Check constraints support
+- [ ] Custom types (domains)
+- [ ] Stored procedures/functions
 
 ## License
 
