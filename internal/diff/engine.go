@@ -3,6 +3,8 @@ package diff
 import (
 	"fmt"
 	"reflect"
+	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/eleven-am/db-migrator/internal/generator"
@@ -258,7 +260,8 @@ func (e *Engine) checkColumnRenamed(tableName, newColumnName string) *ColumnChan
 
 // columnsEqual checks if two columns are identical
 func (e *Engine) columnsEqual(col1, col2 generator.SchemaColumn) bool {
-	if col1.Type != col2.Type {
+	// Normalize types before comparison to avoid false positives
+	if NormalizePostgreSQLType(col1.Type) != NormalizePostgreSQLType(col2.Type) {
 		return false
 	}
 	if col1.IsNullable != col2.IsNullable {
@@ -277,7 +280,7 @@ func (e *Engine) columnsEqual(col1, col2 generator.SchemaColumn) bool {
 	if (col1.DefaultValue == nil) != (col2.DefaultValue == nil) {
 		return false
 	}
-	if col1.DefaultValue != nil && *col1.DefaultValue != *col2.DefaultValue {
+	if col1.DefaultValue != nil && NormalizeDefault(*col1.DefaultValue) != NormalizeDefault(*col2.DefaultValue) {
 		return false
 	}
 
@@ -424,9 +427,18 @@ func (e *Engine) constraintsEqual(con1, con2 generator.SchemaConstraint) bool {
 	if con1.Type != con2.Type {
 		return false
 	}
+	
+	// For PRIMARY KEY and UNIQUE constraints, the columns are what matter
+	// The Definition might be empty or formatted differently
+	if con1.Type == "PRIMARY KEY" || con1.Type == "UNIQUE" {
+		return reflect.DeepEqual(con1.Columns, con2.Columns)
+	}
+	
+	// For other constraints (CHECK, FOREIGN KEY), compare the definition
 	if con1.Definition != con2.Definition {
 		return false
 	}
+	
 	if !reflect.DeepEqual(con1.Columns, con2.Columns) {
 		return false
 	}
@@ -531,25 +543,40 @@ func (e *Engine) isUnsafeColumnChange(oldCol, newCol *generator.SchemaColumn) bo
 
 // isUnsafeTypeChange checks if changing from one type to another could lose data
 func (e *Engine) isUnsafeTypeChange(oldType, newType string) bool {
-	safeConversions := map[string][]string{
-		"VARCHAR":   {"TEXT"},
-		"CHAR":      {"VARCHAR", "TEXT"},
-		"SMALLINT":  {"INTEGER", "BIGINT"},
-		"INTEGER":   {"BIGINT"},
-		"REAL":      {"DOUBLE PRECISION"},
-		"TIMESTAMP": {"TIMESTAMPTZ"},
-	}
-
-	oldType = strings.ToUpper(strings.Split(oldType, "(")[0])
-	newType = strings.ToUpper(strings.Split(newType, "(")[0])
-
-	if oldType == newType {
+	// Normalize types first
+	oldTypeNorm := NormalizePostgreSQLType(oldType)
+	newTypeNorm := NormalizePostgreSQLType(newType)
+	
+	// If normalized types are identical, it's safe
+	if oldTypeNorm == newTypeNorm {
 		return false
 	}
+	
+	// Extract base type and size
+	oldBase, oldSize := extractTypeAndSize(oldTypeNorm)
+	newBase, newSize := extractTypeAndSize(newTypeNorm)
+	
+	// For varchar/char types, increasing size is safe
+	if oldBase == newBase && (oldBase == "varchar" || oldBase == "char") {
+		if oldSize <= newSize {
+			return false
+		}
+		// Decreasing size is unsafe
+		return true
+	}
+	
+	safeConversions := map[string][]string{
+		"varchar":   {"text"},
+		"char":      {"varchar", "text"},
+		"smallint":  {"integer", "bigint"},
+		"integer":   {"bigint"},
+		"real":      {"double precision"},
+		"timestamp": {"timestamptz"},
+	}
 
-	if safeTypes, exists := safeConversions[oldType]; exists {
+	if safeTypes, exists := safeConversions[oldBase]; exists {
 		for _, safe := range safeTypes {
-			if safe == newType {
+			if safe == newBase {
 				return false
 			}
 		}
@@ -558,11 +585,30 @@ func (e *Engine) isUnsafeTypeChange(oldType, newType string) bool {
 	return true
 }
 
+// extractTypeAndSize extracts the base type and size from a type string
+func extractTypeAndSize(typeName string) (string, int) {
+	re := regexp.MustCompile(`^([a-z\s]+)(?:\((\d+)\))?`)
+	matches := re.FindStringSubmatch(typeName)
+	
+	if len(matches) < 2 {
+		return typeName, 0
+	}
+	
+	baseType := strings.TrimSpace(matches[1])
+	size := 0
+	if len(matches) > 2 && matches[2] != "" {
+		size, _ = strconv.Atoi(matches[2])
+	}
+	
+	return baseType, size
+}
+
 // getColumnChangeSafetyNotes generates safety notes for column changes
 func (e *Engine) getColumnChangeSafetyNotes(oldCol, newCol *generator.SchemaColumn) string {
 	notes := []string{}
 
-	if oldCol.Type != newCol.Type {
+	// Only report type change if normalized types are actually different
+	if NormalizePostgreSQLType(oldCol.Type) != NormalizePostgreSQLType(newCol.Type) {
 		notes = append(notes, fmt.Sprintf("Type change from %s to %s may cause data loss", oldCol.Type, newCol.Type))
 	}
 

@@ -434,14 +434,8 @@ func (g *SchemaGenerator) addImplicitConstraints(table *SchemaTable) {
 			Columns: primaryKeyColumns,
 		}
 		table.Constraints = append(table.Constraints, constraint)
-
-		pkIndex := SchemaIndex{
-			Name:      pkConstraintName,
-			Columns:   primaryKeyColumns,
-			IsUnique:  true,
-			IsPrimary: true,
-		}
-		table.Indexes = append(table.Indexes, pkIndex)
+		
+		// Don't create a separate index for PRIMARY KEY - PostgreSQL creates it automatically
 	}
 }
 

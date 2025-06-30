@@ -240,7 +240,8 @@ func (g *MigrationSQLGenerator) generateAlterColumn(change Change) (upSQL, downS
 	var upStatements []string
 	var downStatements []string
 
-	if oldColumn.Type != newColumn.Type {
+	// Only generate type change if normalized types are different
+	if NormalizePostgreSQLType(oldColumn.Type) != NormalizePostgreSQLType(newColumn.Type) {
 		if change.IsUnsafe {
 			upStatements = append(upStatements,
 				fmt.Sprintf("-- WARNING: Type change from %s to %s may cause data loss", oldColumn.Type, newColumn.Type))
@@ -452,7 +453,7 @@ func (g *MigrationSQLGenerator) defaultsEqual(d1, d2 *string) bool {
 	if (d1 == nil) != (d2 == nil) {
 		return false
 	}
-	if d1 != nil && *d1 != *d2 {
+	if d1 != nil && NormalizeDefault(*d1) != NormalizeDefault(*d2) {
 		return false
 	}
 	return true

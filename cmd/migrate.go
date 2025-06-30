@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/eleven-am/db-migrator/internal/diff"
 	"github.com/eleven-am/db-migrator/internal/generator"
 	"github.com/eleven-am/db-migrator/internal/introspect"
 	"github.com/eleven-am/db-migrator/internal/parser"
@@ -63,6 +64,92 @@ func init() {
 	migrateCmd.Flags().BoolVar(&pushToDB, "push", false, "Execute the generated SQL directly on the database")
 }
 
+// convertIntrospectedToSchema converts introspected database structure to DatabaseSchema
+func convertIntrospectedToSchema(introspector *introspect.PostgreSQLIntrospector) (*generator.DatabaseSchema, error) {
+	schema := &generator.DatabaseSchema{
+		Tables: make(map[string]generator.SchemaTable),
+	}
+
+	// Get all tables
+	tables, err := introspector.GetTables()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get tables: %w", err)
+	}
+
+	for _, table := range tables {
+		schemaTable := generator.SchemaTable{
+			Name:        table.Name,
+			Columns:     make([]generator.SchemaColumn, 0),
+			Indexes:     make([]generator.SchemaIndex, 0),
+			Constraints: make([]generator.SchemaConstraint, 0),
+		}
+
+		// Convert columns
+		for _, col := range table.Columns {
+			schemaCol := generator.SchemaColumn{
+				Name:            col.Name,
+				Type:            col.Type,
+				IsNullable:      col.IsNullable,
+				DefaultValue:    col.DefaultValue,
+				IsPrimaryKey:    col.IsPrimaryKey,
+				IsUnique:        col.IsUnique,
+				IsAutoIncrement: col.IsAutoIncrement,
+			}
+
+			if col.ForeignKey != nil {
+				schemaCol.ForeignKey = &generator.ForeignKeyRef{
+					ReferencedTable:  col.ForeignKey.ReferencedTable,
+					ReferencedColumn: col.ForeignKey.ReferencedColumn,
+					OnDelete:         col.ForeignKey.OnDelete,
+					OnUpdate:         col.ForeignKey.OnUpdate,
+				}
+			}
+
+			schemaTable.Columns = append(schemaTable.Columns, schemaCol)
+		}
+
+		// First, build a set of indexes that back constraints
+		constraintBackedIndexes := make(map[string]bool)
+		for _, constraint := range table.Constraints {
+			if constraint.BackingIndexName != "" && 
+			   (constraint.Type == "PRIMARY KEY" || constraint.Type == "UNIQUE") {
+				constraintBackedIndexes[constraint.BackingIndexName] = true
+			}
+		}
+
+		// Convert indexes (skip those that back constraints)
+		for _, idx := range table.Indexes {
+			// Skip this index if it backs a constraint
+			if constraintBackedIndexes[idx.Name] {
+				continue
+			}
+			
+			schemaIdx := generator.SchemaIndex{
+				Name:      idx.Name,
+				Columns:   idx.Columns,
+				IsUnique:  idx.IsUnique,
+				IsPrimary: idx.IsPrimary,
+			}
+			schemaTable.Indexes = append(schemaTable.Indexes, schemaIdx)
+		}
+
+		// Convert constraints
+		for _, constraint := range table.Constraints {
+			schemaConstraint := generator.SchemaConstraint{
+				Name:       constraint.Name,
+				Type:       constraint.Type,
+				Definition: constraint.Definition,
+				Columns:    constraint.Columns,
+			}
+			schemaTable.Constraints = append(schemaTable.Constraints, schemaConstraint)
+		}
+
+		schema.Tables[table.Name] = schemaTable
+	}
+
+	return schema, nil
+}
+
 func runMigrate(cmd *cobra.Command, args []string) error {
 	var dsn string
 	if dbURL != "" {
@@ -89,127 +176,68 @@ func runMigrate(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("Found %d models in %s\n", len(models), packagePath)
 
+	// Generate schema from structs
+	schemaGen := generator.NewSchemaGenerator()
+	newSchema, err := schemaGen.GenerateSchema(models)
+	if err != nil {
+		return fmt.Errorf("failed to generate schema from structs: %w", err)
+	}
+
+	// Connect to database
 	db, err := sql.Open("postgres", dsn)
 	if err != nil {
 		return fmt.Errorf("failed to connect to database: %w", err)
 	}
 	defer db.Close()
 
-	fmt.Println("Using signature-based comparison...")
-
-	enhancedGen := generator.NewEnhancedGenerator()
+	// Introspect current database schema
+	fmt.Println("Introspecting database schema...")
 	introspector := introspect.NewPostgreSQLIntrospector(db)
-
-	var allStructIndexes []generator.IndexDefinition
-	var allStructForeignKeys []generator.ForeignKeyDefinition
-
-	for _, model := range models {
-		indexes, err := enhancedGen.GenerateIndexDefinitions(model)
-		if err != nil {
-			return fmt.Errorf("failed to generate indexes for %s: %w", model.StructName, err)
-		}
-		allStructIndexes = append(allStructIndexes, indexes...)
-
-		foreignKeys, err := enhancedGen.GenerateForeignKeyDefinitions(model)
-		if err != nil {
-			return fmt.Errorf("failed to generate foreign keys for %s: %w", model.StructName, err)
-		}
-		allStructForeignKeys = append(allStructForeignKeys, foreignKeys...)
+	oldSchema, err := convertIntrospectedToSchema(introspector)
+	if err != nil {
+		return fmt.Errorf("failed to introspect database: %w", err)
 	}
 
-	var allDBIndexes []generator.IndexDefinition
-	var allDBForeignKeys []generator.ForeignKeyDefinition
-
-	for _, model := range models {
-		dbIndexes, err := introspector.GetEnhancedIndexes(model.TableName)
-		if err != nil {
-			return fmt.Errorf("failed to get indexes for %s: %w", model.TableName, err)
-		}
-
-		for _, dbIdx := range dbIndexes {
-			genIdx := generator.IndexDefinition{
-				Name:       dbIdx.Name,
-				TableName:  dbIdx.TableName,
-				Columns:    dbIdx.Columns,
-				IsUnique:   dbIdx.IsUnique,
-				IsPrimary:  dbIdx.IsPrimary,
-				Method:     dbIdx.Method,
-				Where:      dbIdx.Where,
-				Definition: dbIdx.Definition,
-				Signature:  dbIdx.Signature,
-			}
-			allDBIndexes = append(allDBIndexes, genIdx)
-		}
-
-		dbForeignKeys, err := introspector.GetEnhancedForeignKeys(model.TableName)
-		if err != nil {
-			return fmt.Errorf("failed to get foreign keys for %s: %w", model.TableName, err)
-		}
-
-		for _, dbFK := range dbForeignKeys {
-			genFK := generator.ForeignKeyDefinition{
-				Name:              dbFK.Name,
-				TableName:         dbFK.TableName,
-				Columns:           dbFK.Columns,
-				ReferencedTable:   dbFK.ReferencedTable,
-				ReferencedColumns: dbFK.ReferencedColumns,
-				OnDelete:          dbFK.OnDelete,
-				OnUpdate:          dbFK.OnUpdate,
-				Definition:        dbFK.Definition,
-				Signature:         dbFK.Signature,
-			}
-			allDBForeignKeys = append(allDBForeignKeys, genFK)
-		}
-	}
-
-	comparison, err := enhancedGen.CompareSchemas(allStructIndexes, allStructForeignKeys, allDBIndexes, allDBForeignKeys)
+	// Use the diff engine to compare schemas
+	fmt.Println("Comparing schemas...")
+	engine := diff.NewEngine(oldSchema, newSchema)
+	diffResult, err := engine.Compare()
 	if err != nil {
 		return fmt.Errorf("failed to compare schemas: %w", err)
 	}
+	
 
-	if !enhancedGen.IsSafeOperation(comparison) && !allowDestructive {
+	// Check for unsafe changes
+	if diffResult.HasUnsafeChanges && !allowDestructive {
 		fmt.Println("\nPOTENTIALLY DESTRUCTIVE OPERATIONS DETECTED:")
-
-		if len(comparison.ForeignKeysToDrop) > 0 {
-			fmt.Printf("  - %d foreign key(s) to drop (data integrity risk)\n", len(comparison.ForeignKeysToDrop))
-		}
-
-		uniqueDropCount := 0
-		for _, idx := range comparison.IndexesToDrop {
-			if idx.IsUnique || idx.IsPrimary {
-				uniqueDropCount++
+		for _, change := range diffResult.Changes {
+			if change.IsUnsafe {
+				desc := fmt.Sprintf("%s %s", change.Type, change.TableName)
+				if change.ColumnName != "" {
+					desc += "." + change.ColumnName
+				}
+				if change.SafetyNotes != "" {
+					desc += " - " + change.SafetyNotes
+				}
+				fmt.Printf("  - %s\n", desc)
 			}
 		}
-		if uniqueDropCount > 0 {
-			fmt.Printf("  - %d unique/primary index(es) to drop (duplicate data risk)\n", uniqueDropCount)
-		}
-
 		fmt.Println("\nUse --allow-destructive to proceed with these changes.")
-		fmt.Println("Review the changes carefully as they may cause data integrity issues.")
+		fmt.Println("Review the changes carefully as they may cause data loss.")
 		return nil
 	}
 
-	upStatements, downStatements, err := enhancedGen.GenerateSafeSQL(comparison, allowDestructive)
+	// Generate SQL
+	sqlGen := diff.NewMigrationSQLGenerator()
+	upSQL, downSQL, err := sqlGen.GenerateMigration(diffResult)
 	if err != nil {
 		return fmt.Errorf("failed to generate SQL: %w", err)
 	}
 
-	var upSQL, downSQL string
-	if len(upStatements) == 0 {
-		upSQL = ""
-		downSQL = ""
-	} else {
-		upSQL = strings.Join(upStatements, "\n\n")
-		downSQL = strings.Join(downStatements, "\n\n")
-	}
+	// Print summary
+	fmt.Println("\n" + diffResult.Summary)
 
-	fmt.Printf("\nSchema comparison summary:\n")
-	fmt.Printf("  Indexes to create: %d\n", len(comparison.IndexesToCreate))
-	fmt.Printf("  Indexes to drop: %d\n", len(comparison.IndexesToDrop))
-	fmt.Printf("  Foreign keys to create: %d\n", len(comparison.ForeignKeysToCreate))
-	fmt.Printf("  Foreign keys to drop: %d\n", len(comparison.ForeignKeysToDrop))
-
-	if upSQL == "" && downSQL == "" {
+	if len(diffResult.Changes) == 0 {
 		fmt.Println("No changes detected. Database is up to date!")
 		return nil
 	}
@@ -224,20 +252,26 @@ func runMigrate(cmd *cobra.Command, args []string) error {
 
 	if pushToDB {
 		fmt.Println("\nExecuting migration on database...")
-
+		
+		// Split SQL into individual statements
+		upStatements := strings.Split(upSQL, ";\n")
 		for i, stmt := range upStatements {
+			stmt = strings.TrimSpace(stmt)
+			if stmt == "" {
+				continue
+			}
 			fmt.Printf("Executing statement %d/%d...\n", i+1, len(upStatements))
 			if _, err := db.Exec(stmt); err != nil {
 				return fmt.Errorf("failed to execute statement %d: %s\nError: %w", i+1, stmt, err)
 			}
 		}
 
-		fmt.Printf("\nMigration executed successfully! Applied %d statements.\n", len(upStatements))
+		fmt.Printf("\nMigration executed successfully! Applied %d changes.\n", len(diffResult.Changes))
 		return nil
 	}
 
+	// Create migration files
 	timestamp := time.Now().UTC().Format("20060102150405")
-
 	if migrationName == "" {
 		migrationName = "schema_update"
 	}

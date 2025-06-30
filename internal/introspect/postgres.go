@@ -74,10 +74,11 @@ type Table struct {
 
 // Constraint represents a table constraint
 type Constraint struct {
-	Name       string
-	Type       string
-	Definition string
-	Columns    []string
+	Name             string
+	Type             string
+	Definition       string
+	Columns          []string
+	BackingIndexName string // Name of the index that backs this constraint (for PK/UNIQUE)
 }
 
 // PostgreSQLIntrospector handles introspection of PostgreSQL databases
@@ -278,8 +279,8 @@ func (i *PostgreSQLIntrospector) getIndexes(tableName string) ([]Index, error) {
 		SELECT 
 			idx.indexname,
 			idx.tablename,
-			ic.indisunique as is_unique,
-			ic.indisprimary as is_primary,
+			i.indisunique as is_unique,
+			i.indisprimary as is_primary,
 			string_agg(a.attname, ',' ORDER BY ic2.ordinality) as columns,
 			idx.indexdef
 		FROM pg_indexes idx
@@ -291,8 +292,8 @@ func (i *PostgreSQLIntrospector) getIndexes(tableName string) ([]Index, error) {
 		WHERE idx.tablename = $1
 			AND idx.schemaname = 'public'
 			-- Exclude system-generated indexes for foreign keys unless they're also user-defined
-			AND NOT (idx.indexname ~ '_fkey$' AND ic.indisunique = false AND ic.indisprimary = false)
-		GROUP BY idx.indexname, idx.tablename, ic.indisunique, ic.indisprimary, idx.indexdef
+			AND NOT (idx.indexname ~ '_fkey$' AND i.indisunique = false AND i.indisprimary = false)
+		GROUP BY idx.indexname, idx.tablename, i.indisunique, i.indisprimary, idx.indexdef
 		ORDER BY idx.indexname
 	`
 
@@ -350,23 +351,26 @@ func (i *PostgreSQLIntrospector) getConstraints(tableName string) ([]Constraint,
 					ELSE 'UNKNOWN'
 				END as constraint_type,
 				pg_get_constraintdef(c.oid) as definition,
-				array_agg(a.attname ORDER BY array_position(c.conkey, a.attnum)) as columns
+				array_agg(a.attname ORDER BY array_position(c.conkey, a.attnum)) as columns,
+				idx.relname as backing_index_name
 			FROM pg_constraint c
 			JOIN pg_class t ON t.oid = c.conrelid
 			JOIN pg_namespace n ON n.oid = t.relnamespace
 			LEFT JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = ANY(c.conkey)
+			LEFT JOIN pg_class idx ON idx.oid = c.conindid  -- Join to get backing index name
 			WHERE t.relname = $1
 				AND n.nspname = 'public'
 				AND c.contype != 'x'  -- Exclude exclusion constraints
 				-- Filter out system-generated NOT NULL constraints
 				AND NOT (c.contype = 'c' AND pg_get_constraintdef(c.oid) ~ '^\(\w+\s+IS\s+NOT\s+NULL\)$')
-			GROUP BY c.conname, c.contype, c.oid
+			GROUP BY c.conname, c.contype, c.oid, idx.relname
 		)
 		SELECT 
 			constraint_name,
 			constraint_type,
 			definition,
-			array_to_string(columns, ',') as columns_str
+			array_to_string(columns, ',') as columns_str,
+			COALESCE(backing_index_name, '') as backing_index_name
 		FROM constraint_info
 		WHERE array_length(columns, 1) > 0  -- Ensure we have columns
 		ORDER BY constraint_name
@@ -388,6 +392,7 @@ func (i *PostgreSQLIntrospector) getConstraints(tableName string) ([]Constraint,
 			&constraint.Type,
 			&constraint.Definition,
 			&columnsStr,
+			&constraint.BackingIndexName,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan constraint: %w", err)
