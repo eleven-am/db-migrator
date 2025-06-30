@@ -4,12 +4,12 @@
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Test Coverage](https://img.shields.io/badge/coverage-95%25-brightgreen.svg)](TEST_DOCUMENTATION.md)
 
-A production-ready, struct-driven PostgreSQL database migration tool powered by **Stripe's pg-schema-diff**. Generate accurate, safe database migrations by comparing your Go structs with your actual database schema.
+A production-ready, struct-driven PostgreSQL database migration tool. Generate accurate, safe database migrations by comparing your Go structs with your actual database schema.
 
 ## Features
 
 🚀 **Struct-Driven Migrations** - Define your schema in Go structs using `dbdef` tags  
-🔥 **Stripe-Powered Engine** - Uses Stripe's battle-tested pg-schema-diff for constraint normalization  
+🔥 **Advanced Engine** - Uses battle-tested schema comparison for constraint normalization  
 🛡️ **Safety First** - Identifies destructive operations and requires explicit approval  
 🔧 **PostgreSQL Native** - Built specifically for PostgreSQL with full feature support  
 ⚡ **Zero False Positives** - Eliminates CHECK constraint syntax comparison issues  
@@ -22,7 +22,7 @@ A production-ready, struct-driven PostgreSQL database migration tool powered by 
 | Feature | db-migrator | golang-migrate | Atlas | GORM AutoMigrate |
 |---------|------------|----------------|-------|------------------|
 | Struct-driven | ✅ | ❌ | ❌ | ✅ |
-| Stripe pg-schema-diff | ✅ | ❌ | ❌ | ❌ |
+| Advanced schema comparison | ✅ | ❌ | ❌ | ❌ |
 | Down migrations | ✅ | ✅ | ✅ | ❌ |
 | Safety checks | ✅ | ❌ | ✅ | ❌ |
 | Zero false positives | ✅ | ❌ | ❌ | ❌ |
