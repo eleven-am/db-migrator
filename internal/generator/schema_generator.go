@@ -424,6 +424,42 @@ func (g *SchemaGenerator) addImplicitConstraints(table *SchemaTable) {
 		if column.IsPrimaryKey {
 			primaryKeyColumns = append(primaryKeyColumns, column.Name)
 		}
+
+		// Add UNIQUE constraints for columns marked as unique
+		if column.IsUnique && !column.IsPrimaryKey {
+			constraintName := fmt.Sprintf("%s_%s_key", table.Name, column.Name)
+			constraint := SchemaConstraint{
+				Name:    constraintName,
+				Type:    "UNIQUE",
+				Columns: []string{column.Name},
+			}
+			table.Constraints = append(table.Constraints, constraint)
+		}
+
+		// Add FOREIGN KEY constraints
+		if column.ForeignKey != nil {
+			constraintName := fmt.Sprintf("%s_%s_fkey", table.Name, column.Name)
+			// Build the FK definition string
+			definition := fmt.Sprintf("FOREIGN KEY (%s) REFERENCES %s(%s)",
+				column.Name,
+				column.ForeignKey.ReferencedTable,
+				column.ForeignKey.ReferencedColumn)
+
+			if column.ForeignKey.OnDelete != "" && column.ForeignKey.OnDelete != "NO ACTION" {
+				definition += fmt.Sprintf(" ON DELETE %s", column.ForeignKey.OnDelete)
+			}
+			if column.ForeignKey.OnUpdate != "" && column.ForeignKey.OnUpdate != "NO ACTION" {
+				definition += fmt.Sprintf(" ON UPDATE %s", column.ForeignKey.OnUpdate)
+			}
+
+			constraint := SchemaConstraint{
+				Name:       constraintName,
+				Type:       "FOREIGN KEY",
+				Columns:    []string{column.Name},
+				Definition: definition,
+			}
+			table.Constraints = append(table.Constraints, constraint)
+		}
 	}
 
 	if len(primaryKeyColumns) > 0 {
@@ -435,13 +471,7 @@ func (g *SchemaGenerator) addImplicitConstraints(table *SchemaTable) {
 		}
 		table.Constraints = append(table.Constraints, constraint)
 
-		pkIndex := SchemaIndex{
-			Name:      pkConstraintName,
-			Columns:   primaryKeyColumns,
-			IsUnique:  true,
-			IsPrimary: true,
-		}
-		table.Indexes = append(table.Indexes, pkIndex)
+		// Don't create a separate index for PRIMARY KEY - PostgreSQL creates it automatically
 	}
 }
 
