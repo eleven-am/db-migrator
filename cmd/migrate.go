@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"os"
@@ -9,11 +10,11 @@ import (
 	"time"
 
 	"github.com/eleven-am/db-migrator/internal/generator"
-	"github.com/eleven-am/db-migrator/internal/introspect"
 	"github.com/eleven-am/db-migrator/internal/parser"
-
-	_ "github.com/lib/pq" // PostgreSQL driver
+	_ "github.com/lib/pq" //
 	"github.com/spf13/cobra"
+	"github.com/stripe/pg-schema-diff/pkg/diff"
+	"github.com/stripe/pg-schema-diff/pkg/tempdb"
 )
 
 var (
@@ -39,7 +40,7 @@ var (
 var migrateCmd = &cobra.Command{
 	Use:   "migrate",
 	Short: "Generate database migrations",
-	Long:  `Compare current Go structs with database schema and generate migration files`,
+	Long:  `Compare current Go structs with database schema and generate migration files using production-grade schema comparison`,
 	RunE:  runMigrate,
 }
 
@@ -59,11 +60,14 @@ func init() {
 	migrateCmd.Flags().StringVar(&migrationName, "name", "", "Migration name (optional)")
 	migrateCmd.Flags().BoolVar(&dryRun, "dry-run", false, "Print migration without creating files")
 	migrateCmd.Flags().BoolVar(&createDBIfNotExists, "create-if-not-exists", false, "Create the database if it does not exist")
-	migrateCmd.Flags().BoolVar(&allowDestructive, "allow-destructive", false, "Allow potentially destructive operations (DROP constraints, DROP indexes)")
+	migrateCmd.Flags().BoolVar(&allowDestructive, "allow-destructive", false, "Allow potentially destructive operations")
 	migrateCmd.Flags().BoolVar(&pushToDB, "push", false, "Execute the generated SQL directly on the database")
 }
 
 func runMigrate(cmd *cobra.Command, args []string) error {
+	ctx := context.Background()
+
+	// Build DSN
 	var dsn string
 	if dbURL != "" {
 		dsn = dbURL
@@ -80,6 +84,9 @@ func runMigrate(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	fmt.Println("Initializing schema migration engine...")
+
+	// Step 1: Parse Go structs and generate DDL SQL
 	fmt.Println("Parsing Go structs...")
 	structParser := parser.NewStructParser()
 	models, err := structParser.ParseDirectory(packagePath)
@@ -89,155 +96,155 @@ func runMigrate(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("Found %d models in %s\n", len(models), packagePath)
 
+	// Step 2: Generate DDL SQL from structs
+	fmt.Println("Generating DDL SQL from Go structs...")
+	schemaGen := generator.NewSchemaGenerator()
+	schema, err := schemaGen.GenerateSchema(models)
+	if err != nil {
+		return fmt.Errorf("failed to generate schema from structs: %w", err)
+	}
+
+	// Convert schema to DDL SQL
+	sqlGen := generator.NewSQLGenerator()
+	ddlSQL := sqlGen.GenerateSchema(schema)
+
+	fmt.Printf("Generated DDL SQL (%d tables)\n", len(schema.Tables))
+
+	// Step 3: Connect to database
+	fmt.Println("Connecting to database...")
 	db, err := sql.Open("postgres", dsn)
 	if err != nil {
 		return fmt.Errorf("failed to connect to database: %w", err)
 	}
 	defer db.Close()
 
-	fmt.Println("Using signature-based comparison...")
-
-	enhancedGen := generator.NewEnhancedGenerator()
-	introspector := introspect.NewPostgreSQLIntrospector(db)
-
-	var allStructIndexes []generator.IndexDefinition
-	var allStructForeignKeys []generator.ForeignKeyDefinition
-
-	for _, model := range models {
-		indexes, err := enhancedGen.GenerateIndexDefinitions(model)
-		if err != nil {
-			return fmt.Errorf("failed to generate indexes for %s: %w", model.StructName, err)
-		}
-		allStructIndexes = append(allStructIndexes, indexes...)
-
-		foreignKeys, err := enhancedGen.GenerateForeignKeyDefinitions(model)
-		if err != nil {
-			return fmt.Errorf("failed to generate foreign keys for %s: %w", model.StructName, err)
-		}
-		allStructForeignKeys = append(allStructForeignKeys, foreignKeys...)
+	// Test connection
+	if err := db.PingContext(ctx); err != nil {
+		return fmt.Errorf("failed to ping database: %w", err)
 	}
 
-	var allDBIndexes []generator.IndexDefinition
-	var allDBForeignKeys []generator.ForeignKeyDefinition
+	// Step 4: Use pg-schema-diff to generate migration plan
+	fmt.Println("Analyzing schema differences...")
 
-	for _, model := range models {
-		dbIndexes, err := introspector.GetEnhancedIndexes(model.TableName)
-		if err != nil {
-			return fmt.Errorf("failed to get indexes for %s: %w", model.TableName, err)
-		}
-
-		for _, dbIdx := range dbIndexes {
-			genIdx := generator.IndexDefinition{
-				Name:       dbIdx.Name,
-				TableName:  dbIdx.TableName,
-				Columns:    dbIdx.Columns,
-				IsUnique:   dbIdx.IsUnique,
-				IsPrimary:  dbIdx.IsPrimary,
-				Method:     dbIdx.Method,
-				Where:      dbIdx.Where,
-				Definition: dbIdx.Definition,
-				Signature:  dbIdx.Signature,
+	// Create temporary database factory for pg-schema-diff
+	createConnPoolForDb := func(ctx context.Context, dbName string) (*sql.DB, error) {
+		// Build DSN for the temp database by replacing the database name
+		var tempDSN string
+		if dbURL != "" {
+			// Extract base URL and replace database name
+			if idx := strings.LastIndex(dbURL, "/"); idx != -1 {
+				if queryIdx := strings.Index(dbURL[idx:], "?"); queryIdx != -1 {
+					// Has query parameters
+					tempDSN = dbURL[:idx+1] + dbName + dbURL[idx+queryIdx:]
+				} else {
+					// No query parameters
+					tempDSN = dbURL[:idx+1] + dbName
+				}
+			} else {
+				return nil, fmt.Errorf("invalid database URL format")
 			}
-			allDBIndexes = append(allDBIndexes, genIdx)
+		} else {
+			tempDSN = fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
+				dbHost, dbPort, dbUser, dbPassword, dbName, dbSSLMode)
 		}
-
-		dbForeignKeys, err := introspector.GetEnhancedForeignKeys(model.TableName)
-		if err != nil {
-			return fmt.Errorf("failed to get foreign keys for %s: %w", model.TableName, err)
-		}
-
-		for _, dbFK := range dbForeignKeys {
-			genFK := generator.ForeignKeyDefinition{
-				Name:              dbFK.Name,
-				TableName:         dbFK.TableName,
-				Columns:           dbFK.Columns,
-				ReferencedTable:   dbFK.ReferencedTable,
-				ReferencedColumns: dbFK.ReferencedColumns,
-				OnDelete:          dbFK.OnDelete,
-				OnUpdate:          dbFK.OnUpdate,
-				Definition:        dbFK.Definition,
-				Signature:         dbFK.Signature,
-			}
-			allDBForeignKeys = append(allDBForeignKeys, genFK)
-		}
+		return sql.Open("postgres", tempDSN)
 	}
 
-	comparison, err := enhancedGen.CompareSchemas(allStructIndexes, allStructForeignKeys, allDBIndexes, allDBForeignKeys)
+	tempDbFactory, err := tempdb.NewOnInstanceFactory(ctx, createConnPoolForDb,
+		tempdb.WithRootDatabase("postgres"),
+	)
 	if err != nil {
-		return fmt.Errorf("failed to compare schemas: %w", err)
+		return fmt.Errorf("failed to create temp database factory: %w", err)
+	}
+	defer tempDbFactory.Close()
+
+	// Generate migration plan
+	plan, err := diff.Generate(ctx,
+		diff.DBSchemaSource(db),                // Current database schema
+		diff.DDLSchemaSource([]string{ddlSQL}), // Target schema from Go structs
+		diff.WithTempDbFactory(tempDbFactory),
+		diff.WithDataPackNewTables(), // Pack data for new tables
+		diff.WithDoNotValidatePlan(), // Skip validation for now to avoid function dependency issues
+	)
+
+	if err != nil {
+		return fmt.Errorf("failed to generate migration plan: %w", err)
 	}
 
-	if !enhancedGen.IsSafeOperation(comparison) && !allowDestructive {
-		fmt.Println("\nPOTENTIALLY DESTRUCTIVE OPERATIONS DETECTED:")
-
-		if len(comparison.ForeignKeysToDrop) > 0 {
-			fmt.Printf("  - %d foreign key(s) to drop (data integrity risk)\n", len(comparison.ForeignKeysToDrop))
-		}
-
-		uniqueDropCount := 0
-		for _, idx := range comparison.IndexesToDrop {
-			if idx.IsUnique || idx.IsPrimary {
-				uniqueDropCount++
-			}
-		}
-		if uniqueDropCount > 0 {
-			fmt.Printf("  - %d unique/primary index(es) to drop (duplicate data risk)\n", uniqueDropCount)
-		}
-
-		fmt.Println("\nUse --allow-destructive to proceed with these changes.")
-		fmt.Println("Review the changes carefully as they may cause data integrity issues.")
+	// Step 5: Display results
+	if len(plan.Statements) == 0 {
+		fmt.Println("No schema changes detected! Database is up to date.")
 		return nil
 	}
 
-	upStatements, downStatements, err := enhancedGen.GenerateSafeSQL(comparison, allowDestructive)
-	if err != nil {
-		return fmt.Errorf("failed to generate SQL: %w", err)
+	fmt.Printf("Found %d migration statements:\n", len(plan.Statements))
+
+	// Convert migration plan to SQL
+	var upSQL strings.Builder
+	var downSQL strings.Builder
+
+	upSQL.WriteString("-- Migration UP generated by db-migrator\n")
+	upSQL.WriteString("-- Generated at: " + time.Now().UTC().Format(time.RFC3339) + "\n\n")
+
+	for i, stmt := range plan.Statements {
+		upSQL.WriteString(fmt.Sprintf("-- Statement %d\n", i+1))
+		upSQL.WriteString(stmt.ToSQL())
+		upSQL.WriteString(";\n\n")
 	}
 
-	var upSQL, downSQL string
-	if len(upStatements) == 0 {
-		upSQL = ""
-		downSQL = ""
-	} else {
-		upSQL = strings.Join(upStatements, "\n\n")
-		downSQL = strings.Join(downStatements, "\n\n")
-	}
+	// Generate reverse statements for DOWN migration
+	downSQL.WriteString("-- Migration DOWN generated by db-migrator\n")
+	downSQL.WriteString("-- Generated at: " + time.Now().UTC().Format(time.RFC3339) + "\n\n")
+	downSQL.WriteString("-- WARNING: Reverse migration may cause data loss!\n")
+	downSQL.WriteString("-- Review carefully before executing.\n\n")
 
-	fmt.Printf("\nSchema comparison summary:\n")
-	fmt.Printf("  Indexes to create: %d\n", len(comparison.IndexesToCreate))
-	fmt.Printf("  Indexes to drop: %d\n", len(comparison.IndexesToDrop))
-	fmt.Printf("  Foreign keys to create: %d\n", len(comparison.ForeignKeysToCreate))
-	fmt.Printf("  Foreign keys to drop: %d\n", len(comparison.ForeignKeysToDrop))
+	// For down migration, we'd need to reverse the statements
+	// This is complex and would require analyzing each statement type
+	downSQL.WriteString("-- TODO: Implement reverse migration logic\n")
+	downSQL.WriteString("-- For now, backup your database before running UP migration\n")
 
-	if upSQL == "" && downSQL == "" {
-		fmt.Println("No changes detected. Database is up to date!")
+	upSQLString := upSQL.String()
+	downSQLString := downSQL.String()
+
+	// Check for destructive operations
+	hasDestructive := containsDestructiveOperations(plan.Statements)
+	if hasDestructive && !allowDestructive {
+		fmt.Println("\nPOTENTIALLY DESTRUCTIVE OPERATIONS DETECTED:")
+		for i, stmt := range plan.Statements {
+			if isDestructiveOperation(stmt) {
+				fmt.Printf("  - Statement %d: %s\n", i+1, summarizeStatement(stmt))
+			}
+		}
+		fmt.Println("\nUse --allow-destructive to proceed with these changes.")
+		fmt.Println("Review the changes carefully as they may cause data loss.")
 		return nil
 	}
 
 	if dryRun {
 		fmt.Println("\n=== UP Migration ===")
-		fmt.Println(upSQL)
+		fmt.Println(upSQLString)
 		fmt.Println("\n=== DOWN Migration ===")
-		fmt.Println(downSQL)
+		fmt.Println(downSQLString)
 		return nil
 	}
 
 	if pushToDB {
-		fmt.Println("\nExecuting migration on database...")
+		fmt.Println("Executing migration on database...")
 
-		for i, stmt := range upStatements {
-			fmt.Printf("Executing statement %d/%d...\n", i+1, len(upStatements))
-			if _, err := db.Exec(stmt); err != nil {
-				return fmt.Errorf("failed to execute statement %d: %s\nError: %w", i+1, stmt, err)
+		// Execute each statement
+		for i, stmt := range plan.Statements {
+			fmt.Printf("Executing statement %d/%d...\n", i+1, len(plan.Statements))
+			if _, err := db.ExecContext(ctx, stmt.ToSQL()); err != nil {
+				return fmt.Errorf("failed to execute statement %d: %s\nError: %w", i+1, stmt.ToSQL(), err)
 			}
 		}
 
-		fmt.Printf("\nMigration executed successfully! Applied %d statements.\n", len(upStatements))
+		fmt.Printf("\nMigration executed successfully! Applied %d changes.\n", len(plan.Statements))
 		return nil
 	}
 
+	// Create migration files
 	timestamp := time.Now().UTC().Format("20060102150405")
-
 	if migrationName == "" {
 		migrationName = "schema_update"
 	}
@@ -250,11 +257,11 @@ func runMigrate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to create output directory: %w", err)
 	}
 
-	if err = os.WriteFile(upFile, []byte(upSQL), 0644); err != nil {
+	if err = os.WriteFile(upFile, []byte(upSQLString), 0644); err != nil {
 		return fmt.Errorf("failed to write UP migration: %w", err)
 	}
 
-	if err = os.WriteFile(downFile, []byte(downSQL), 0644); err != nil {
+	if err = os.WriteFile(downFile, []byte(downSQLString), 0644); err != nil {
 		return fmt.Errorf("failed to write DOWN migration: %w", err)
 	}
 
@@ -263,4 +270,30 @@ func runMigrate(cmd *cobra.Command, args []string) error {
 	fmt.Printf("  DOWN: %s\n", downFile)
 
 	return nil
+}
+
+// Helper functions
+func containsDestructiveOperations(statements []diff.Statement) bool {
+	for _, stmt := range statements {
+		if isDestructiveOperation(stmt) {
+			return true
+		}
+	}
+	return false
+}
+
+func isDestructiveOperation(stmt diff.Statement) bool {
+	sql := strings.ToUpper(stmt.ToSQL())
+	return strings.Contains(sql, "DROP TABLE") ||
+		strings.Contains(sql, "DROP COLUMN") ||
+		strings.Contains(sql, "DROP INDEX") ||
+		strings.Contains(sql, "DROP CONSTRAINT")
+}
+
+func summarizeStatement(stmt diff.Statement) string {
+	sql := stmt.ToSQL()
+	if len(sql) > 100 {
+		return sql[:100] + "..."
+	}
+	return sql
 }

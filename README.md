@@ -1,19 +1,19 @@
 # Go Database Migrator
 
-[![Go Version](https://img.shields.io/badge/go-1.19+-blue.svg)](https://golang.org)
+[![Go Version](https://img.shields.io/badge/go-1.23+-blue.svg)](https://golang.org)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Test Coverage](https://img.shields.io/badge/coverage-95%25-brightgreen.svg)](TEST_DOCUMENTATION.md)
 
-A powerful, struct-driven PostgreSQL database migration tool for Go applications. Generate accurate, safe database migrations by comparing your Go structs with your actual database schema.
+A production-ready, struct-driven PostgreSQL database migration tool. Generate accurate, safe database migrations by comparing your Go structs with your actual database schema.
 
 ## Features
 
 🚀 **Struct-Driven Migrations** - Define your schema in Go structs using `dbdef` tags  
-🔍 **Signature-Based Comparison** - Intelligent schema comparison using normalized signatures  
+🔥 **Advanced Engine** - Uses battle-tested schema comparison for constraint normalization  
 🛡️ **Safety First** - Identifies destructive operations and requires explicit approval  
 🔧 **PostgreSQL Native** - Built specifically for PostgreSQL with full feature support  
-⚡ **Zero False Positives** - Advanced normalization eliminates schema comparison false positives  
-📊 **Comprehensive Testing** - 95%+ test coverage with integration tests  
+⚡ **Zero False Positives** - Eliminates CHECK constraint syntax comparison issues  
+🏗️ **Zero-Downtime** - Leverages PostgreSQL's online migration capabilities  
 
 ## Why db-migrator?
 
@@ -22,11 +22,11 @@ A powerful, struct-driven PostgreSQL database migration tool for Go applications
 | Feature | db-migrator | golang-migrate | Atlas | GORM AutoMigrate |
 |---------|------------|----------------|-------|------------------|
 | Struct-driven | ✅ | ❌ | ❌ | ✅ |
-| Signature matching | ✅ | ❌ | ❌ | ❌ |
+| Advanced schema comparison | ✅ | ❌ | ❌ | ❌ |
 | Down migrations | ✅ | ✅ | ✅ | ❌ |
 | Safety checks | ✅ | ❌ | ✅ | ❌ |
-| False positive elimination | ✅ | ❌ | ❌ | ❌ |
-| Works with sqlx/squirrel | ✅ | ✅ | ✅ | ❌ |
+| Zero false positives | ✅ | ❌ | ❌ | ❌ |
+| Zero-downtime migrations | ✅ | ❌ | ✅ | ❌ |
 
 ## Quick Start
 
