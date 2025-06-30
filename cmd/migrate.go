@@ -111,8 +111,8 @@ func convertIntrospectedToSchema(introspector *introspect.PostgreSQLIntrospector
 		// First, build a set of indexes that back constraints
 		constraintBackedIndexes := make(map[string]bool)
 		for _, constraint := range table.Constraints {
-			if constraint.BackingIndexName != "" && 
-			   (constraint.Type == "PRIMARY KEY" || constraint.Type == "UNIQUE") {
+			if constraint.BackingIndexName != "" &&
+				(constraint.Type == "PRIMARY KEY" || constraint.Type == "UNIQUE") {
 				constraintBackedIndexes[constraint.BackingIndexName] = true
 			}
 		}
@@ -123,12 +123,13 @@ func convertIntrospectedToSchema(introspector *introspect.PostgreSQLIntrospector
 			if constraintBackedIndexes[idx.Name] {
 				continue
 			}
-			
+
 			schemaIdx := generator.SchemaIndex{
 				Name:      idx.Name,
 				Columns:   idx.Columns,
 				IsUnique:  idx.IsUnique,
 				IsPrimary: idx.IsPrimary,
+				Where:     idx.Where,
 			}
 			schemaTable.Indexes = append(schemaTable.Indexes, schemaIdx)
 		}
@@ -205,7 +206,6 @@ func runMigrate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to compare schemas: %w", err)
 	}
-	
 
 	// Check for unsafe changes
 	if diffResult.HasUnsafeChanges && !allowDestructive {
@@ -252,7 +252,7 @@ func runMigrate(cmd *cobra.Command, args []string) error {
 
 	if pushToDB {
 		fmt.Println("\nExecuting migration on database...")
-		
+
 		// Split SQL into individual statements
 		upStatements := strings.Split(upSQL, ";\n")
 		for i, stmt := range upStatements {

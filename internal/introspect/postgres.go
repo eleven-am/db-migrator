@@ -36,6 +36,7 @@ type Index struct {
 	Columns   []string
 	IsUnique  bool
 	IsPrimary bool
+	Where     string // WHERE clause for partial indexes
 }
 
 // IndexDefinition represents an enhanced index definition with signature-based matching
@@ -326,6 +327,12 @@ func (i *PostgreSQLIntrospector) getIndexes(tableName string) ([]Index, error) {
 			for i := range idx.Columns {
 				idx.Columns[i] = strings.TrimSpace(idx.Columns[i])
 			}
+		}
+
+		// Extract WHERE clause from index definition
+		// Example: "CREATE INDEX idx_name ON table (col) WHERE condition"
+		if whereIdx := strings.Index(indexDef, " WHERE "); whereIdx != -1 {
+			idx.Where = strings.TrimSpace(indexDef[whereIdx+7:])
 		}
 
 		indexes = append(indexes, idx)

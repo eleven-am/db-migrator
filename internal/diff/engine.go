@@ -310,18 +310,29 @@ func (e *Engine) columnsEqual(col1, col2 generator.SchemaColumn) bool {
 func (e *Engine) compareIndexes(oldTable, newTable generator.SchemaTable) []IndexChange {
 	changes := make([]IndexChange, 0)
 
-	oldIndexes := make(map[string]generator.SchemaIndex)
+	// Create signature maps for matching
+	oldIndexesByName := make(map[string]generator.SchemaIndex)
+	oldIndexesBySig := make(map[string]generator.SchemaIndex)
 	for _, idx := range oldTable.Indexes {
-		oldIndexes[idx.Name] = idx
+		oldIndexesByName[idx.Name] = idx
+		sig := GenerateIndexSignature(idx)
+		oldIndexesBySig[sig] = idx
 	}
 
-	newIndexes := make(map[string]generator.SchemaIndex)
+	newIndexesByName := make(map[string]generator.SchemaIndex)
+	newIndexesBySig := make(map[string]generator.SchemaIndex)
+	processedOld := make(map[string]bool)
+
 	for _, idx := range newTable.Indexes {
-		newIndexes[idx.Name] = idx
+		newIndexesByName[idx.Name] = idx
+		sig := GenerateIndexSignature(idx)
+		newIndexesBySig[sig] = idx
 	}
 
+	// First pass: match by name
 	for _, newIdx := range newTable.Indexes {
-		if oldIdx, exists := oldIndexes[newIdx.Name]; exists {
+		if oldIdx, exists := oldIndexesByName[newIdx.Name]; exists {
+			processedOld[oldIdx.Name] = true
 			if !e.indexesEqual(oldIdx, newIdx) {
 				changes = append(changes, IndexChange{
 					Type:      ChangeTypeAlterIndex,
@@ -330,17 +341,32 @@ func (e *Engine) compareIndexes(oldTable, newTable generator.SchemaTable) []Inde
 					NewIndex:  &newIdx,
 				})
 			}
-		} else {
-			changes = append(changes, IndexChange{
-				Type:      ChangeTypeCreateIndex,
-				IndexName: newIdx.Name,
-				NewIndex:  &newIdx,
-			})
 		}
 	}
 
+	// Second pass: match by signature for indexes not matched by name
+	for _, newIdx := range newTable.Indexes {
+		if _, matchedByName := oldIndexesByName[newIdx.Name]; !matchedByName {
+			// Try to find by signature
+			newSig := GenerateIndexSignature(newIdx)
+			if oldIdx, exists := oldIndexesBySig[newSig]; exists && !processedOld[oldIdx.Name] {
+				// Found matching index with different name - skip it
+				processedOld[oldIdx.Name] = true
+				// No changes needed - the index exists with the same signature
+			} else {
+				// Genuinely new index
+				changes = append(changes, IndexChange{
+					Type:      ChangeTypeCreateIndex,
+					IndexName: newIdx.Name,
+					NewIndex:  &newIdx,
+				})
+			}
+		}
+	}
+
+	// Third pass: drop old indexes that weren't matched
 	for _, oldIdx := range oldTable.Indexes {
-		if _, exists := newIndexes[oldIdx.Name]; !exists {
+		if !processedOld[oldIdx.Name] {
 			changes = append(changes, IndexChange{
 				Type:      ChangeTypeDropIndex,
 				IndexName: oldIdx.Name,
@@ -376,18 +402,29 @@ func (e *Engine) indexesEqual(idx1, idx2 generator.SchemaIndex) bool {
 func (e *Engine) compareConstraints(oldTable, newTable generator.SchemaTable) []ConstraintChange {
 	changes := make([]ConstraintChange, 0)
 
-	oldConstraints := make(map[string]generator.SchemaConstraint)
+	// Create signature maps for matching
+	oldConstraintsByName := make(map[string]generator.SchemaConstraint)
+	oldConstraintsBySig := make(map[string]generator.SchemaConstraint)
 	for _, con := range oldTable.Constraints {
-		oldConstraints[con.Name] = con
+		oldConstraintsByName[con.Name] = con
+		sig := GenerateConstraintSignature(con)
+		oldConstraintsBySig[sig.Hash()] = con
 	}
 
-	newConstraints := make(map[string]generator.SchemaConstraint)
+	newConstraintsByName := make(map[string]generator.SchemaConstraint)
+	newConstraintsBySig := make(map[string]generator.SchemaConstraint)
+	processedOld := make(map[string]bool)
+
 	for _, con := range newTable.Constraints {
-		newConstraints[con.Name] = con
+		newConstraintsByName[con.Name] = con
+		sig := GenerateConstraintSignature(con)
+		newConstraintsBySig[sig.Hash()] = con
 	}
 
+	// First pass: match by name
 	for _, newCon := range newTable.Constraints {
-		if oldCon, exists := oldConstraints[newCon.Name]; exists {
+		if oldCon, exists := oldConstraintsByName[newCon.Name]; exists {
+			processedOld[oldCon.Name] = true
 			if !e.constraintsEqual(oldCon, newCon) {
 				changes = append(changes, ConstraintChange{
 					Type:           ChangeTypeDropConstraint,
@@ -400,17 +437,42 @@ func (e *Engine) compareConstraints(oldTable, newTable generator.SchemaTable) []
 					NewConstraint:  &newCon,
 				})
 			}
-		} else {
-			changes = append(changes, ConstraintChange{
-				Type:           ChangeTypeAddConstraint,
-				ConstraintName: newCon.Name,
-				NewConstraint:  &newCon,
-			})
 		}
 	}
 
+	// Second pass: match by signature for constraints not matched by name
+	for _, newCon := range newTable.Constraints {
+		if _, matchedByName := oldConstraintsByName[newCon.Name]; !matchedByName {
+			// Try to find by signature
+			newSig := GenerateConstraintSignature(newCon)
+			if oldCon, exists := oldConstraintsBySig[newSig.Hash()]; exists && !processedOld[oldCon.Name] {
+				// Found matching constraint with different name - this is a rename
+				processedOld[oldCon.Name] = true
+				// For now, we'll drop and recreate, but could handle rename in the future
+				changes = append(changes, ConstraintChange{
+					Type:           ChangeTypeDropConstraint,
+					ConstraintName: oldCon.Name,
+					OldConstraint:  &oldCon,
+				})
+				changes = append(changes, ConstraintChange{
+					Type:           ChangeTypeAddConstraint,
+					ConstraintName: newCon.Name,
+					NewConstraint:  &newCon,
+				})
+			} else {
+				// Genuinely new constraint
+				changes = append(changes, ConstraintChange{
+					Type:           ChangeTypeAddConstraint,
+					ConstraintName: newCon.Name,
+					NewConstraint:  &newCon,
+				})
+			}
+		}
+	}
+
+	// Third pass: drop old constraints that weren't matched
 	for _, oldCon := range oldTable.Constraints {
-		if _, exists := newConstraints[oldCon.Name]; !exists {
+		if !processedOld[oldCon.Name] {
 			changes = append(changes, ConstraintChange{
 				Type:           ChangeTypeDropConstraint,
 				ConstraintName: oldCon.Name,
@@ -427,18 +489,18 @@ func (e *Engine) constraintsEqual(con1, con2 generator.SchemaConstraint) bool {
 	if con1.Type != con2.Type {
 		return false
 	}
-	
+
 	// For PRIMARY KEY and UNIQUE constraints, the columns are what matter
 	// The Definition might be empty or formatted differently
 	if con1.Type == "PRIMARY KEY" || con1.Type == "UNIQUE" {
 		return reflect.DeepEqual(con1.Columns, con2.Columns)
 	}
-	
+
 	// For other constraints (CHECK, FOREIGN KEY), compare the definition
 	if con1.Definition != con2.Definition {
 		return false
 	}
-	
+
 	if !reflect.DeepEqual(con1.Columns, con2.Columns) {
 		return false
 	}
@@ -546,16 +608,16 @@ func (e *Engine) isUnsafeTypeChange(oldType, newType string) bool {
 	// Normalize types first
 	oldTypeNorm := NormalizePostgreSQLType(oldType)
 	newTypeNorm := NormalizePostgreSQLType(newType)
-	
+
 	// If normalized types are identical, it's safe
 	if oldTypeNorm == newTypeNorm {
 		return false
 	}
-	
+
 	// Extract base type and size
 	oldBase, oldSize := extractTypeAndSize(oldTypeNorm)
 	newBase, newSize := extractTypeAndSize(newTypeNorm)
-	
+
 	// For varchar/char types, increasing size is safe
 	if oldBase == newBase && (oldBase == "varchar" || oldBase == "char") {
 		if oldSize <= newSize {
@@ -564,7 +626,7 @@ func (e *Engine) isUnsafeTypeChange(oldType, newType string) bool {
 		// Decreasing size is unsafe
 		return true
 	}
-	
+
 	safeConversions := map[string][]string{
 		"varchar":   {"text"},
 		"char":      {"varchar", "text"},
@@ -589,17 +651,17 @@ func (e *Engine) isUnsafeTypeChange(oldType, newType string) bool {
 func extractTypeAndSize(typeName string) (string, int) {
 	re := regexp.MustCompile(`^([a-z\s]+)(?:\((\d+)\))?`)
 	matches := re.FindStringSubmatch(typeName)
-	
+
 	if len(matches) < 2 {
 		return typeName, 0
 	}
-	
+
 	baseType := strings.TrimSpace(matches[1])
 	size := 0
 	if len(matches) > 2 && matches[2] != "" {
 		size, _ = strconv.Atoi(matches[2])
 	}
-	
+
 	return baseType, size
 }
 
