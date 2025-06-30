@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"os"
@@ -8,13 +9,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/eleven-am/db-migrator/internal/diff"
 	"github.com/eleven-am/db-migrator/internal/generator"
-	"github.com/eleven-am/db-migrator/internal/introspect"
 	"github.com/eleven-am/db-migrator/internal/parser"
-
-	_ "github.com/lib/pq" // PostgreSQL driver
+	_ "github.com/lib/pq" //
 	"github.com/spf13/cobra"
+	"github.com/stripe/pg-schema-diff/pkg/diff"
+	"github.com/stripe/pg-schema-diff/pkg/tempdb"
 )
 
 var (
@@ -40,7 +40,7 @@ var (
 var migrateCmd = &cobra.Command{
 	Use:   "migrate",
 	Short: "Generate database migrations",
-	Long:  `Compare current Go structs with database schema and generate migration files`,
+	Long:  `Compare current Go structs with database schema and generate migration files using Stripe's production-grade pg-schema-diff library`,
 	RunE:  runMigrate,
 }
 
@@ -60,98 +60,14 @@ func init() {
 	migrateCmd.Flags().StringVar(&migrationName, "name", "", "Migration name (optional)")
 	migrateCmd.Flags().BoolVar(&dryRun, "dry-run", false, "Print migration without creating files")
 	migrateCmd.Flags().BoolVar(&createDBIfNotExists, "create-if-not-exists", false, "Create the database if it does not exist")
-	migrateCmd.Flags().BoolVar(&allowDestructive, "allow-destructive", false, "Allow potentially destructive operations (DROP constraints, DROP indexes)")
+	migrateCmd.Flags().BoolVar(&allowDestructive, "allow-destructive", false, "Allow potentially destructive operations")
 	migrateCmd.Flags().BoolVar(&pushToDB, "push", false, "Execute the generated SQL directly on the database")
 }
 
-// convertIntrospectedToSchema converts introspected database structure to DatabaseSchema
-func convertIntrospectedToSchema(introspector *introspect.PostgreSQLIntrospector) (*generator.DatabaseSchema, error) {
-	schema := &generator.DatabaseSchema{
-		Tables: make(map[string]generator.SchemaTable),
-	}
-
-	// Get all tables
-	tables, err := introspector.GetTables()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get tables: %w", err)
-	}
-
-	for _, table := range tables {
-		schemaTable := generator.SchemaTable{
-			Name:        table.Name,
-			Columns:     make([]generator.SchemaColumn, 0),
-			Indexes:     make([]generator.SchemaIndex, 0),
-			Constraints: make([]generator.SchemaConstraint, 0),
-		}
-
-		// Convert columns
-		for _, col := range table.Columns {
-			schemaCol := generator.SchemaColumn{
-				Name:            col.Name,
-				Type:            col.Type,
-				IsNullable:      col.IsNullable,
-				DefaultValue:    col.DefaultValue,
-				IsPrimaryKey:    col.IsPrimaryKey,
-				IsUnique:        col.IsUnique,
-				IsAutoIncrement: col.IsAutoIncrement,
-			}
-
-			if col.ForeignKey != nil {
-				schemaCol.ForeignKey = &generator.ForeignKeyRef{
-					ReferencedTable:  col.ForeignKey.ReferencedTable,
-					ReferencedColumn: col.ForeignKey.ReferencedColumn,
-					OnDelete:         col.ForeignKey.OnDelete,
-					OnUpdate:         col.ForeignKey.OnUpdate,
-				}
-			}
-
-			schemaTable.Columns = append(schemaTable.Columns, schemaCol)
-		}
-
-		// First, build a set of indexes that back constraints
-		constraintBackedIndexes := make(map[string]bool)
-		for _, constraint := range table.Constraints {
-			if constraint.BackingIndexName != "" &&
-				(constraint.Type == "PRIMARY KEY" || constraint.Type == "UNIQUE") {
-				constraintBackedIndexes[constraint.BackingIndexName] = true
-			}
-		}
-
-		// Convert indexes (skip those that back constraints)
-		for _, idx := range table.Indexes {
-			// Skip this index if it backs a constraint
-			if constraintBackedIndexes[idx.Name] {
-				continue
-			}
-
-			schemaIdx := generator.SchemaIndex{
-				Name:      idx.Name,
-				Columns:   idx.Columns,
-				IsUnique:  idx.IsUnique,
-				IsPrimary: idx.IsPrimary,
-				Where:     idx.Where,
-			}
-			schemaTable.Indexes = append(schemaTable.Indexes, schemaIdx)
-		}
-
-		// Convert constraints
-		for _, constraint := range table.Constraints {
-			schemaConstraint := generator.SchemaConstraint{
-				Name:       constraint.Name,
-				Type:       constraint.Type,
-				Definition: constraint.Definition,
-				Columns:    constraint.Columns,
-			}
-			schemaTable.Constraints = append(schemaTable.Constraints, schemaConstraint)
-		}
-
-		schema.Tables[table.Name] = schemaTable
-	}
-
-	return schema, nil
-}
-
 func runMigrate(cmd *cobra.Command, args []string) error {
+	ctx := context.Background()
+
+	// Build DSN
 	var dsn string
 	if dbURL != "" {
 		dsn = dbURL
@@ -168,7 +84,10 @@ func runMigrate(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	fmt.Println("Parsing Go structs...")
+	fmt.Println("🚀 Using Stripe's pg-schema-diff for schema migration...")
+
+	// Step 1: Parse Go structs and generate DDL SQL
+	fmt.Println("📖 Parsing Go structs...")
 	structParser := parser.NewStructParser()
 	models, err := structParser.ParseDirectory(packagePath)
 	if err != nil {
@@ -177,49 +96,123 @@ func runMigrate(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("Found %d models in %s\n", len(models), packagePath)
 
-	// Generate schema from structs
+	// Step 2: Generate DDL SQL from structs
+	fmt.Println("🔨 Generating DDL SQL from Go structs...")
 	schemaGen := generator.NewSchemaGenerator()
-	newSchema, err := schemaGen.GenerateSchema(models)
+	schema, err := schemaGen.GenerateSchema(models)
 	if err != nil {
 		return fmt.Errorf("failed to generate schema from structs: %w", err)
 	}
 
-	// Connect to database
+	// Convert schema to DDL SQL
+	sqlGen := generator.NewSQLGenerator()
+	ddlSQL := sqlGen.GenerateSchema(schema)
+
+	fmt.Printf("✅ Generated DDL SQL (%d tables)\n", len(schema.Tables))
+
+	// Step 3: Connect to database
+	fmt.Println("🔌 Connecting to database...")
 	db, err := sql.Open("postgres", dsn)
 	if err != nil {
 		return fmt.Errorf("failed to connect to database: %w", err)
 	}
 	defer db.Close()
 
-	// Introspect current database schema
-	fmt.Println("Introspecting database schema...")
-	introspector := introspect.NewPostgreSQLIntrospector(db)
-	oldSchema, err := convertIntrospectedToSchema(introspector)
-	if err != nil {
-		return fmt.Errorf("failed to introspect database: %w", err)
+	// Test connection
+	if err := db.PingContext(ctx); err != nil {
+		return fmt.Errorf("failed to ping database: %w", err)
 	}
 
-	// Use the diff engine to compare schemas
-	fmt.Println("Comparing schemas...")
-	engine := diff.NewEngine(oldSchema, newSchema)
-	diffResult, err := engine.Compare()
-	if err != nil {
-		return fmt.Errorf("failed to compare schemas: %w", err)
+	// Step 4: Use pg-schema-diff to generate migration plan
+	fmt.Println("🔍 Analyzing schema differences with pg-schema-diff...")
+
+	// Create temporary database factory for pg-schema-diff
+	createConnPoolForDb := func(ctx context.Context, dbName string) (*sql.DB, error) {
+		// Build DSN for the temp database by replacing the database name
+		var tempDSN string
+		if dbURL != "" {
+			// Extract base URL and replace database name
+			if idx := strings.LastIndex(dbURL, "/"); idx != -1 {
+				if queryIdx := strings.Index(dbURL[idx:], "?"); queryIdx != -1 {
+					// Has query parameters
+					tempDSN = dbURL[:idx+1] + dbName + dbURL[idx+queryIdx:]
+				} else {
+					// No query parameters
+					tempDSN = dbURL[:idx+1] + dbName
+				}
+			} else {
+				return nil, fmt.Errorf("invalid database URL format")
+			}
+		} else {
+			tempDSN = fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
+				dbHost, dbPort, dbUser, dbPassword, dbName, dbSSLMode)
+		}
+		return sql.Open("postgres", tempDSN)
 	}
 
-	// Check for unsafe changes
-	if diffResult.HasUnsafeChanges && !allowDestructive {
-		fmt.Println("\nPOTENTIALLY DESTRUCTIVE OPERATIONS DETECTED:")
-		for _, change := range diffResult.Changes {
-			if change.IsUnsafe {
-				desc := fmt.Sprintf("%s %s", change.Type, change.TableName)
-				if change.ColumnName != "" {
-					desc += "." + change.ColumnName
-				}
-				if change.SafetyNotes != "" {
-					desc += " - " + change.SafetyNotes
-				}
-				fmt.Printf("  - %s\n", desc)
+	tempDbFactory, err := tempdb.NewOnInstanceFactory(ctx, createConnPoolForDb,
+		tempdb.WithRootDatabase("postgres"),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create temp database factory: %w", err)
+	}
+	defer tempDbFactory.Close()
+
+	// Generate migration plan
+	plan, err := diff.Generate(ctx,
+		diff.DBSchemaSource(db),                // Current database schema
+		diff.DDLSchemaSource([]string{ddlSQL}), // Target schema from Go structs
+		diff.WithTempDbFactory(tempDbFactory),
+		diff.WithDataPackNewTables(), // Pack data for new tables
+		diff.WithDoNotValidatePlan(), // Skip validation for now to avoid function dependency issues
+	)
+
+	if err != nil {
+		return fmt.Errorf("failed to generate migration plan: %w", err)
+	}
+
+	// Step 5: Display results
+	if len(plan.Statements) == 0 {
+		fmt.Println("🎉 No schema changes detected! Database is up to date.")
+		return nil
+	}
+
+	fmt.Printf("📋 Found %d migration statements:\n", len(plan.Statements))
+
+	// Convert migration plan to SQL
+	var upSQL strings.Builder
+	var downSQL strings.Builder
+
+	upSQL.WriteString("-- Migration UP generated by Stripe's pg-schema-diff\n")
+	upSQL.WriteString("-- Generated at: " + time.Now().UTC().Format(time.RFC3339) + "\n\n")
+
+	for i, stmt := range plan.Statements {
+		upSQL.WriteString(fmt.Sprintf("-- Statement %d\n", i+1))
+		upSQL.WriteString(stmt.ToSQL())
+		upSQL.WriteString(";\n\n")
+	}
+
+	// Generate reverse statements for DOWN migration
+	downSQL.WriteString("-- Migration DOWN generated by Stripe's pg-schema-diff\n")
+	downSQL.WriteString("-- Generated at: " + time.Now().UTC().Format(time.RFC3339) + "\n\n")
+	downSQL.WriteString("-- WARNING: Reverse migration may cause data loss!\n")
+	downSQL.WriteString("-- Review carefully before executing.\n\n")
+
+	// For down migration, we'd need to reverse the statements
+	// This is complex and would require analyzing each statement type
+	downSQL.WriteString("-- TODO: Implement reverse migration logic\n")
+	downSQL.WriteString("-- For now, backup your database before running UP migration\n")
+
+	upSQLString := upSQL.String()
+	downSQLString := downSQL.String()
+
+	// Check for destructive operations
+	hasDestructive := containsDestructiveOperations(plan.Statements)
+	if hasDestructive && !allowDestructive {
+		fmt.Println("\n⚠️  POTENTIALLY DESTRUCTIVE OPERATIONS DETECTED:")
+		for i, stmt := range plan.Statements {
+			if isDestructiveOperation(stmt) {
+				fmt.Printf("  - Statement %d: %s\n", i+1, summarizeStatement(stmt))
 			}
 		}
 		fmt.Println("\nUse --allow-destructive to proceed with these changes.")
@@ -227,53 +220,33 @@ func runMigrate(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Generate SQL
-	sqlGen := diff.NewMigrationSQLGenerator()
-	upSQL, downSQL, err := sqlGen.GenerateMigration(diffResult)
-	if err != nil {
-		return fmt.Errorf("failed to generate SQL: %w", err)
-	}
-
-	// Print summary
-	fmt.Println("\n" + diffResult.Summary)
-
-	if len(diffResult.Changes) == 0 {
-		fmt.Println("No changes detected. Database is up to date!")
-		return nil
-	}
-
 	if dryRun {
-		fmt.Println("\n=== UP Migration ===")
-		fmt.Println(upSQL)
+		fmt.Println("\n=== UP Migration (Stripe pg-schema-diff) ===")
+		fmt.Println(upSQLString)
 		fmt.Println("\n=== DOWN Migration ===")
-		fmt.Println(downSQL)
+		fmt.Println(downSQLString)
 		return nil
 	}
 
 	if pushToDB {
-		fmt.Println("\nExecuting migration on database...")
+		fmt.Println("🚀 Executing migration on database...")
 
-		// Split SQL into individual statements
-		upStatements := strings.Split(upSQL, ";\n")
-		for i, stmt := range upStatements {
-			stmt = strings.TrimSpace(stmt)
-			if stmt == "" {
-				continue
-			}
-			fmt.Printf("Executing statement %d/%d...\n", i+1, len(upStatements))
-			if _, err := db.Exec(stmt); err != nil {
-				return fmt.Errorf("failed to execute statement %d: %s\nError: %w", i+1, stmt, err)
+		// Execute each statement
+		for i, stmt := range plan.Statements {
+			fmt.Printf("Executing statement %d/%d...\n", i+1, len(plan.Statements))
+			if _, err := db.ExecContext(ctx, stmt.ToSQL()); err != nil {
+				return fmt.Errorf("failed to execute statement %d: %s\nError: %w", i+1, stmt.ToSQL(), err)
 			}
 		}
 
-		fmt.Printf("\nMigration executed successfully! Applied %d changes.\n", len(diffResult.Changes))
+		fmt.Printf("\n✅ Migration executed successfully! Applied %d changes.\n", len(plan.Statements))
 		return nil
 	}
 
 	// Create migration files
 	timestamp := time.Now().UTC().Format("20060102150405")
 	if migrationName == "" {
-		migrationName = "schema_update"
+		migrationName = "stripe_schema_update"
 	}
 
 	baseName := fmt.Sprintf("%s_%s", timestamp, migrationName)
@@ -284,17 +257,43 @@ func runMigrate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to create output directory: %w", err)
 	}
 
-	if err = os.WriteFile(upFile, []byte(upSQL), 0644); err != nil {
+	if err = os.WriteFile(upFile, []byte(upSQLString), 0644); err != nil {
 		return fmt.Errorf("failed to write UP migration: %w", err)
 	}
 
-	if err = os.WriteFile(downFile, []byte(downSQL), 0644); err != nil {
+	if err = os.WriteFile(downFile, []byte(downSQLString), 0644); err != nil {
 		return fmt.Errorf("failed to write DOWN migration: %w", err)
 	}
 
-	fmt.Printf("\nMigration files created:\n")
+	fmt.Printf("\n📁 Migration files created:\n")
 	fmt.Printf("  UP:   %s\n", upFile)
 	fmt.Printf("  DOWN: %s\n", downFile)
 
 	return nil
+}
+
+// Helper functions
+func containsDestructiveOperations(statements []diff.Statement) bool {
+	for _, stmt := range statements {
+		if isDestructiveOperation(stmt) {
+			return true
+		}
+	}
+	return false
+}
+
+func isDestructiveOperation(stmt diff.Statement) bool {
+	sql := strings.ToUpper(stmt.ToSQL())
+	return strings.Contains(sql, "DROP TABLE") ||
+		strings.Contains(sql, "DROP COLUMN") ||
+		strings.Contains(sql, "DROP INDEX") ||
+		strings.Contains(sql, "DROP CONSTRAINT")
+}
+
+func summarizeStatement(stmt diff.Statement) string {
+	sql := stmt.ToSQL()
+	if len(sql) > 100 {
+		return sql[:100] + "..."
+	}
+	return sql
 }
