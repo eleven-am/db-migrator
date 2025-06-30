@@ -1,14 +1,4 @@
-.PHONY: test test-unit test-integration test-all coverage clean release-patch release-minor release-major build install
-
-# Version information
-VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
-GIT_COMMIT = $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-BUILD_DATE = $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
-
-# Build flags
-LDFLAGS = -X 'github.com/eleven-am/db-migrator/cmd.Version=$(VERSION)' \
-          -X 'github.com/eleven-am/db-migrator/cmd.GitCommit=$(GIT_COMMIT)' \
-          -X 'github.com/eleven-am/db-migrator/cmd.BuildDate=$(BUILD_DATE)'
+.PHONY: test test-unit test-integration test-all coverage clean release-patch release-minor release-major
 
 # Run unit tests only
 test-unit:
@@ -53,11 +43,11 @@ lint:
 
 # Build the binary
 build:
-	go build -ldflags "$(LDFLAGS)" -o bin/db-migrator .
+	go build -o bin/db-migrator .
 
 # Install the binary
-install:
-	go install -ldflags "$(LDFLAGS)"
+install: build
+	cp bin/db-migrator $(GOPATH)/bin/
 
 # Release commands
 release-patch:
