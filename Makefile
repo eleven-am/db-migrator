@@ -1,4 +1,14 @@
-.PHONY: test test-unit test-integration test-all coverage clean release-patch release-minor release-major
+.PHONY: test test-unit test-integration test-all coverage clean release-patch release-minor release-major build install
+
+# Version information
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
+GIT_COMMIT = $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+BUILD_DATE = $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
+
+# Build flags
+LDFLAGS = -X 'github.com/eleven-am/db-migrator/cmd.Version=$(VERSION)' \
+          -X 'github.com/eleven-am/db-migrator/cmd.GitCommit=$(GIT_COMMIT)' \
+          -X 'github.com/eleven-am/db-migrator/cmd.BuildDate=$(BUILD_DATE)'
 
 # Run unit tests only
 test-unit:
@@ -43,11 +53,11 @@ lint:
 
 # Build the binary
 build:
-	go build -o bin/db-migrator .
+	go build -ldflags "$(LDFLAGS)" -o bin/db-migrator .
 
 # Install the binary
-install: build
-	cp bin/db-migrator $(GOPATH)/bin/
+install:
+	go install -ldflags "$(LDFLAGS)"
 
 # Release commands
 release-patch:
@@ -55,6 +65,10 @@ release-patch:
 	@current_version=$$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0"); \
 	new_version=$$(echo $$current_version | awk -F. '{$$3 = $$3 + 1; print $$1"."$$2"."$$3}'); \
 	echo "Bumping from $$current_version to $$new_version"; \
+	if git rev-parse $$new_version >/dev/null 2>&1; then \
+		echo "Error: Tag $$new_version already exists"; \
+		exit 1; \
+	fi; \
 	git tag $$new_version; \
 	git push origin $$new_version; \
 	echo "Released $$new_version"
@@ -64,6 +78,10 @@ release-minor:
 	@current_version=$$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0"); \
 	new_version=$$(echo $$current_version | awk -F. '{$$2 = $$2 + 1; $$3 = 0; print $$1"."$$2"."$$3}'); \
 	echo "Bumping from $$current_version to $$new_version"; \
+	if git rev-parse $$new_version >/dev/null 2>&1; then \
+		echo "Error: Tag $$new_version already exists"; \
+		exit 1; \
+	fi; \
 	git tag $$new_version; \
 	git push origin $$new_version; \
 	echo "Released $$new_version"
@@ -73,6 +91,10 @@ release-major:
 	@current_version=$$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0"); \
 	new_version=$$(echo $$current_version | awk -F. '{$$1 = $$1 + 1; $$2 = 0; $$3 = 0; print $$1"."$$2"."$$3}' | sed 's/^v/v/'); \
 	echo "Bumping from $$current_version to $$new_version"; \
+	if git rev-parse $$new_version >/dev/null 2>&1; then \
+		echo "Error: Tag $$new_version already exists"; \
+		exit 1; \
+	fi; \
 	git tag $$new_version; \
 	git push origin $$new_version; \
 	echo "Released $$new_version"
