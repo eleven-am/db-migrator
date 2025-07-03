@@ -198,10 +198,20 @@ func runMigrate(cmd *cobra.Command, args []string) error {
 	downSQL.WriteString("-- WARNING: Reverse migration may cause data loss!\n")
 	downSQL.WriteString("-- Review carefully before executing.\n\n")
 
-	// For down migration, we'd need to reverse the statements
-	// This is complex and would require analyzing each statement type
-	downSQL.WriteString("-- TODO: Implement reverse migration logic\n")
-	downSQL.WriteString("-- For now, backup your database before running UP migration\n")
+	// Generate reverse statements
+	reverser := generator.NewMigrationReverser()
+	reversedStatements, err := reverser.ReverseStatements(plan.Statements)
+	if err != nil {
+		fmt.Printf("Warning: Failed to generate complete DOWN migration: %v\n", err)
+		downSQL.WriteString(fmt.Sprintf("-- ERROR: Failed to generate complete reversal: %v\n", err))
+		downSQL.WriteString("-- Manual reversal may be required\n\n")
+	} else {
+		for i, stmt := range reversedStatements {
+			downSQL.WriteString(fmt.Sprintf("-- Reversal of statement %d\n", len(plan.Statements)-i))
+			downSQL.WriteString(stmt)
+			downSQL.WriteString(";\n\n")
+		}
+	}
 
 	upSQLString := upSQL.String()
 	downSQLString := downSQL.String()
