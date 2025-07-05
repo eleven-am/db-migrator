@@ -86,6 +86,10 @@ func (g *SchemaGenerator) GenerateSchema(tables []parser2.TableDefinition) (*Dat
 		schema.Tables[schemaTable.Name] = schemaTable
 	}
 
+	if err := g.validateForeignKeys(schema); err != nil {
+		return nil, fmt.Errorf("foreign key validation failed: %w", err)
+	}
+
 	return schema, nil
 }
 
@@ -556,4 +560,45 @@ func (s *DatabaseSchema) HasTable(tableName string) bool {
 func (s *DatabaseSchema) GetTable(tableName string) (SchemaTable, bool) {
 	table, exists := s.Tables[tableName]
 	return table, exists
+}
+
+// validateForeignKeys validates that all foreign key references point to existing tables
+func (g *SchemaGenerator) validateForeignKeys(schema *DatabaseSchema) error {
+	var errors []string
+
+	for tableName, table := range schema.Tables {
+		for _, column := range table.Columns {
+			if column.ForeignKey != nil {
+				referencedTable := column.ForeignKey.ReferencedTable
+
+				if !schema.HasTable(referencedTable) {
+					errors = append(errors, fmt.Sprintf(
+						"table '%s', column '%s': foreign key references non-existent table '%s'",
+						tableName, column.Name, referencedTable))
+					continue
+				}
+
+				refTable := schema.Tables[referencedTable]
+				columnExists := false
+				for _, refCol := range refTable.Columns {
+					if refCol.Name == column.ForeignKey.ReferencedColumn {
+						columnExists = true
+						break
+					}
+				}
+
+				if !columnExists {
+					errors = append(errors, fmt.Sprintf(
+						"table '%s', column '%s': foreign key references non-existent column '%s.%s'",
+						tableName, column.Name, referencedTable, column.ForeignKey.ReferencedColumn))
+				}
+			}
+		}
+	}
+
+	if len(errors) > 0 {
+		return fmt.Errorf("invalid foreign key references found:\n  - %s", strings.Join(errors, "\n  - "))
+	}
+
+	return nil
 }
