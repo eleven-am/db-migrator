@@ -71,6 +71,53 @@ db-migrator migrate \
    - **Direct execution**: Use `--push` to apply changes immediately  
    - **Preview mode**: Use `--dry-run` to see changes without applying
 
+## Reverse Engineering (Database-First)
+
+The `introspect` command with `--format=go` enables database-first development by generating Go structs from your existing database schema:
+
+```bash
+db-migrator introspect --database="postgres://localhost/mydb" --format=go --output=models.go
+```
+
+This generates:
+- Go structs for all tables with proper field types
+- Complete `dbdef` tags matching your database schema
+- Foreign key relationships with proper references
+- Indexes and constraints preserved in table-level tags
+- Enum types as Go constants
+
+### Example Generated Code
+
+From a `users` table with foreign keys and indexes:
+
+```go
+package models
+
+import (
+    "time"
+)
+
+// User represents the users table
+type User struct {
+    _ struct{} `dbdef:"table:users;index:idx_users_email,email;unique:uk_users_username,username"`
+    
+    ID        string    `db:"id" dbdef:"type:uuid;primary_key;default:gen_random_uuid()"`
+    Email     string    `db:"email" dbdef:"type:varchar(255);not_null"`
+    Username  string    `db:"username" dbdef:"type:varchar(100);not_null;unique"`
+    TeamID    string    `db:"team_id" dbdef:"type:uuid;not_null;foreign_key:teams.id;on_delete:CASCADE"`
+    Role      string    `db:"role" dbdef:"type:varchar(50);not_null;default:'member'"`
+    IsActive  bool      `db:"is_active" dbdef:"type:boolean;not_null;default:true"`
+    CreatedAt time.Time `db:"created_at" dbdef:"type:timestamptz;not_null;default:now()"`
+    UpdatedAt time.Time `db:"updated_at" dbdef:"type:timestamptz;not_null;default:now()"`
+}
+```
+
+This allows you to:
+1. Start with an existing database
+2. Generate Go structs that match exactly
+3. Use db-migrator for future schema changes
+4. Maintain consistency between code and database
+
 ## Architecture
 
 ### How Tag Parsing Works
@@ -278,6 +325,31 @@ db-migrator migrate [flags]
 --create-if-not-exists    # Create database if missing
 ```
 
+### introspect
+
+Inspect database schema and export in various formats. This is a read-only operation that analyzes your database structure without making any changes.
+
+```bash
+db-migrator introspect [flags]
+```
+
+**Options:**
+```bash
+--database, -d string     # Database connection URL (required)
+--format, -f string       # Export format: json, yaml, markdown, sql, dot (default "markdown")
+--output, -o string       # Output file (default: stdout)
+--table, -t string        # Inspect specific table only
+--schema, -s string       # Database schema to inspect (default "public")
+```
+
+**Export Formats:**
+- `json` - Machine-readable JSON format
+- `yaml` - YAML format for configuration
+- `markdown` - Human-readable documentation
+- `sql` - SQL DDL statements
+- `dot` - GraphViz format for visualization
+- `go` - Generate Go structs with dbdef tags
+
 ### Examples
 
 ```bash
@@ -303,6 +375,28 @@ db-migrator migrate --url="postgres://localhost/mydb" --package="./models" --pus
 
 # Generate and execute in one command
 db-migrator migrate --url="postgres://localhost/mydb" --package="./models" --push --allow-destructive
+
+# Introspect database and output as markdown documentation
+db-migrator introspect --database="postgres://localhost/mydb" --format=markdown
+
+# Export schema as JSON to file
+db-migrator introspect --database="postgres://localhost/mydb" --format=json --output=schema.json
+
+# Generate GraphViz visualization
+db-migrator introspect --database="postgres://localhost/mydb" --format=dot --output=schema.dot
+# Then: dot -Tpng schema.dot -o schema.png
+
+# Inspect specific table only
+db-migrator introspect --database="postgres://localhost/mydb" --table=users --format=yaml
+
+# Export SQL DDL for entire schema
+db-migrator introspect --database="postgres://localhost/mydb" --format=sql --output=schema.sql
+
+# Generate Go structs from database (reverse engineering)
+db-migrator introspect --database="postgres://localhost/mydb" --format=go --output=models.go
+
+# Generate Go structs with custom package name
+db-migrator introspect --database="postgres://localhost/mydb" --format=go --package=db --output=internal/db/models.go
 ```
 
 ## Common Patterns

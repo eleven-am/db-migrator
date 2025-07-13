@@ -1,4 +1,4 @@
-package generator
+package migrator
 
 import (
 	"strings"
@@ -119,7 +119,6 @@ func TestMigrationReverser_ReverseSQL(t *testing.T) {
 				return
 			}
 
-			// Normalize whitespace for comparison
 			gotNormalized := strings.TrimSpace(got)
 			expectedNormalized := strings.TrimSpace(tt.expected)
 

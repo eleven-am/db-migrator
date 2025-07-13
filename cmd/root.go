@@ -28,4 +28,6 @@ func init() {
 	rootCmd.AddCommand(createCmd)
 	rootCmd.AddCommand(generateCmd)
 	rootCmd.AddCommand(verifyCmd)
+	rootCmd.AddCommand(introspectCmd)
+	rootCmd.AddCommand(versionCmd)
 }

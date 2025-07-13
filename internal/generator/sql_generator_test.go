@@ -143,7 +143,7 @@ func TestSQLGenerator_GenerateCreateTable(t *testing.T) {
 				"id CHAR(25) NOT NULL DEFAULT gen_cuid()",
 			},
 			notContains: []string{
-				"CREATE OR REPLACE FUNCTION gen_cuid()", // Function is generated at schema level, not table level
+				"CREATE OR REPLACE FUNCTION gen_cuid()",
 			},
 		},
 	}
@@ -219,7 +219,7 @@ func TestSQLGenerator_GenerateIndexDDL(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := gen.GenerateIndexDDL(tt.tableName, tt.index)
-			// Trim newline from result for comparison
+
 			result = strings.TrimSuffix(result, "\n")
 			if result != tt.expected {
 				t.Errorf("Got %q, want %q", result, tt.expected)
@@ -325,7 +325,6 @@ func TestSQLGenerator_GenerateCreateDatabase(t *testing.T) {
 
 	sql := gen.GenerateSchema(&schema)
 
-	// Check that tables are created in the right order (users before teams)
 	usersIndex := strings.Index(sql, "CREATE TABLE users")
 	teamsIndex := strings.Index(sql, "CREATE TABLE teams")
 

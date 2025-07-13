@@ -12,23 +12,23 @@ import (
 
 // FieldDefinition represents a struct field with database metadata
 type FieldDefinition struct {
-	Name      string            // Go field name
-	DBName    string            // Database column name (from db tag)
-	Type      string            // Go type (string, int, time.Time, etc.)
-	IsPointer bool              // Whether field is a pointer (*string)
-	IsArray   bool              // Whether field is an array/slice
-	DBDef     map[string]string // Parsed dbdef tag attributes
-	DBTag     string            // Raw db tag value
-	DBDefTag  string            // Raw dbdef tag value
-	JSONTag   string            // Raw json tag value (for debugging)
+	Name      string
+	DBName    string
+	Type      string
+	IsPointer bool
+	IsArray   bool
+	DBDef     map[string]string
+	DBTag     string
+	DBDefTag  string
+	JSONTag   string
 }
 
 // TableDefinition represents a complete table structure
 type TableDefinition struct {
-	StructName string            // Go struct name
-	TableName  string            // Database table name
-	Fields     []FieldDefinition // All fields in the struct
-	TableLevel map[string]string // Table-level dbdef attributes (indexes, constraints)
+	StructName string
+	TableName  string
+	Fields     []FieldDefinition
+	TableLevel map[string]string
 }
 
 // StructParser handles parsing Go struct definitions
@@ -233,14 +233,13 @@ func (p *StructParser) extractTag(tagString, tagName string) string {
 
 // isDatabaseStruct determines if a struct represents a database entity
 func (p *StructParser) isDatabaseStruct(table TableDefinition) bool {
-	// Check if any field has a db tag or dbdef tag
+
 	for _, field := range table.Fields {
 		if field.DBTag != "" || field.DBDefTag != "" {
 			return true
 		}
 	}
 
-	// Check for table-level dbdef
 	if len(table.TableLevel) > 0 {
 		return true
 	}
@@ -250,20 +249,19 @@ func (p *StructParser) isDatabaseStruct(table TableDefinition) bool {
 
 // deriveTableName converts a struct name to a table name using conventions
 func (p *StructParser) deriveTableName(structName string) string {
-	// Simple pluralization - convert to snake_case and add 's'
+
 	snake := p.toSnakeCase(structName)
 
-	// Special cases for irregular plurals
 	irregularPlurals := map[string]string{
 		"analysis": "analyses",
 		"basis":    "bases",
 		"datum":    "data",
-		"index":    "indexes", // or "indices"
+		"index":    "indexes",
 		"matrix":   "matrices",
 		"vertex":   "vertices",
 		"axis":     "axes",
 		"crisis":   "crises",
-		// "person":   "people", // commented out - using regular pluralization
+
 		"child": "children",
 		"foot":  "feet",
 		"tooth": "teeth",
@@ -277,9 +275,8 @@ func (p *StructParser) deriveTableName(structName string) string {
 		return plural
 	}
 
-	// Basic pluralization rules
 	if strings.HasSuffix(snake, "y") && !strings.HasSuffix(snake, "ey") && !strings.HasSuffix(snake, "ay") && !strings.HasSuffix(snake, "oy") && !strings.HasSuffix(snake, "uy") {
-		// policy -> policies, but not key -> keies
+
 		return snake[:len(snake)-1] + "ies"
 	}
 	if strings.HasSuffix(snake, "s") || strings.HasSuffix(snake, "sh") || strings.HasSuffix(snake, "ch") || strings.HasSuffix(snake, "x") || strings.HasSuffix(snake, "z") {
@@ -290,7 +287,7 @@ func (p *StructParser) deriveTableName(structName string) string {
 
 // toSnakeCase converts PascalCase to snake_case
 func (p *StructParser) toSnakeCase(s string) string {
-	// Handle known edge cases
+
 	edgeCases := map[string]string{
 		"OAuth2Token": "oauth2_token",
 		"OAuth2":      "oauth2",
@@ -305,27 +302,21 @@ func (p *StructParser) toSnakeCase(s string) string {
 	for i, r := range s {
 		isUpper := r >= 'A' && r <= 'Z'
 
-		// Determine if we need an underscore before this character
 		if i > 0 {
 			prevIsLower := s[i-1] >= 'a' && s[i-1] <= 'z'
 			prevIsDigit := s[i-1] >= '0' && s[i-1] <= '9'
 			prevIsUpper := s[i-1] >= 'A' && s[i-1] <= 'Z'
 
-			// Add underscore in these cases:
-			// 1. Uppercase letter after lowercase letter: aB -> a_b
-			// 2. Uppercase letter after digit: 1A -> 1_a
-			// 3. Letter after digit (except continuing a number): 2nd -> 2nd, but 42A -> 42_a
-			// 4. Start of new word in acronym: SQLParser -> sql_parser
 			if isUpper && (prevIsLower || prevIsDigit) {
 				result.WriteRune('_')
 			} else if isUpper && prevIsUpper && i+1 < len(s) {
-				// Check if this is the start of a new word (like the 'P' in 'HTTPParser')
+
 				nextIsLower := s[i+1] >= 'a' && s[i+1] <= 'z'
 				if nextIsLower {
 					result.WriteRune('_')
 				}
 			} else if (r >= 'a' && r <= 'z') && prevIsDigit {
-				// Don't split numbers like "2nd" but do split "42abc"
+
 				if i >= 2 {
 					prevPrevIsDigit := s[i-2] >= '0' && s[i-2] <= '9'
 					if !prevPrevIsDigit || !isOrdinalSuffix(s[i-1:]) {
@@ -337,7 +328,6 @@ func (p *StructParser) toSnakeCase(s string) string {
 			}
 		}
 
-		// Add the character (converting uppercase to lowercase)
 		if isUpper {
 			result.WriteRune(r - 'A' + 'a')
 		} else {

@@ -7,7 +7,7 @@ import (
 
 func TestTagParser_ParseDBDefTag(t *testing.T) {
 	parser := NewTagParser()
-	
+
 	tests := []struct {
 		name     string
 		tag      string
@@ -25,7 +25,7 @@ func TestTagParser_ParseDBDefTag(t *testing.T) {
 			name: "full field tags",
 			tag:  "type:varchar(255);not_null;unique;default:'active'",
 			expected: map[string]string{
-				"type":    "varchar(255)",
+				"type":     "varchar(255)",
 				"not_null": "",
 				"unique":   "",
 				"default":  "'active'",
@@ -99,8 +99,8 @@ func TestTagParser_ParseDBDefTag(t *testing.T) {
 			},
 		},
 		{
-			name: "empty tag",
-			tag:  "",
+			name:     "empty tag",
+			tag:      "",
 			expected: map[string]string{},
 		},
 		{
@@ -112,11 +112,11 @@ func TestTagParser_ParseDBDefTag(t *testing.T) {
 			},
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := parser.ParseDBDefTag(tt.tag)
-			
+
 			if !reflect.DeepEqual(result, tt.expected) {
 				t.Errorf("ParseDBDefTag() = %v, want %v", result, tt.expected)
 			}

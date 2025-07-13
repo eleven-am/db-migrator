@@ -149,6 +149,25 @@ func (g *SQLGenerator) isImplicitIndex(idx SchemaIndex, table SchemaTable) bool 
 	return false
 }
 
+// generateEnumType generates CREATE TYPE for enum
+func (g *SQLGenerator) generateEnumType(typeName string, values []string) string {
+	var sql strings.Builder
+
+	sql.WriteString("CREATE TYPE ")
+	sql.WriteString(typeName)
+	sql.WriteString(" AS ENUM (")
+
+	quotedValues := make([]string, len(values))
+	for i, v := range values {
+		quotedValues[i] = fmt.Sprintf("'%s'", v)
+	}
+
+	sql.WriteString(strings.Join(quotedValues, ", "))
+	sql.WriteString(");")
+
+	return sql.String()
+}
+
 // GenerateSchema generates CREATE statements for entire schema
 func (g *SQLGenerator) GenerateSchema(schema *DatabaseSchema) string {
 	var sql strings.Builder
@@ -157,6 +176,15 @@ func (g *SQLGenerator) GenerateSchema(schema *DatabaseSchema) string {
 	sql.WriteString("-- Enable required extensions\n")
 	sql.WriteString("CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\";\n")
 	sql.WriteString("CREATE EXTENSION IF NOT EXISTS \"pgcrypto\";\n\n")
+
+	if len(schema.EnumTypes) > 0 {
+		sql.WriteString("-- Enum types\n")
+		for typeName, values := range schema.EnumTypes {
+			sql.WriteString(g.generateEnumType(typeName, values))
+			sql.WriteString("\n")
+		}
+		sql.WriteString("\n")
+	}
 
 	if g.schemaUsesCUIDs(schema) {
 		sql.WriteString("-- CUID generation function\n")

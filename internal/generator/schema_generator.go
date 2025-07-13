@@ -19,6 +19,7 @@ type SchemaColumn struct {
 	IsAutoIncrement bool
 	ForeignKey      *ForeignKeyRef
 	CheckConstraint *string
+	EnumValues      []string
 }
 
 // ForeignKeyRef represents a foreign key reference
@@ -42,22 +43,23 @@ type SchemaIndex struct {
 	Name      string
 	Columns   []string
 	IsUnique  bool
-	IsPrimary bool   // Added to identify primary key indexes
-	Type      string // e.g., "gin", "btree", "hash"
-	Where     string // Partial index condition
+	IsPrimary bool
+	Type      string
+	Where     string
 }
 
 // SchemaConstraint represents a table constraint
 type SchemaConstraint struct {
 	Name       string
-	Type       string // CHECK, UNIQUE, PRIMARY KEY, FOREIGN KEY
+	Type       string
 	Definition string
 	Columns    []string
 }
 
 // DatabaseSchema represents the complete target database schema
 type DatabaseSchema struct {
-	Tables map[string]SchemaTable
+	Tables    map[string]SchemaTable
+	EnumTypes map[string][]string
 }
 
 // SchemaGenerator converts parsed struct definitions to database schema
@@ -75,7 +77,8 @@ func NewSchemaGenerator() *SchemaGenerator {
 // GenerateSchema converts table definitions to database schema
 func (g *SchemaGenerator) GenerateSchema(tables []parser2.TableDefinition) (*DatabaseSchema, error) {
 	schema := &DatabaseSchema{
-		Tables: make(map[string]SchemaTable),
+		Tables:    make(map[string]SchemaTable),
+		EnumTypes: make(map[string][]string),
 	}
 
 	for _, tableDef := range tables {
@@ -83,6 +86,13 @@ func (g *SchemaGenerator) GenerateSchema(tables []parser2.TableDefinition) (*Dat
 		if err != nil {
 			return nil, fmt.Errorf("failed to generate schema for table %s: %w", tableDef.TableName, err)
 		}
+
+		for _, col := range schemaTable.Columns {
+			if len(col.EnumValues) > 0 {
+				schema.EnumTypes[col.Type] = col.EnumValues
+			}
+		}
+
 		schema.Tables[schemaTable.Name] = schemaTable
 	}
 
@@ -103,7 +113,7 @@ func (g *SchemaGenerator) generateTable(tableDef parser2.TableDefinition) (Schem
 	}
 
 	for _, field := range tableDef.Fields {
-		column, err := g.generateColumn(field)
+		column, err := g.generateColumn(field, tableDef.TableName)
 		if err != nil {
 			return table, fmt.Errorf("failed to generate column %s: %w", field.Name, err)
 		}
@@ -121,7 +131,7 @@ func (g *SchemaGenerator) generateTable(tableDef parser2.TableDefinition) (Schem
 }
 
 // generateColumn converts a field definition to a schema column
-func (g *SchemaGenerator) generateColumn(field parser2.FieldDefinition) (SchemaColumn, error) {
+func (g *SchemaGenerator) generateColumn(field parser2.FieldDefinition, tableName string) (SchemaColumn, error) {
 	column := SchemaColumn{
 		Name: field.DBName,
 	}
@@ -130,7 +140,16 @@ func (g *SchemaGenerator) generateColumn(field parser2.FieldDefinition) (SchemaC
 	if err != nil {
 		return column, fmt.Errorf("failed to map type for field %s: %w", field.Name, err)
 	}
-	column.Type = pgType
+
+	if field.IsArray || strings.HasSuffix(pgType, "[]") {
+		if arrayType := g.tagParser.GetArrayType(field.DBDef); arrayType != "" {
+			column.Type = arrayType + "[]"
+		} else {
+			column.Type = pgType
+		}
+	} else {
+		column.Type = pgType
+	}
 
 	column.IsNullable = field.IsPointer || !g.tagParser.HasFlag(field.DBDef, "not_null")
 
@@ -153,11 +172,33 @@ func (g *SchemaGenerator) generateColumn(field parser2.FieldDefinition) (SchemaC
 		if err != nil {
 			return column, fmt.Errorf("invalid foreign key reference: %w", err)
 		}
+
+		if onDelete, exists := field.DBDef["on_delete"]; exists {
+			fk.OnDelete = onDelete
+		}
+		if onUpdate, exists := field.DBDef["on_update"]; exists {
+			fk.OnUpdate = onUpdate
+		}
+
 		column.ForeignKey = fk
 	}
 
 	if checkExpr, exists := field.DBDef["check"]; exists {
 		column.CheckConstraint = &checkExpr
+	}
+
+	if enumValues := g.tagParser.GetEnum(field.DBDef); enumValues != nil {
+		column.EnumValues = enumValues
+
+		enumTypeName := fmt.Sprintf("%s_%s_enum", tableName, column.Name)
+		column.Type = enumTypeName
+
+		enumList := make([]string, len(enumValues))
+		for i, v := range enumValues {
+			enumList[i] = fmt.Sprintf("'%s'", v)
+		}
+		checkStr := fmt.Sprintf("%s IN (%s)", column.Name, strings.Join(enumList, ", "))
+		column.CheckConstraint = &checkStr
 	}
 
 	return column, nil
@@ -196,6 +237,28 @@ func (g *SchemaGenerator) mapGoTypeToPostgreSQL(goType string, dbDef map[string]
 		return "BYTEA", nil
 	case "pq.StringArray":
 		return "TEXT[]", nil
+	case "pq.Int32Array":
+		return "INTEGER[]", nil
+	case "pq.Int64Array":
+		return "BIGINT[]", nil
+	case "pq.Float32Array":
+		return "REAL[]", nil
+	case "pq.Float64Array":
+		return "DOUBLE PRECISION[]", nil
+	case "pq.BoolArray":
+		return "BOOLEAN[]", nil
+	case "[]string":
+		return "TEXT[]", nil
+	case "[]int", "[]int32":
+		return "INTEGER[]", nil
+	case "[]int64":
+		return "BIGINT[]", nil
+	case "[]float32":
+		return "REAL[]", nil
+	case "[]float64":
+		return "DOUBLE PRECISION[]", nil
+	case "[]bool":
+		return "BOOLEAN[]", nil
 	case "json.RawMessage", "JSONB":
 		return "JSONB", nil
 	case "cuid.CUID", "CUID":
@@ -429,7 +492,6 @@ func (g *SchemaGenerator) addImplicitConstraints(table *SchemaTable) {
 			primaryKeyColumns = append(primaryKeyColumns, column.Name)
 		}
 
-		// Add UNIQUE constraints for columns marked as unique
 		if column.IsUnique && !column.IsPrimaryKey {
 			constraintName := fmt.Sprintf("%s_%s_key", table.Name, column.Name)
 			constraint := SchemaConstraint{
@@ -440,10 +502,9 @@ func (g *SchemaGenerator) addImplicitConstraints(table *SchemaTable) {
 			table.Constraints = append(table.Constraints, constraint)
 		}
 
-		// Add FOREIGN KEY constraints
 		if column.ForeignKey != nil {
 			constraintName := fmt.Sprintf("%s_%s_fkey", table.Name, column.Name)
-			// Build the FK definition string
+
 			definition := fmt.Sprintf("FOREIGN KEY (%s) REFERENCES %s(%s)",
 				column.Name,
 				column.ForeignKey.ReferencedTable,
@@ -475,7 +536,6 @@ func (g *SchemaGenerator) addImplicitConstraints(table *SchemaTable) {
 		}
 		table.Constraints = append(table.Constraints, constraint)
 
-		// Don't create a separate index for PRIMARY KEY - PostgreSQL creates it automatically
 	}
 }
 

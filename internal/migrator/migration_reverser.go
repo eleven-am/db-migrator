@@ -1,11 +1,9 @@
-package generator
+package migrator
 
 import (
 	"fmt"
 	"regexp"
 	"strings"
-
-	"github.com/stripe/pg-schema-diff/pkg/diff"
 )
 
 // MigrationReverser handles the reversal of migration statements
@@ -16,32 +14,9 @@ func NewMigrationReverser() *MigrationReverser {
 	return &MigrationReverser{}
 }
 
-// ReverseStatements takes a slice of statements and returns their reversal
-func (mr *MigrationReverser) ReverseStatements(statements []diff.Statement) ([]string, error) {
-	reversedStatements := make([]string, 0, len(statements))
-
-	// Process statements in reverse order to handle dependencies
-	for i := len(statements) - 1; i >= 0; i-- {
-		reversed, err := mr.reverseStatement(statements[i])
-		if err != nil {
-			return nil, fmt.Errorf("failed to reverse statement %d: %w", i+1, err)
-		}
-		if reversed != "" {
-			reversedStatements = append(reversedStatements, reversed)
-		}
-	}
-
-	return reversedStatements, nil
-}
-
-// reverseStatement reverses a single statement
-func (mr *MigrationReverser) reverseStatement(stmt diff.Statement) (string, error) {
-	return mr.ReverseSQL(stmt.ToSQL())
-}
-
 // ReverseSQL reverses a SQL statement string (exported for testing)
 func (mr *MigrationReverser) ReverseSQL(sql string) (string, error) {
-	// Normalize SQL for easier parsing
+
 	normalizedSQL := strings.TrimSpace(strings.ToUpper(sql))
 
 	switch {
@@ -72,17 +47,17 @@ func (mr *MigrationReverser) ReverseSQL(sql string) (string, error) {
 	case strings.HasPrefix(normalizedSQL, "DROP TRIGGER"):
 		return mr.reverseDropTrigger(sql)
 	case strings.HasPrefix(normalizedSQL, "COMMENT ON"):
-		// Comments don't need reversal
+
 		return "", nil
 	default:
-		// For unknown statements, add a warning comment
+
 		return fmt.Sprintf("-- WARNING: Unable to automatically reverse the following statement:\n-- %s\n-- Please add manual reversal if needed", sql), nil
 	}
 }
 
 // reverseCreateTable generates DROP TABLE statement
 func (mr *MigrationReverser) reverseCreateTable(sql string) (string, error) {
-	// Extract table name from CREATE TABLE statement
+
 	re := regexp.MustCompile(`(?i)CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([^\s(]+)`)
 	matches := re.FindStringSubmatch(sql)
 	if len(matches) < 2 {
@@ -95,7 +70,7 @@ func (mr *MigrationReverser) reverseCreateTable(sql string) (string, error) {
 
 // reverseDropTable would need the original CREATE TABLE statement
 func (mr *MigrationReverser) reverseDropTable(sql string) (string, error) {
-	// Cannot reverse DROP TABLE without the original schema
+
 	return "-- WARNING: Cannot reverse DROP TABLE without original schema. Backup required for restoration", nil
 }
 
@@ -103,7 +78,6 @@ func (mr *MigrationReverser) reverseDropTable(sql string) (string, error) {
 func (mr *MigrationReverser) reverseAlterTable(sql string) (string, error) {
 	normalizedSQL := strings.ToUpper(sql)
 
-	// Extract table name
 	tableRe := regexp.MustCompile(`(?i)ALTER\s+TABLE\s+([^\s]+)`)
 	tableMatches := tableRe.FindStringSubmatch(sql)
 	if len(tableMatches) < 2 {
@@ -113,7 +87,7 @@ func (mr *MigrationReverser) reverseAlterTable(sql string) (string, error) {
 
 	switch {
 	case strings.Contains(normalizedSQL, "ADD COLUMN"):
-		// Extract column name
+
 		colRe := regexp.MustCompile(`(?i)ADD\s+COLUMN\s+([^\s]+)`)
 		colMatches := colRe.FindStringSubmatch(sql)
 		if len(colMatches) < 2 {
@@ -123,11 +97,11 @@ func (mr *MigrationReverser) reverseAlterTable(sql string) (string, error) {
 		return fmt.Sprintf("ALTER TABLE %s DROP COLUMN IF EXISTS %s", tableName, columnName), nil
 
 	case strings.Contains(normalizedSQL, "DROP COLUMN"):
-		// Cannot reverse DROP COLUMN without original column definition
+
 		return "-- WARNING: Cannot reverse DROP COLUMN without original column definition. Backup required for restoration", nil
 
 	case strings.Contains(normalizedSQL, "ADD CONSTRAINT"):
-		// Extract constraint name
+
 		constraintRe := regexp.MustCompile(`(?i)ADD\s+CONSTRAINT\s+([^\s]+)`)
 		constraintMatches := constraintRe.FindStringSubmatch(sql)
 		if len(constraintMatches) < 2 {
@@ -137,15 +111,15 @@ func (mr *MigrationReverser) reverseAlterTable(sql string) (string, error) {
 		return fmt.Sprintf("ALTER TABLE %s DROP CONSTRAINT IF EXISTS %s", tableName, constraintName), nil
 
 	case strings.Contains(normalizedSQL, "DROP CONSTRAINT"):
-		// Cannot reverse DROP CONSTRAINT without original constraint definition
+
 		return "-- WARNING: Cannot reverse DROP CONSTRAINT without original constraint definition", nil
 
 	case strings.Contains(normalizedSQL, "ALTER COLUMN"):
-		// Complex to reverse without knowing previous state
+
 		return fmt.Sprintf("-- WARNING: Cannot automatically reverse ALTER COLUMN. Manual reversal required for:\n-- %s", sql), nil
 
 	case strings.Contains(normalizedSQL, "RENAME"):
-		// Handle column/table renames
+
 		if strings.Contains(normalizedSQL, "RENAME COLUMN") {
 			renameRe := regexp.MustCompile(`(?i)RENAME\s+COLUMN\s+([^\s]+)\s+TO\s+([^\s]+)`)
 			renameMatches := renameRe.FindStringSubmatch(sql)
@@ -174,7 +148,7 @@ func (mr *MigrationReverser) reverseAlterTable(sql string) (string, error) {
 
 // reverseCreateIndex generates DROP INDEX statement
 func (mr *MigrationReverser) reverseCreateIndex(sql string) (string, error) {
-	// Extract index name - handle various CREATE INDEX patterns
+
 	re := regexp.MustCompile(`(?i)CREATE\s+(?:UNIQUE\s+)?INDEX\s+(?:CONCURRENTLY\s+)?(?:IF\s+NOT\s+EXISTS\s+)?([^\s]+)`)
 	matches := re.FindStringSubmatch(sql)
 	if len(matches) < 2 {
@@ -226,7 +200,7 @@ func (mr *MigrationReverser) reverseDropType(sql string) (string, error) {
 
 // reverseCreateFunction generates DROP FUNCTION statement
 func (mr *MigrationReverser) reverseCreateFunction(sql string) (string, error) {
-	// Extract function name and parameters
+
 	re := regexp.MustCompile(`(?i)CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+([^\s(]+)\s*\(([^)]*)\)`)
 	matches := re.FindStringSubmatch(sql)
 	if len(matches) < 2 {
@@ -234,7 +208,7 @@ func (mr *MigrationReverser) reverseCreateFunction(sql string) (string, error) {
 	}
 
 	functionName := matches[1]
-	// For simplicity, dropping with CASCADE to handle dependencies
+
 	return fmt.Sprintf("DROP FUNCTION IF EXISTS %s CASCADE", functionName), nil
 }
 
@@ -245,7 +219,7 @@ func (mr *MigrationReverser) reverseDropFunction(sql string) (string, error) {
 
 // reverseCreateTrigger generates DROP TRIGGER statement
 func (mr *MigrationReverser) reverseCreateTrigger(sql string) (string, error) {
-	// Extract trigger name and table
+
 	re := regexp.MustCompile(`(?i)CREATE\s+TRIGGER\s+([^\s]+)\s+.*?\s+ON\s+([^\s]+)`)
 	matches := re.FindStringSubmatch(sql)
 	if len(matches) < 3 {
