@@ -18,7 +18,6 @@ func TestExportJSON(t *testing.T) {
 		t.Fatalf("Failed to export JSON: %v", err)
 	}
 
-	// Verify it's valid JSON
 	var result map[string]interface{}
 	if err := json.Unmarshal(output, &result); err != nil {
 		t.Fatalf("Invalid JSON output: %v", err)
@@ -43,7 +42,6 @@ func TestExportYAML(t *testing.T) {
 		t.Fatalf("Failed to export YAML: %v", err)
 	}
 
-	// Verify it's valid YAML
 	var result map[string]interface{}
 	if err := yaml.Unmarshal(output, &result); err != nil {
 		t.Fatalf("Invalid YAML output: %v", err)

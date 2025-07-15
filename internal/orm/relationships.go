@@ -80,7 +80,6 @@ func (rm *relationshipManager) parseRelationships(structType reflect.Type) error
 	for i := 0; i < structType.NumField(); i++ {
 		field := structType.Field(i)
 
-		// Skip non-relationship fields
 		if field.Tag.Get("db") != "-" {
 			continue
 		}
@@ -108,7 +107,6 @@ func (rm *relationshipManager) parseRelationshipTag(field reflect.StructField, t
 		return relationshipDef{}, fmt.Errorf("empty relationship tag")
 	}
 
-	// Parse relationship type and target
 	typeAndTarget := strings.Split(parts[0], ":")
 	if len(typeAndTarget) != 2 {
 		return relationshipDef{}, fmt.Errorf("invalid relationship format, expected 'type:target'")
@@ -121,7 +119,6 @@ func (rm *relationshipManager) parseRelationshipTag(field reflect.StructField, t
 		FieldType: field.Type,
 	}
 
-	// Parse additional parameters
 	for i := 1; i < len(parts); i++ {
 		part := strings.TrimSpace(parts[i])
 		if part == "" {
@@ -152,7 +149,6 @@ func (rm *relationshipManager) parseRelationshipTag(field reflect.StructField, t
 		}
 	}
 
-	// Set defaults based on relationship type
 	if err := rm.setRelationshipDefaults(&rel); err != nil {
 		return rel, err
 	}
@@ -165,7 +161,7 @@ func (rm *relationshipManager) setRelationshipDefaults(rel *relationshipDef) err
 	switch rel.Type {
 	case "belongs_to":
 		if rel.ForeignKey == "" {
-			// Default: {target_singular}_id
+
 			rel.ForeignKey = rm.toSnakeCase(rel.Target) + "_id"
 		}
 		if rel.TargetKey == "" {
@@ -174,7 +170,7 @@ func (rm *relationshipManager) setRelationshipDefaults(rel *relationshipDef) err
 
 	case "has_one", "has_many":
 		if rel.ForeignKey == "" {
-			// Default: {source_singular}_id
+
 			sourceTableSingular := rm.tableNameToSingular(rm.sourceTable)
 			rel.ForeignKey = sourceTableSingular + "_id"
 		}
@@ -227,7 +223,7 @@ func (rm *relationshipManager) toSnakeCase(s string) string {
 }
 
 func (rm *relationshipManager) tableNameToSingular(tableName string) string {
-	// Simple singularization rules
+
 	if strings.HasSuffix(tableName, "ies") {
 		return tableName[:len(tableName)-3] + "y"
 	}

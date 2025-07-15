@@ -24,7 +24,6 @@ func (cli *CLICommands) GetRootCommand() *cobra.Command {
 		Long:  `Generate type-safe ORM code from Go struct definitions including column constants, repositories, and query builders`,
 	}
 
-	// Add code generation subcommands (no database needed)
 	ormCmd.AddCommand(cli.getValidateCommand())
 	ormCmd.AddCommand(cli.getGenerateORMCommand())
 
@@ -47,7 +46,6 @@ func (cli *CLICommands) getValidateCommand() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			fmt.Printf("Validating ORM models in %s...\n", packagePath)
 
-			// Auto-discover models from package
 			result := ValidateModelsFromDirectory(packagePath)
 
 			if result.Valid {
@@ -86,20 +84,17 @@ Code is generated in the same directory as the input models.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			fmt.Printf("Generating type-safe ORM code from %s...\n", packagePath)
 
-			// Use the package path as the output directory
 			config := GenerationConfig{
 				PackageName: packageName,
-				OutputDir:   packagePath, // Generate in same directory as models
+				OutputDir:   packagePath,
 			}
 
 			generator := NewCodeGenerator(config)
 
-			// Auto-discover models instead of manual registration
 			if err := generator.DiscoverModels(packagePath); err != nil {
 				return fmt.Errorf("failed to discover models: %w", err)
 			}
 
-			// Generate all type-safe code
 			if err := generator.GenerateAll(); err != nil {
 				return fmt.Errorf("failed to generate code: %w", err)
 			}

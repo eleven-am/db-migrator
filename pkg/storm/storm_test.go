@@ -9,7 +9,6 @@ import (
 func TestNewConfig(t *testing.T) {
 	config := NewConfig()
 
-	// Test defaults
 	if config.Driver != "postgres" {
 		t.Errorf("Expected driver to be 'postgres', got %s", config.Driver)
 	}
@@ -126,7 +125,6 @@ func TestConfigValidation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Set defaults for required fields if not set
 			if tt.config.DatabaseURL == "" && !tt.expectError {
 				tt.config.DatabaseURL = "postgres://localhost/test"
 			}
@@ -166,7 +164,6 @@ func TestConfigValidation(t *testing.T) {
 func TestOptions(t *testing.T) {
 	config := NewConfig()
 
-	// Test WithDriver
 	err := WithDriver("mysql")(config)
 	if err != nil {
 		t.Errorf("WithDriver failed: %v", err)
@@ -175,7 +172,6 @@ func TestOptions(t *testing.T) {
 		t.Errorf("Expected driver to be 'mysql', got %s", config.Driver)
 	}
 
-	// Test WithMaxConnections
 	err = WithMaxConnections(50)(config)
 	if err != nil {
 		t.Errorf("WithMaxConnections failed: %v", err)
@@ -183,11 +179,10 @@ func TestOptions(t *testing.T) {
 	if config.MaxOpenConns != 50 {
 		t.Errorf("Expected MaxOpenConns to be 50, got %d", config.MaxOpenConns)
 	}
-	if config.MaxIdleConns != 12 { // 50 / 4
+	if config.MaxIdleConns != 12 {
 		t.Errorf("Expected MaxIdleConns to be 12, got %d", config.MaxIdleConns)
 	}
 
-	// Test WithModelsPackage
 	err = WithModelsPackage("./internal/models")(config)
 	if err != nil {
 		t.Errorf("WithModelsPackage failed: %v", err)
@@ -196,7 +191,6 @@ func TestOptions(t *testing.T) {
 		t.Errorf("Expected ModelsPackage to be './internal/models', got %s", config.ModelsPackage)
 	}
 
-	// Test WithAutoMigrate
 	err = WithAutoMigrate(true)(config)
 	if err != nil {
 		t.Errorf("WithAutoMigrate failed: %v", err)
@@ -205,7 +199,6 @@ func TestOptions(t *testing.T) {
 		t.Errorf("Expected AutoMigrate to be true, got %v", config.AutoMigrate)
 	}
 
-	// Test WithDebug
 	err = WithDebug(true)(config)
 	if err != nil {
 		t.Errorf("WithDebug failed: %v", err)
@@ -218,31 +211,26 @@ func TestOptions(t *testing.T) {
 func TestOptionValidation(t *testing.T) {
 	config := NewConfig()
 
-	// Test invalid driver
 	err := WithDriver("")(config)
 	if err == nil {
 		t.Error("Expected error for empty driver")
 	}
 
-	// Test invalid max connections
 	err = WithMaxConnections(0)(config)
 	if err == nil {
 		t.Error("Expected error for zero max connections")
 	}
 
-	// Test invalid models package
 	err = WithModelsPackage("")(config)
 	if err == nil {
 		t.Error("Expected error for empty models package")
 	}
 
-	// Test invalid naming convention
 	err = WithNamingConvention("invalid")(config)
 	if err == nil {
 		t.Error("Expected error for invalid naming convention")
 	}
 
-	// Test nil logger
 	err = WithLogger(nil)(config)
 	if err == nil {
 		t.Error("Expected error for nil logger")
@@ -250,7 +238,6 @@ func TestOptionValidation(t *testing.T) {
 }
 
 func TestErrorTypes(t *testing.T) {
-	// Test basic error creation
 	err := NewError(ErrorTypeConnection, "test", fmt.Errorf("connection failed"))
 	if err.Type != ErrorTypeConnection {
 		t.Errorf("Expected error type to be %s, got %s", ErrorTypeConnection, err.Type)
@@ -259,7 +246,6 @@ func TestErrorTypes(t *testing.T) {
 		t.Errorf("Expected operation to be 'test', got %s", err.Op)
 	}
 
-	// Test error with details
 	err = err.WithDetails("host", "localhost").WithDetails("port", 5432)
 	if err.Details["host"] != "localhost" {
 		t.Errorf("Expected host detail to be 'localhost', got %v", err.Details["host"])
@@ -268,13 +254,11 @@ func TestErrorTypes(t *testing.T) {
 		t.Errorf("Expected port detail to be 5432, got %v", err.Details["port"])
 	}
 
-	// Test error string formatting
 	expected := "storm connection: test: connection failed"
 	if err.Error() != expected {
 		t.Errorf("Expected error string to be '%s', got '%s'", expected, err.Error())
 	}
 
-	// Test error Is method
 	err2 := NewError(ErrorTypeConnection, "other", fmt.Errorf("other error"))
 	if !err.Is(err2) {
 		t.Error("Expected errors to be the same type")
@@ -304,7 +288,6 @@ func TestVersionInfo(t *testing.T) {
 		t.Error("Expected full version info to contain Go version")
 	}
 
-	// Test with build info
 	SetBuildInfo("abc123", "2023-01-01", "go1.21.0")
 	fullInfo = FullVersionInfo()
 	if !contains(fullInfo, "Git Commit: abc123") {
@@ -316,22 +299,19 @@ func TestVersionInfo(t *testing.T) {
 }
 
 func TestStormCreation(t *testing.T) {
-	// Test with invalid database URL (should fail gracefully)
 	_, err := New("invalid://url")
 	if err != nil {
 		t.Logf("Got expected error for invalid URL: %v", err)
 	}
 
-	// Test with nil config
 	_, err = NewWithConfig(nil)
 	if err == nil {
 		t.Error("Expected error for nil config")
 	}
 
-	// Test with invalid config
 	invalidConfig := &Config{
 		DatabaseURL: "postgres://user:pass@localhost/test",
-		Driver:      "", // missing driver
+		Driver:      "",
 	}
 	_, err = NewWithConfig(invalidConfig)
 	if err == nil {
@@ -341,9 +321,9 @@ func TestStormCreation(t *testing.T) {
 
 // Helper function to check if a string contains a substring
 func contains(s, substr string) bool {
-	return len(s) >= len(substr) && s[len(s)-len(substr):] == substr || 
-		   len(s) > len(substr) && s[:len(substr)] == substr ||
-		   (len(s) > len(substr) && findInString(s, substr))
+	return len(s) >= len(substr) && s[len(s)-len(substr):] == substr ||
+		len(s) > len(substr) && s[:len(substr)] == substr ||
+		(len(s) > len(substr) && findInString(s, substr))
 }
 
 func findInString(s, substr string) bool {

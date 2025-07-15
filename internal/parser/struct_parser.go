@@ -223,9 +223,8 @@ func (p *StructParser) parseFieldType(expr ast.Expr) (string, bool, bool) {
 	case *ast.SelectorExpr:
 		pkg := p.exprToString(t.X)
 		return pkg + "." + t.Sel.Name, false, false
-		
+
 	case *ast.IndexExpr:
-		// Handle generic types like JSONField[StageAction]
 		baseType := p.exprToString(t.X)
 		indexType := p.exprToString(t.Index)
 		return baseType + "[" + indexType + "]", false, false

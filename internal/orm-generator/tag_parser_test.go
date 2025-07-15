@@ -123,11 +123,10 @@ func TestParseModel(t *testing.T) {
 		Email   string `db:"email" dbdef:"unique"`
 		Posts   []Post `db:"-" orm:"has_many:Post,foreign_key:user_id"`
 		Profile *Post  `db:"-" orm:"has_one:Profile,foreign_key:user_id"`
-		Ignored string // No tags
+		Ignored string
 	}
 
 	parser := NewORMTagParser()
-	// Use reflection-based parsing since ParseModelFromTable requires AST
 	modelType := reflect.TypeOf(TestModel{})
 	metadata := &ModelMetadata{
 		Name:          modelType.Name(),
@@ -137,7 +136,6 @@ func TestParseModel(t *testing.T) {
 		PrimaryKeys:   make([]string, 0),
 	}
 
-	// Parse each field
 	for i := 0; i < modelType.NumField(); i++ {
 		field := modelType.Field(i)
 		fieldMeta, err := parser.parseField(field)
@@ -147,7 +145,6 @@ func TestParseModel(t *testing.T) {
 
 		metadata.Fields = append(metadata.Fields, fieldMeta)
 
-		// Categorize fields
 		if fieldMeta.Relationship != nil {
 			metadata.Relationships = append(metadata.Relationships, fieldMeta)
 		} else if fieldMeta.DBName != "" {
@@ -158,12 +155,10 @@ func TestParseModel(t *testing.T) {
 		}
 	}
 
-	// Check basic metadata
 	if metadata.Name != "TestModel" {
 		t.Errorf("expected model name TestModel, got %s", metadata.Name)
 	}
 
-	// Check columns - ID, Name, Email, Ignored (not Posts, Profile with db:"-")
 	expectedColumns := 4
 	actualColumns := len(metadata.Columns)
 	if actualColumns != expectedColumns {
@@ -174,18 +169,15 @@ func TestParseModel(t *testing.T) {
 		t.Errorf("expected %d columns, got %d", expectedColumns, actualColumns)
 	}
 
-	// Check primary key
 	if len(metadata.PrimaryKeys) != 1 || metadata.PrimaryKeys[0] != "id" {
 		t.Errorf("expected primary key [id], got %v", metadata.PrimaryKeys)
 	}
 
-	// Check relationships
-	expectedRelationships := 2 // Posts and Profile
+	expectedRelationships := 2
 	if len(metadata.Relationships) != expectedRelationships {
 		t.Errorf("expected %d relationships, got %d", expectedRelationships, len(metadata.Relationships))
 	}
 
-	// Verify specific column properties
 	for _, col := range metadata.Columns {
 		switch col.Name {
 		case "ID":
@@ -281,7 +273,6 @@ func TestParseComplexModel(t *testing.T) {
 	}
 
 	parser := NewORMTagParser()
-	// Use reflection-based parsing since ParseModelFromTable requires AST
 	modelType := reflect.TypeOf(Article{})
 	metadata := &ModelMetadata{
 		Name:          modelType.Name(),
@@ -291,7 +282,6 @@ func TestParseComplexModel(t *testing.T) {
 		PrimaryKeys:   make([]string, 0),
 	}
 
-	// Parse each field
 	for i := 0; i < modelType.NumField(); i++ {
 		field := modelType.Field(i)
 		fieldMeta, err := parser.parseField(field)
@@ -301,7 +291,6 @@ func TestParseComplexModel(t *testing.T) {
 
 		metadata.Fields = append(metadata.Fields, fieldMeta)
 
-		// Categorize fields
 		if fieldMeta.Relationship != nil {
 			metadata.Relationships = append(metadata.Relationships, fieldMeta)
 		} else if fieldMeta.DBName != "" {
@@ -312,12 +301,10 @@ func TestParseComplexModel(t *testing.T) {
 		}
 	}
 
-	// Check relationships
 	if len(metadata.Relationships) != 2 {
 		t.Errorf("expected 2 relationships, got %d", len(metadata.Relationships))
 	}
 
-	// Verify belongs_to relationship
 	var categoryRel *FieldMetadata
 	for _, rel := range metadata.Relationships {
 		if rel.Name == "Category" {
@@ -332,7 +319,6 @@ func TestParseComplexModel(t *testing.T) {
 		t.Errorf("expected belongs_to relationship, got %s", categoryRel.Relationship.Type)
 	}
 
-	// Verify has_many_through relationship
 	var tagsRel *FieldMetadata
 	for _, rel := range metadata.Relationships {
 		if rel.Name == "Tags" {

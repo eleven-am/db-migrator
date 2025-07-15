@@ -10,7 +10,6 @@ import (
 )
 
 var (
-	// Database connection flags
 	dbURL      string
 	dbHost     string
 	dbPort     string
@@ -19,7 +18,6 @@ var (
 	dbName     string
 	dbSSLMode  string
 
-	// Migration flags
 	outputDir           string
 	packagePath         string
 	migrationName       string
@@ -38,7 +36,6 @@ Uses Storm's migration engine for schema comparison and migration generation.`,
 }
 
 func init() {
-	// Database flags - these will override config file values
 	migrateCmd.Flags().StringVar(&dbHost, "host", "localhost", "Database host")
 	migrateCmd.Flags().StringVar(&dbPort, "port", "5432", "Database port")
 	migrateCmd.Flags().StringVar(&dbUser, "user", "", "Database user")
@@ -59,9 +56,7 @@ func runMigrate(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
-	// Apply config file values as defaults
 	if stormConfig != nil {
-		// Use config values if flags weren't specified
 		if outputDir == "" && stormConfig.Migrations.Directory != "" {
 			outputDir = stormConfig.Migrations.Directory
 		}
@@ -70,7 +65,6 @@ func runMigrate(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Set final defaults if still empty
 	if outputDir == "" {
 		outputDir = "./migrations"
 	}
@@ -78,12 +72,11 @@ func runMigrate(cmd *cobra.Command, args []string) error {
 		packagePath = "./models"
 	}
 
-	// Build database URL - use global databaseURL which may come from config
 	var dsn string
 	if databaseURL != "" {
 		dsn = databaseURL
 	} else if dbUser != "" && dbName != "" {
-		dsn = fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s", 
+		dsn = fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s",
 			dbUser, dbPassword, dbHost, dbPort, dbName, dbSSLMode)
 	} else {
 		return fmt.Errorf("database connection required: use --url flag, individual connection flags, or specify in storm.yaml")
@@ -97,7 +90,6 @@ func runMigrate(cmd *cobra.Command, args []string) error {
 
 	fmt.Println("Initializing Storm migration engine...")
 
-	// Create Storm client
 	config := storm.NewConfig()
 	config.DatabaseURL = dsn
 	config.ModelsPackage = packagePath
@@ -110,14 +102,12 @@ func runMigrate(cmd *cobra.Command, args []string) error {
 	}
 	defer stormClient.Close()
 
-	// Test connection
 	if err := stormClient.Ping(ctx); err != nil {
 		return fmt.Errorf("failed to ping database: %w", err)
 	}
 
 	fmt.Println("Generating migration...")
 
-	// Generate migration
 	opts := storm.MigrateOptions{
 		PackagePath: packagePath,
 		OutputDir:   outputDir,

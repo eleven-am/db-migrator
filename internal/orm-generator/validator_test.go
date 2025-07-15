@@ -271,7 +271,6 @@ func validateModelMetadata(model *ModelMetadata) error {
 		return errorf("model %s has no primary key", model.Name)
 	}
 
-	// Check for duplicate columns
 	columnNames := make(map[string]bool)
 	for _, col := range model.Columns {
 		if columnNames[col.DBName] {
@@ -288,30 +287,24 @@ func validateRelationshipMetadata(sourceModel *ModelMetadata, rel FieldMetadata,
 		return errorf("nil relationship metadata")
 	}
 
-	// Check if target model exists
 	targetModel, exists := models[rel.Relationship.Target]
 	if !exists {
 		return errorf("target model %s not found", rel.Relationship.Target)
 	}
 
-	// Validate based on relationship type
 	switch rel.Relationship.Type {
 	case "belongs_to":
-		// Check if foreign key exists in source model
 		if !hasColumn(sourceModel, rel.Relationship.ForeignKey) {
 			return errorf("foreign key column %s not found in model %s", rel.Relationship.ForeignKey, sourceModel.Name)
 		}
-		// Check if target key exists in target model
 		if !hasColumn(targetModel, rel.Relationship.TargetKey) {
 			return errorf("target key column %s not found in model %s", rel.Relationship.TargetKey, targetModel.Name)
 		}
 
 	case "has_one", "has_many":
-		// Check if source key exists in source model
 		if !hasColumn(sourceModel, rel.Relationship.SourceKey) {
 			return errorf("source key column %s not found in model %s", rel.Relationship.SourceKey, sourceModel.Name)
 		}
-		// Check if foreign key exists in target model
 		if !hasColumn(targetModel, rel.Relationship.ForeignKey) {
 			return errorf("foreign key column %s not found in model %s", rel.Relationship.ForeignKey, targetModel.Name)
 		}
@@ -331,7 +324,6 @@ func validateFieldMetadata(field FieldMetadata) error {
 		return errorf("empty type for field %s", field.Name)
 	}
 
-	// Validate db name format (simple check for alphanumeric and underscore)
 	for _, r := range field.DBName {
 		if !((r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '_') {
 			return errorf("invalid db name %s for field %s", field.DBName, field.Name)
@@ -379,12 +371,9 @@ func (e *ValidationError) Error() string {
 }
 
 func sprintf(format string, args ...interface{}) string {
-	// Simple sprintf implementation for tests
-	// In real code, use fmt.Sprintf
 	if len(args) == 0 {
 		return format
 	}
-	// Very basic string replacement for testing
 	result := format
 	for i, arg := range args {
 		if i == 0 {

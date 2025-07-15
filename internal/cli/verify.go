@@ -29,18 +29,16 @@ func runVerify(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
-	// Build database URL (reuse logic from migrate command)
 	var dsn string
 	if dbURL != "" {
 		dsn = dbURL
 	} else if dbUser != "" && dbName != "" {
-		dsn = fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s", 
+		dsn = fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s",
 			dbUser, dbPassword, dbHost, dbPort, dbName, dbSSLMode)
 	} else {
 		return fmt.Errorf("either --url or both --user and --dbname must be provided")
 	}
 
-	// Create Storm client
 	config := storm.NewConfig()
 	config.DatabaseURL = dsn
 	config.ModelsPackage = packagePath
@@ -52,14 +50,12 @@ func runVerify(cmd *cobra.Command, args []string) error {
 	}
 	defer stormClient.Close()
 
-	// Test connection
 	if err := stormClient.Ping(ctx); err != nil {
 		return fmt.Errorf("failed to ping database: %w", err)
 	}
 
 	fmt.Println("Verifying database schema...")
 
-	// Get current schema
 	currentSchema, err := stormClient.Introspect(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to introspect database: %w", err)
@@ -67,8 +63,6 @@ func runVerify(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("Found %d tables in database\n", len(currentSchema.Tables))
 
-	// For now, just report what we found
-	// TODO: Implement actual schema comparison with models
 	for tableName, table := range currentSchema.Tables {
 		fmt.Printf("  %s (%d columns)\n", tableName, len(table.Columns))
 	}

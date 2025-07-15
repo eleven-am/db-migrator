@@ -24,9 +24,9 @@ type StormConfig struct {
 	} `yaml:"models"`
 
 	Migrations struct {
-		Directory  string `yaml:"directory"`
-		Table      string `yaml:"table"`
-		AutoApply  bool   `yaml:"auto_apply"`
+		Directory string `yaml:"directory"`
+		Table     string `yaml:"table"`
+		AutoApply bool   `yaml:"auto_apply"`
 	} `yaml:"migrations"`
 
 	ORM struct {
@@ -43,7 +43,6 @@ type StormConfig struct {
 
 // LoadStormConfig loads configuration from storm.yaml file
 func LoadStormConfig(path string) (*StormConfig, error) {
-	// If no path specified, look for default files
 	if path == "" {
 		locations := []string{"storm.yaml", "storm.yml", ".storm.yaml", ".storm.yml"}
 		for _, loc := range locations {
@@ -53,7 +52,6 @@ func LoadStormConfig(path string) (*StormConfig, error) {
 			}
 		}
 		if path == "" {
-			// No config file found, return nil (not an error)
 			return nil, nil
 		}
 	}
@@ -68,7 +66,6 @@ func LoadStormConfig(path string) (*StormConfig, error) {
 		return nil, fmt.Errorf("failed to parse config file: %w", err)
 	}
 
-	// Set defaults if not specified
 	if config.Database.Driver == "" {
 		config.Database.Driver = "postgres"
 	}
@@ -93,12 +90,10 @@ func LoadStormConfig(path string) (*StormConfig, error) {
 
 // GetConfigPath returns the path to the config file
 func GetConfigPath() string {
-	// Check if config file is specified via environment variable
 	if path := os.Getenv("STORM_CONFIG"); path != "" {
 		return path
 	}
 
-	// Look for config files in current directory
 	locations := []string{"storm.yaml", "storm.yml", ".storm.yaml", ".storm.yml"}
 	for _, loc := range locations {
 		if _, err := os.Stat(loc); err == nil {
@@ -115,7 +110,6 @@ func SaveStormConfig(config *StormConfig, path string) error {
 		path = "storm.yaml"
 	}
 
-	// Ensure directory exists
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return fmt.Errorf("failed to create directory: %w", err)
 	}

@@ -57,7 +57,6 @@ func (v *ModelValidator) ValidateModel(modelType reflect.Type) ValidationResult 
 		return result
 	}
 
-	// Check for primary key
 	if !v.hasPrimaryKey(modelType) {
 		result.Valid = false
 		result.Errors = append(result.Errors, ModelValidationError{
@@ -66,7 +65,6 @@ func (v *ModelValidator) ValidateModel(modelType reflect.Type) ValidationResult 
 		})
 	}
 
-	// Validate fields
 	for i := 0; i < modelType.NumField(); i++ {
 		field := modelType.Field(i)
 		fieldErrors := v.validateField(modelType.Name(), field)
@@ -83,7 +81,6 @@ func (v *ModelValidator) ValidateModel(modelType reflect.Type) ValidationResult 
 func (v *ModelValidator) ValidateModels(models map[string]reflect.Type) ValidationResult {
 	result := ValidationResult{Valid: true}
 
-	// First validate each model individually
 	for _, modelType := range models {
 		modelResult := v.ValidateModel(modelType)
 		if !modelResult.Valid {
@@ -92,7 +89,6 @@ func (v *ModelValidator) ValidateModels(models map[string]reflect.Type) Validati
 		}
 	}
 
-	// Then validate relationships between models
 	relationshipErrors := v.validateRelationships(models)
 	if len(relationshipErrors) > 0 {
 		result.Valid = false
@@ -122,16 +118,13 @@ func (v *ModelValidator) hasPrimaryKey(modelType reflect.Type) bool {
 func (v *ModelValidator) validateField(typeName string, field reflect.StructField) []ModelValidationError {
 	var errors []ModelValidationError
 
-	// Check db tag
 	dbTag := field.Tag.Get("db")
 	if dbTag == "" && field.Name != "ID" {
-		// Allow fields without db tag for embedded structs or special cases
 		if field.Type.Kind() != reflect.Struct || field.Anonymous {
 			return errors
 		}
 	}
 
-	// Validate dbdef tag syntax
 	dbdefTag := field.Tag.Get("dbdef")
 	if dbdefTag != "" {
 		if err := v.validateDbdefTag(dbdefTag); err != nil {
@@ -143,7 +136,6 @@ func (v *ModelValidator) validateField(typeName string, field reflect.StructFiel
 		}
 	}
 
-	// Validate ORM relationship tags
 	ormTag := field.Tag.Get("orm")
 	if ormTag != "" {
 		if _, err := v.tagParser.ParseORMTag(ormTag); err != nil {
@@ -155,7 +147,6 @@ func (v *ModelValidator) validateField(typeName string, field reflect.StructFiel
 		}
 	}
 
-	// Check field type compatibility
 	if err := v.validateFieldType(field.Type); err != nil {
 		errors = append(errors, ModelValidationError{
 			Type:    typeName,
@@ -176,7 +167,6 @@ func (v *ModelValidator) validateDbdefTag(tag string) error {
 			continue
 		}
 
-		// Check for valid dbdef options
 		switch {
 		case part == "primary_key":
 		case part == "unique":
@@ -195,7 +185,6 @@ func (v *ModelValidator) validateDbdefTag(tag string) error {
 
 // validateFieldType checks if field type is supported
 func (v *ModelValidator) validateFieldType(fieldType reflect.Type) error {
-	// Handle pointers
 	if fieldType.Kind() == reflect.Ptr {
 		fieldType = fieldType.Elem()
 	}
@@ -207,21 +196,17 @@ func (v *ModelValidator) validateFieldType(fieldType reflect.Type) error {
 	case reflect.Float32, reflect.Float64:
 	case reflect.Bool:
 	case reflect.Slice:
-		// Check slice element type
 		if fieldType.Elem().Kind() == reflect.Uint8 {
-			// []byte is supported
 			return nil
 		}
 		return fmt.Errorf("unsupported slice type: %s", fieldType)
 	case reflect.Struct:
-		// Check for supported struct types
 		typeName := fieldType.String()
 		switch typeName {
 		case "time.Time":
 		case "json.RawMessage":
 		case "uuid.UUID":
 		default:
-			// Allow embedded structs
 			if fieldType.NumField() > 0 {
 				return nil
 			}
@@ -248,12 +233,10 @@ func (v *ModelValidator) validateRelationships(models map[string]reflect.Type) [
 
 			parsedTag, err := v.tagParser.ParseORMTag(ormTag)
 			if err != nil {
-				// Already caught in field validation
 				continue
 			}
 
-			// Validate target model exists
-			targetTableName := strings.ToLower(parsedTag.Target + "s") // Simple pluralization
+			targetTableName := strings.ToLower(parsedTag.Target + "s")
 			targetExists := false
 			for _, targetType := range models {
 				if strings.ToLower(deriveTableName(targetType.Name())) == targetTableName {
@@ -270,7 +253,6 @@ func (v *ModelValidator) validateRelationships(models map[string]reflect.Type) [
 				})
 			}
 
-			// Validate foreign key field exists
 			if parsedTag.ForeignKey != "" {
 				if !v.hasField(modelType, parsedTag.ForeignKey) {
 					errors = append(errors, ModelValidationError{
@@ -281,7 +263,6 @@ func (v *ModelValidator) validateRelationships(models map[string]reflect.Type) [
 				}
 			}
 
-			// Validate through table for many-to-many relationships
 			if parsedTag.Type == "has_many_through" && parsedTag.Through != "" {
 				throughTableName := strings.ToLower(parsedTag.Through)
 				throughExists := false
@@ -320,7 +301,6 @@ func (v *ModelValidator) hasField(structType reflect.Type, fieldName string) boo
 
 // ValidateModelsFromDirectory auto-discovers and validates models using the migrator's proven parser
 func ValidateModelsFromDirectory(packagePath string) ValidationResult {
-	// Use the SAME parser that the migrator uses successfully
 	structParser := parser.NewStructParser()
 	tables, err := structParser.ParseDirectory(packagePath)
 	if err != nil {
@@ -343,23 +323,18 @@ func ValidateModelsFromDirectory(packagePath string) ValidationResult {
 		}
 	}
 
-	// Validate table-level requirements beyond basic parsing
 	result := ValidationResult{Valid: true}
-	tableNames := make(map[string]string) // tableName -> structName for duplicate detection
+	tableNames := make(map[string]string)
 
-	// Filter to only include structs that are actual database models (have explicit table definitions)
 	var dbModels []parser.TableDefinition
 	for _, table := range tables {
-		// Check if the table has an explicit table definition (not just derived name)
 		if _, hasExplicitTable := table.TableLevel["table"]; hasExplicitTable {
 			dbModels = append(dbModels, table)
 		}
-		// Skip structs without explicit table definitions - they're utility structs, not database models
 	}
 
 	for _, table := range dbModels {
 
-		// Validate table name format (should be snake_case)
 		if !isValidTableName(table.TableName) {
 			result.Valid = false
 			result.Errors = append(result.Errors, ModelValidationError{
@@ -368,7 +343,6 @@ func ValidateModelsFromDirectory(packagePath string) ValidationResult {
 			})
 		}
 
-		// Check for duplicate table names
 		if existingStruct, exists := tableNames[table.TableName]; exists {
 			result.Valid = false
 			result.Errors = append(result.Errors, ModelValidationError{
@@ -379,7 +353,6 @@ func ValidateModelsFromDirectory(packagePath string) ValidationResult {
 			tableNames[table.TableName] = table.StructName
 		}
 
-		// Validate primary key exists
 		hasPK := false
 		for _, field := range table.Fields {
 			if _, isPK := field.DBDef["primary_key"]; isPK {
@@ -410,7 +383,6 @@ func ValidateModelsFromDirectory(packagePath string) ValidationResult {
 func (v *ModelValidator) validateTableDefinition(table parser.TableDefinition) []ModelValidationError {
 	var errors []ModelValidationError
 
-	// Check for primary key
 	hasPK := false
 	for _, field := range table.Fields {
 		if _, isPK := field.DBDef["primary_key"]; isPK {
@@ -426,7 +398,6 @@ func (v *ModelValidator) validateTableDefinition(table parser.TableDefinition) [
 		})
 	}
 
-	// Validate each field
 	for _, field := range table.Fields {
 		fieldErrors := v.validateTableField(table.StructName, field)
 		errors = append(errors, fieldErrors...)
@@ -439,7 +410,6 @@ func (v *ModelValidator) validateTableDefinition(table parser.TableDefinition) [
 func (v *ModelValidator) validateTableField(typeName string, field parser.FieldDefinition) []ModelValidationError {
 	var errors []ModelValidationError
 
-	// Validate dbdef tag syntax
 	if field.DBDefTag != "" {
 		if err := v.validateDbdefTag(field.DBDefTag); err != nil {
 			errors = append(errors, ModelValidationError{
@@ -450,7 +420,6 @@ func (v *ModelValidator) validateTableField(typeName string, field parser.FieldD
 		}
 	}
 
-	// Basic field type validation
 	if field.Type == "" {
 		errors = append(errors, ModelValidationError{
 			Type:    typeName,
@@ -464,19 +433,17 @@ func (v *ModelValidator) validateTableField(typeName string, field parser.FieldD
 
 // deriveTableName derives table name from struct name
 func deriveTableName(structName string) string {
-	// Convert PascalCase to snake_case and pluralize
 	var result strings.Builder
 
 	for i, r := range structName {
 		if i > 0 && r >= 'A' && r <= 'Z' {
 			result.WriteRune('_')
 		}
-		result.WriteRune(r + 32) // Convert to lowercase
+		result.WriteRune(r + 32)
 	}
 
 	snake := result.String()
 
-	// Simple pluralization
 	if strings.HasSuffix(snake, "y") && !strings.HasSuffix(snake, "ey") {
 		return snake[:len(snake)-1] + "ies"
 	}
@@ -493,19 +460,16 @@ func isValidTableName(tableName string) bool {
 		return false
 	}
 
-	// Check that it's snake_case (only lowercase letters, digits, underscores)
 	for _, r := range tableName {
 		if !((r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '_') {
 			return false
 		}
 	}
 
-	// Don't start or end with underscore
 	if strings.HasPrefix(tableName, "_") || strings.HasSuffix(tableName, "_") {
 		return false
 	}
 
-	// Don't allow consecutive underscores
 	if strings.Contains(tableName, "__") {
 		return false
 	}

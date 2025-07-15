@@ -29,16 +29,13 @@ func NewSchemaInspector(db *sqlx.DB, config *storm.Config, logger storm.Logger) 
 func (s *SchemaInspectorImpl) Inspect(ctx context.Context) (*storm.Schema, error) {
 	s.logger.Info("Inspecting database schema...")
 
-	// Use the existing working introspect functionality
 	inspector := introspect.NewInspector(s.db.DB, "postgres")
 
-	// Get the database schema
 	dbSchema, err := inspector.GetSchema(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to introspect database schema: %w", err)
 	}
 
-	// Convert to Storm schema format
 	stormSchema := s.convertIntrospectSchemaToStorm(dbSchema)
 
 	s.logger.Info("Schema inspection completed", "tables", len(stormSchema.Tables))
@@ -55,21 +52,17 @@ func (s *SchemaInspectorImpl) Compare(ctx context.Context, from, to *storm.Schem
 		ModifiedTables: make(map[string]*storm.TableDiff),
 	}
 
-	// Find added and modified tables
 	for name, toTable := range to.Tables {
 		if fromTable, exists := from.Tables[name]; exists {
-			// Table exists in both schemas, check for modifications
 			tableDiff := s.compareTable(fromTable, toTable)
 			if !tableDiff.IsEmpty() {
 				diff.ModifiedTables[name] = tableDiff
 			}
 		} else {
-			// Table only exists in 'to' schema
 			diff.AddedTables[name] = toTable
 		}
 	}
 
-	// Find dropped tables
 	for name, fromTable := range from.Tables {
 		if _, exists := to.Tables[name]; !exists {
 			diff.DroppedTables[name] = fromTable
@@ -88,16 +81,13 @@ func (s *SchemaInspectorImpl) Compare(ctx context.Context, from, to *storm.Schem
 func (s *SchemaInspectorImpl) ExportSQL(ctx context.Context) (string, error) {
 	s.logger.Info("Exporting schema as SQL...")
 
-	// Use the existing working introspect functionality
 	inspector := introspect.NewInspector(s.db.DB, "postgres")
 
-	// Get the database schema
 	dbSchema, err := inspector.GetSchema(ctx)
 	if err != nil {
 		return "", fmt.Errorf("failed to introspect database schema: %w", err)
 	}
 
-	// Export as SQL using the existing functionality
 	sqlExport, err := inspector.ExportSchema(dbSchema, introspect.ExportFormatSQL)
 	if err != nil {
 		return "", fmt.Errorf("failed to export schema as SQL: %w", err)
@@ -110,16 +100,13 @@ func (s *SchemaInspectorImpl) ExportSQL(ctx context.Context) (string, error) {
 func (s *SchemaInspectorImpl) ExportGo(ctx context.Context) (string, error) {
 	s.logger.Info("Exporting schema as Go structs...")
 
-	// Use the existing working introspect functionality
 	inspector := introspect.NewInspector(s.db.DB, "postgres")
 
-	// Get the database schema
 	dbSchema, err := inspector.GetSchema(ctx)
 	if err != nil {
 		return "", fmt.Errorf("failed to introspect database schema: %w", err)
 	}
 
-	// Use the existing struct generator
 	structGen := introspect.NewStructGenerator(dbSchema, "models")
 	goCode, err := structGen.GenerateStructs()
 	if err != nil {
@@ -129,9 +116,6 @@ func (s *SchemaInspectorImpl) ExportGo(ctx context.Context) (string, error) {
 	return goCode, nil
 }
 
-// Helper methods
-
-// convertIntrospectSchemaToStorm converts introspect.DatabaseSchema to storm.Schema
 func (s *SchemaInspectorImpl) convertIntrospectSchemaToStorm(dbSchema *introspect.DatabaseSchema) *storm.Schema {
 	stormSchema := &storm.Schema{
 		Tables: make(map[string]*storm.Table),
@@ -143,7 +127,6 @@ func (s *SchemaInspectorImpl) convertIntrospectSchemaToStorm(dbSchema *introspec
 			Columns: make(map[string]*storm.Column),
 		}
 
-		// Convert columns
 		for _, col := range table.Columns {
 			stormCol := &storm.Column{
 				Name:     col.Name,
@@ -156,7 +139,6 @@ func (s *SchemaInspectorImpl) convertIntrospectSchemaToStorm(dbSchema *introspec
 			stormTable.Columns[col.Name] = stormCol
 		}
 
-		// Convert primary key
 		if table.PrimaryKey != nil {
 			stormTable.PrimaryKey = &storm.PrimaryKey{
 				Name:    table.PrimaryKey.Name,
@@ -164,7 +146,6 @@ func (s *SchemaInspectorImpl) convertIntrospectSchemaToStorm(dbSchema *introspec
 			}
 		}
 
-		// Convert foreign keys
 		for _, fk := range table.ForeignKeys {
 			stormFK := &storm.ForeignKey{
 				Name:           fk.Name,
@@ -175,7 +156,6 @@ func (s *SchemaInspectorImpl) convertIntrospectSchemaToStorm(dbSchema *introspec
 			stormTable.ForeignKeys = append(stormTable.ForeignKeys, stormFK)
 		}
 
-		// Convert indexes
 		for _, idx := range table.Indexes {
 			columns := make([]string, len(idx.Columns))
 			for i, col := range idx.Columns {
@@ -202,21 +182,17 @@ func (s *SchemaInspectorImpl) compareTable(from, to *storm.Table) *storm.TableDi
 		ModifiedColumns: make(map[string]*storm.ColumnDiff),
 	}
 
-	// Compare columns
 	for name, toColumn := range to.Columns {
 		if fromColumn, exists := from.Columns[name]; exists {
-			// Column exists in both, check for modifications
 			columnDiff := s.compareColumn(fromColumn, toColumn)
 			if !columnDiff.IsEmpty() {
 				diff.ModifiedColumns[name] = columnDiff
 			}
 		} else {
-			// Column only exists in 'to' schema
 			diff.AddedColumns[name] = toColumn
 		}
 	}
 
-	// Find dropped columns
 	for name, fromColumn := range from.Columns {
 		if _, exists := to.Columns[name]; !exists {
 			diff.DroppedColumns[name] = fromColumn

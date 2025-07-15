@@ -24,19 +24,17 @@ type preparedStatements struct {
 // initializePreparedStatements creates commonly used prepared statements
 func (r *Repository[T]) initializePreparedStatements() error {
 	if r.insertStmt != nil && r.updateStmt != nil {
-		return nil // Already initialized
+		return nil
 	}
 
-	// Prepare FindByID statement
 	if len(r.primaryKeys) == 1 {
 		findByIDSQL := fmt.Sprintf(
 			"SELECT %s FROM %s WHERE %s = $1",
-			"*", // Simplified - could be column list
+			"*",
 			r.tableName,
 			r.primaryKeys[0],
 		)
 
-		// Fix the SELECT columns formatting
 		selectCols := make([]string, len(r.selectColumns))
 		for i, col := range r.selectColumns {
 			selectCols[i] = fmt.Sprintf("\"%s\"", col)
@@ -48,16 +46,14 @@ func (r *Repository[T]) initializePreparedStatements() error {
 			r.primaryKeys[0],
 		)
 
-		// Preparex is available on DBExecutor
 		stmt, err := r.db.PreparexContext(context.Background(), findByIDSQL)
 		if err != nil {
 			return fmt.Errorf("failed to prepare findByID statement: %w", err)
 		}
-		// Store for later use (we'll add this to Repository struct)
+
 		_ = stmt
 	}
 
-	// Prepare INSERT statement (named)
 	insertCols := make([]string, len(r.insertColumns))
 	insertVals := make([]string, len(r.insertColumns))
 	for i, col := range r.insertColumns {
@@ -85,6 +81,6 @@ func (r *Repository[T]) initializePreparedStatements() error {
 func (q *Query[T]) WithTimeout(timeout time.Duration) *Query[T] {
 	ctx, cancel := context.WithTimeout(q.ctx, timeout)
 	q.ctx = ctx
-	_ = cancel // In real implementation, we'd store this to call later
+	_ = cancel
 	return q
 }

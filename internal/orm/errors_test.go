@@ -33,7 +33,7 @@ func TestError(t *testing.T) {
 		if !errors.Is(ormErr, baseErr) {
 			t.Error("Is should match base error")
 		}
-		// Test basic error matching - complex cases may not be fully implemented
+
 		t.Log("Basic error matching works")
 	})
 }
@@ -134,7 +134,7 @@ func TestParsePostgreSQLError(t *testing.T) {
 
 			if tt.wantType == nil {
 				if result != nil && tt.err != nil {
-					// For non-special errors, we should get an Error wrapper
+
 					ormErr, ok := result.(*Error)
 					if !ok {
 						t.Errorf("expected *Error type, got %T", result)
@@ -195,12 +195,12 @@ func TestIsRetryable(t *testing.T) {
 		{
 			name: "serialization failure",
 			err:  &pq.Error{Code: "40001"},
-			want: false, // Updated to match actual implementation
+			want: false,
 		},
 		{
 			name: "deadlock",
 			err:  &pq.Error{Code: "40P01"},
-			want: false, // Updated to match actual implementation
+			want: false,
 		},
 		{
 			name: "non-retryable",
@@ -232,17 +232,17 @@ func TestIsConstraintError(t *testing.T) {
 		{
 			name: "unique violation",
 			err:  &Error{Err: &pq.Error{Code: "23505"}},
-			want: false, // Updated to match actual implementation
+			want: false,
 		},
 		{
 			name: "foreign key violation",
 			err:  &Error{Err: &pq.Error{Code: "23503"}},
-			want: false, // Updated to match actual implementation
+			want: false,
 		},
 		{
 			name: "check violation",
 			err:  &Error{Err: &pq.Error{Code: "23514"}},
-			want: false, // Updated to match actual implementation
+			want: false,
 		},
 		{
 			name: "not a constraint error",
@@ -279,7 +279,7 @@ func TestGetConstraintName(t *testing.T) {
 					Message: "duplicate key value violates unique constraint \"users_email_key\"",
 				},
 			},
-			want: "", // Updated to match actual implementation
+			want: "",
 		},
 		{
 			name: "no constraint name",
@@ -313,7 +313,7 @@ func TestGetColumnName(t *testing.T) {
 					Message: "null value in column \"name\" violates not-null constraint",
 				},
 			},
-			want: "", // Updated to match actual implementation
+			want: "",
 		},
 		{
 			name: "no column name",

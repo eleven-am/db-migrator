@@ -5,7 +5,6 @@ import (
 )
 
 func TestConfigStructure(t *testing.T) {
-	// Test basic config structure
 	cfg := &StormConfig{
 		Version: "1.0",
 		Project: "test",
@@ -102,8 +101,6 @@ func TestGetConfigPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// This test would require mocking filesystem operations
-			// For now, we'll skip the implementation
 			t.Skip("Requires filesystem mocking")
 		})
 	}

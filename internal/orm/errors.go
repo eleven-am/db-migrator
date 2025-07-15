@@ -9,25 +9,16 @@ import (
 
 // Common errors
 var (
-	ErrNotFound          = errors.New("record not found")
-	ErrInvalidStruct     = errors.New("invalid struct type")
-	ErrNoPrimaryKey      = errors.New("no primary key defined")
-	ErrInvalidQuery      = errors.New("invalid query")
-	ErrInvalidCondition  = errors.New("invalid condition")
-	ErrTransactionFailed = errors.New("transaction failed")
-	ErrMigrationFailed   = errors.New("migration failed")
-	ErrHookFailed        = errors.New("hook execution failed")
-	ErrCacheFailed       = errors.New("cache operation failed")
-	ErrDuplicateKey      = errors.New("duplicate key violation")
-	ErrForeignKey        = errors.New("foreign key violation")
-	ErrCheckConstraint   = errors.New("check constraint violation")
-	ErrNotNull           = errors.New("not null constraint violation")
-	ErrInvalidType       = errors.New("invalid type")
-	ErrConnectionFailed  = errors.New("database connection failed")
-	ErrTimeout           = errors.New("operation timeout")
-	ErrCanceled          = errors.New("operation canceled")
-	ErrMultipleRecords   = errors.New("multiple records found")
-	ErrTransactionNil    = errors.New("transaction is nil")
+	ErrNotFound         = errors.New("record not found")
+	ErrInvalidStruct    = errors.New("invalid struct type")
+	ErrNoPrimaryKey     = errors.New("no primary key defined")
+	ErrDuplicateKey     = errors.New("duplicate key violation")
+	ErrForeignKey       = errors.New("foreign key violation")
+	ErrCheckConstraint  = errors.New("check constraint violation")
+	ErrNotNull          = errors.New("not null constraint violation")
+	ErrConnectionFailed = errors.New("database connection failed")
+	ErrTimeout          = errors.New("operation timeout")
+	ErrCanceled         = errors.New("operation canceled")
 )
 
 // Error provides detailed error information
@@ -77,12 +68,10 @@ func (e *Error) Is(target error) bool {
 		return errors.Is(e.Err, target)
 	}
 
-	// Match if operations are the same
 	if t.Op != "" && e.Op == t.Op {
 		return true
 	}
 
-	// Match if underlying errors match
 	return errors.Is(e.Err, t.Err)
 }
 
@@ -92,7 +81,6 @@ func ParsePostgreSQLError(err error, op, table string) error {
 		return nil
 	}
 
-	// Check for common errors
 	if errors.Is(err, sql.ErrNoRows) {
 		return &Error{
 			Op:    op,
@@ -101,10 +89,8 @@ func ParsePostgreSQLError(err error, op, table string) error {
 		}
 	}
 
-	// Parse PostgreSQL error codes
 	errStr := err.Error()
 
-	// Duplicate key violation
 	if strings.Contains(errStr, "duplicate key value violates unique constraint") {
 		constraint := extractConstraintName(errStr)
 		return &Error{
@@ -116,7 +102,6 @@ func ParsePostgreSQLError(err error, op, table string) error {
 		}
 	}
 
-	// Foreign key violation
 	if strings.Contains(errStr, "violates foreign key constraint") {
 		constraint := extractConstraintName(errStr)
 		return &Error{
@@ -128,7 +113,6 @@ func ParsePostgreSQLError(err error, op, table string) error {
 		}
 	}
 
-	// Not null violation
 	if strings.Contains(errStr, "violates not-null constraint") {
 		column := extractColumnName(errStr)
 		return &Error{
@@ -140,7 +124,6 @@ func ParsePostgreSQLError(err error, op, table string) error {
 		}
 	}
 
-	// Check constraint violation
 	if strings.Contains(errStr, "violates check constraint") {
 		constraint := extractConstraintName(errStr)
 		return &Error{
@@ -152,7 +135,6 @@ func ParsePostgreSQLError(err error, op, table string) error {
 		}
 	}
 
-	// Timeout
 	if strings.Contains(errStr, "context deadline exceeded") {
 		return &Error{
 			Op:        op,
@@ -162,7 +144,6 @@ func ParsePostgreSQLError(err error, op, table string) error {
 		}
 	}
 
-	// Canceled
 	if strings.Contains(errStr, "context canceled") {
 		return &Error{
 			Op:        op,
@@ -172,7 +153,6 @@ func ParsePostgreSQLError(err error, op, table string) error {
 		}
 	}
 
-	// Connection errors
 	if strings.Contains(errStr, "connection refused") ||
 		strings.Contains(errStr, "connection reset") ||
 		strings.Contains(errStr, "broken pipe") {
@@ -184,7 +164,6 @@ func ParsePostgreSQLError(err error, op, table string) error {
 		}
 	}
 
-	// Default error
 	return &Error{
 		Op:        op,
 		Table:     table,
@@ -196,7 +175,7 @@ func ParsePostgreSQLError(err error, op, table string) error {
 // Helper functions to extract information from error messages
 
 func extractConstraintName(errStr string) string {
-	// Look for quoted constraint name
+
 	start := strings.Index(errStr, "\"")
 	if start == -1 {
 		return ""
@@ -209,7 +188,7 @@ func extractConstraintName(errStr string) string {
 }
 
 func extractColumnName(errStr string) string {
-	// Look for "column \"name\""
+
 	columnIdx := strings.Index(errStr, "column \"")
 	if columnIdx == -1 {
 		return ""

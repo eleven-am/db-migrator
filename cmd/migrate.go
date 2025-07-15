@@ -62,7 +62,6 @@ func runMigrate(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
-	// Build DSN
 	var dsn string
 	if dbURL != "" {
 		dsn = dbURL

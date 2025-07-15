@@ -7,7 +7,6 @@ import (
 )
 
 func TestNewInspector(t *testing.T) {
-	// Mock database connection (would be nil in unit test)
 	var db *sql.DB
 
 	inspector := NewInspector(db, "postgres")

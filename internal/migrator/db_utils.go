@@ -21,7 +21,6 @@ func EnsureDatabaseExists(dsn string) error {
 	}
 	defer db.Close()
 
-	// Check if database exists
 	var exists bool
 	query := `SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname = $1)`
 	if err := db.QueryRow(query, dbName).Scan(&exists); err != nil {

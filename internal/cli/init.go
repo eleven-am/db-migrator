@@ -9,9 +9,9 @@ import (
 )
 
 var (
-	initProject   string
-	initDriver    string
-	initForce     bool
+	initProject string
+	initDriver  string
+	initForce   bool
 )
 
 var initCmd = &cobra.Command{
@@ -30,13 +30,11 @@ func init() {
 }
 
 func runInit(cmd *cobra.Command, args []string) error {
-	// Check if config file already exists
 	configPath := "storm.yaml"
 	if _, err := os.Stat(configPath); err == nil && !initForce {
 		return fmt.Errorf("storm.yaml already exists. Use --force to overwrite")
 	}
 
-	// Get project name from current directory if not specified
 	if initProject == "" {
 		dir, err := os.Getwd()
 		if err == nil {
@@ -46,35 +44,28 @@ func runInit(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Create default configuration
 	config := &StormConfig{
 		Version: "1",
 		Project: initProject,
 	}
 
-	// Set database defaults
 	config.Database.Driver = initDriver
 	config.Database.URL = fmt.Sprintf("%s://user:password@localhost:5432/dbname?sslmode=disable", initDriver)
 	config.Database.MaxConnections = 25
 
-	// Set models defaults
 	config.Models.Package = "./models"
 
-	// Set migrations defaults
 	config.Migrations.Directory = "./migrations"
 	config.Migrations.Table = "schema_migrations"
 	config.Migrations.AutoApply = false
 
-	// Set ORM defaults
 	config.ORM.GenerateHooks = true
 	config.ORM.GenerateTests = false
 	config.ORM.GenerateMocks = false
 
-	// Set schema defaults
 	config.Schema.StrictMode = true
 	config.Schema.NamingConvention = "snake_case"
 
-	// Save configuration
 	if err := SaveStormConfig(config, configPath); err != nil {
 		return fmt.Errorf("failed to save configuration: %w", err)
 	}

@@ -94,7 +94,7 @@ func (hm *hookManager) ExecuteHooks(hookCtx *HookContext) error {
 
 // ExecuteMiddleware executes the middleware chain
 func (hm *hookManager) ExecuteMiddleware(hookCtx *HookContext, finalFunc MiddlewareFunc) error {
-	// Build middleware chain from outside in
+
 	handler := finalFunc
 	for i := len(hm.middleware) - 1; i >= 0; i-- {
 		handler = hm.middleware[i](handler)
@@ -213,7 +213,7 @@ type MetricsCollector interface {
 func ValidationMiddleware(validator RecordValidator) Middleware {
 	return func(next MiddlewareFunc) MiddlewareFunc {
 		return func(ctx *HookContext) error {
-			// Only validate create and update operations
+
 			if ctx.Type == HookBeforeCreate || ctx.Type == HookBeforeUpdate {
 				if ctx.Record != nil {
 					if err := validator.Validate(ctx.Record); err != nil {
@@ -243,7 +243,6 @@ func TimestampHook(ctx *HookContext) error {
 	now := time.Now()
 	recordValue := reflect.ValueOf(ctx.Record)
 
-	// Handle pointer to struct
 	if recordValue.Kind() == reflect.Ptr {
 		recordValue = recordValue.Elem()
 	}
@@ -256,12 +255,12 @@ func TimestampHook(ctx *HookContext) error {
 
 	switch ctx.Type {
 	case HookBeforeCreate:
-		// Set both created_at and updated_at
+
 		setTimeField(recordValue, recordType, "CreatedAt", now)
 		setTimeField(recordValue, recordType, "UpdatedAt", now)
 
 	case HookBeforeUpdate:
-		// Set only updated_at
+
 		setTimeField(recordValue, recordType, "UpdatedAt", now)
 	}
 
@@ -283,7 +282,7 @@ func setTimeField(recordValue reflect.Value, recordType reflect.Type, fieldName 
 // AuditHook logs all database operations for auditing
 func AuditHook(auditLogger func(operation, table string, record interface{}, timestamp time.Time)) Hook {
 	return func(ctx *HookContext) error {
-		// Log after operations complete
+
 		if ctx.Type == HookAfterCreate || ctx.Type == HookAfterUpdate || ctx.Type == HookAfterDelete {
 			auditLogger(string(ctx.Type), ctx.TableName, ctx.Record, time.Now())
 		}
@@ -300,7 +299,6 @@ func SoftDeleteHook(ctx *HookContext) error {
 
 	recordValue := reflect.ValueOf(ctx.Record)
 
-	// Handle pointer to struct
 	if recordValue.Kind() == reflect.Ptr {
 		recordValue = recordValue.Elem()
 	}
@@ -311,7 +309,6 @@ func SoftDeleteHook(ctx *HookContext) error {
 
 	recordType := recordValue.Type()
 
-	// Look for DeletedAt field
 	if field, found := recordType.FieldByName("DeletedAt"); found {
 		if field.Type == reflect.TypeOf((*time.Time)(nil)) {
 			fieldValue := recordValue.FieldByName("DeletedAt")
@@ -319,8 +316,6 @@ func SoftDeleteHook(ctx *HookContext) error {
 				now := time.Now()
 				fieldValue.Set(reflect.ValueOf(&now))
 
-				// Prevent actual deletion by modifying the context
-				// This would require more sophisticated handling in the actual implementation
 				ctx.Metadata["soft_delete"] = true
 			}
 		}
@@ -335,11 +330,9 @@ func SoftDeleteHook(ctx *HookContext) error {
 func (r *Repository[T]) SetupCommonHooks() {
 	hm := r.getHookManager()
 
-	// Add timestamp hooks
 	hm.AddHook(HookBeforeCreate, TimestampHook)
 	hm.AddHook(HookBeforeUpdate, TimestampHook)
 
-	// Add soft delete hook
 	hm.AddHook(HookBeforeDelete, SoftDeleteHook)
 }
 

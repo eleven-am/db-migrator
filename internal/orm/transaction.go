@@ -64,15 +64,13 @@ func (tm *TransactionManager) WithTransactionOptions(ctx context.Context, opts *
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
 
-	// Ensure proper cleanup
 	defer func() {
 		if p := recover(); p != nil {
 			tx.Rollback()
-			panic(p) // Re-throw panic after rollback
+			panic(p)
 		}
 	}()
 
-	// Execute the function
 	err = fn(tx)
 	if err != nil {
 		if rbErr := tx.Rollback(); rbErr != nil {
@@ -81,7 +79,6 @@ func (tm *TransactionManager) WithTransactionOptions(ctx context.Context, opts *
 		return err
 	}
 
-	// Commit the transaction
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("failed to commit: %w", err)
 	}

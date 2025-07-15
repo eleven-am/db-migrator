@@ -12,7 +12,7 @@ import (
 )
 
 func TestNewStorm(t *testing.T) {
-	// Create a mock database
+
 	mockDB, _, err := sqlmock.New()
 	if err != nil {
 		t.Fatalf("failed to create mock db: %v", err)
@@ -37,7 +37,7 @@ func TestNewStorm(t *testing.T) {
 }
 
 func TestStormWithTransaction(t *testing.T) {
-	// Create a mock database
+
 	mockDB, mock, err := sqlmock.New()
 	if err != nil {
 		t.Fatalf("failed to create mock db: %v", err)
@@ -60,7 +60,7 @@ func TestStormWithTransaction(t *testing.T) {
 			if txStorm.db != storm.db {
 				t.Error("transaction storm should have same db")
 			}
-			// Can't easily check if executor is tx without exposing it
+
 			return nil
 		})
 
@@ -111,7 +111,7 @@ func TestStormWithTransaction(t *testing.T) {
 }
 
 func TestStormWithTransactionOptions(t *testing.T) {
-	// Create a mock database
+
 	mockDB, mock, err := sqlmock.New()
 	if err != nil {
 		t.Fatalf("failed to create mock db: %v", err)
@@ -145,7 +145,7 @@ func TestStormWithTransactionOptions(t *testing.T) {
 }
 
 func TestStormLogicalOperators(t *testing.T) {
-	// Create a mock database
+
 	mockDB, _, err := sqlmock.New()
 	if err != nil {
 		t.Fatalf("failed to create mock db: %v", err)
@@ -155,7 +155,6 @@ func TestStormLogicalOperators(t *testing.T) {
 	db := sqlx.NewDb(mockDB, "postgres")
 	storm := NewStorm(db)
 
-	// Create test conditions
 	cond1 := Condition{condition: squirrel.Eq{"name": "John"}}
 	cond2 := Condition{condition: squirrel.Eq{"age": 25}}
 	cond3 := Condition{condition: squirrel.Eq{"active": true}}
@@ -166,7 +165,7 @@ func TestStormLogicalOperators(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		// The exact SQL depends on squirrel's And implementation
+
 		if sql == "" {
 			t.Error("expected non-empty SQL")
 		}
@@ -221,7 +220,7 @@ func TestStormLogicalOperators(t *testing.T) {
 }
 
 func TestStormGetters(t *testing.T) {
-	// Create a mock database
+
 	mockDB, _, err := sqlmock.New()
 	if err != nil {
 		t.Fatalf("failed to create mock db: %v", err)

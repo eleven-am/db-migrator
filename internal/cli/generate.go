@@ -36,8 +36,7 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Printf("Parsing structs from: %s\n", absPath)
-	
-	// Create Storm client for schema generation
+
 	config := storm.NewConfig()
 	config.ModelsPackage = absPath
 	config.Debug = debug
@@ -50,7 +49,6 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 
 	ctx := context.Background()
 
-	// Generate schema SQL
 	schemaSQL, err := stormClient.Schema().ExportSQL(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to generate schema SQL: %w", err)

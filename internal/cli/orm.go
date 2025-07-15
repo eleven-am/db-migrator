@@ -9,8 +9,8 @@ import (
 )
 
 var (
-	ormPackage     string
-	ormOutput      string
+	ormPackage      string
+	ormOutput       string
 	ormIncludeHooks bool
 	ormIncludeTests bool
 	ormIncludeMocks bool
@@ -41,13 +41,10 @@ func init() {
 func runORM(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
 
-	// Apply config file values as defaults
 	if stormConfig != nil {
-		// Use config values if flags weren't specified
 		if ormPackage == "" && stormConfig.Models.Package != "" {
 			ormPackage = stormConfig.Models.Package
 		}
-		// Use ORM settings from config if not overridden
 		if !cmd.Flags().Changed("hooks") && stormConfig.ORM.GenerateHooks {
 			ormIncludeHooks = stormConfig.ORM.GenerateHooks
 		}
@@ -59,7 +56,6 @@ func runORM(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Set final defaults if still empty
 	if ormPackage == "" {
 		ormPackage = "./models"
 	}
@@ -75,11 +71,10 @@ func runORM(cmd *cobra.Command, args []string) error {
 		cmd.Printf("Generate mocks: %v\n", ormIncludeMocks)
 	}
 
-	// Create Storm client (no database connection needed for ORM generation)
 	config := storm.NewConfig()
 	config.ModelsPackage = ormPackage
 	config.Debug = debug
-	config.DatabaseURL = "postgres://localhost/dummy" // Dummy URL for ORM generation
+	config.DatabaseURL = "postgres://localhost/dummy"
 
 	stormClient, err := storm.NewWithConfig(config)
 	if err != nil {
@@ -89,7 +84,6 @@ func runORM(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("Generating ORM code from models in %s\n", ormPackage)
 
-	// Generate ORM code
 	opts := storm.GenerateOptions{
 		PackagePath:  ormPackage,
 		OutputDir:    ormOutput,

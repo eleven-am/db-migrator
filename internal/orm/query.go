@@ -168,7 +168,6 @@ func (q *Query[T]) buildQuery() (string, []interface{}, error) {
 
 	builder := q.builder
 
-	// Add JOINs
 	for _, join := range q.joins {
 		switch join.Type {
 		case InnerJoin:
@@ -182,22 +181,18 @@ func (q *Query[T]) buildQuery() (string, []interface{}, error) {
 		}
 	}
 
-	// Add WHERE clauses
 	if len(q.whereClause) > 0 {
 		builder = builder.Where(q.whereClause)
 	}
 
-	// Add ORDER BY
 	for _, orderBy := range q.orderBy {
 		builder = builder.OrderBy(orderBy)
 	}
 
-	// Add LIMIT
 	if q.limit != nil {
 		builder = builder.Limit(*q.limit)
 	}
 
-	// Add OFFSET
 	if q.offset != nil {
 		builder = builder.Offset(*q.offset)
 	}
@@ -214,7 +209,7 @@ func (q *Query[T]) buildQuery() (string, []interface{}, error) {
 
 // Find executes the query and returns all matching records
 func (q *Query[T]) Find() ([]T, error) {
-	// Handle relationship eager loading
+
 	if len(q.includes) > 0 {
 		return q.findWithRelationships()
 	}
@@ -228,7 +223,6 @@ func (q *Query[T]) Find() ([]T, error) {
 		}
 	}
 
-	// Execute query
 	var records []T
 	var execErr error
 
@@ -274,7 +268,6 @@ func (q *Query[T]) Count() (int64, error) {
 		From(q.repo.tableName).
 		PlaceholderFormat(squirrel.Dollar)
 
-	// Add JOINs
 	for _, join := range q.joins {
 		switch join.Type {
 		case InnerJoin:
@@ -288,7 +281,6 @@ func (q *Query[T]) Count() (int64, error) {
 		}
 	}
 
-	// Add WHERE clauses
 	if len(q.whereClause) > 0 {
 		countBuilder = countBuilder.Where(q.whereClause)
 	}
@@ -334,7 +326,6 @@ func (q *Query[T]) Delete() (int64, error) {
 	deleteBuilder := squirrel.Delete(q.repo.tableName).
 		PlaceholderFormat(squirrel.Dollar)
 
-	// Add WHERE clauses
 	if len(q.whereClause) > 0 {
 		deleteBuilder = deleteBuilder.Where(q.whereClause)
 	}
@@ -379,11 +370,10 @@ func (q *Query[T]) Delete() (int64, error) {
 
 // findWithRelationships handles eager loading of relationships
 func (q *Query[T]) findWithRelationships() ([]T, error) {
-	// Store includes temporarily
+
 	originalIncludes := q.includes
 	q.includes = nil
 
-	// Execute the main query without includes to avoid recursion
 	records, err := q.Find()
 	if err != nil {
 		return nil, err
@@ -393,7 +383,6 @@ func (q *Query[T]) findWithRelationships() ([]T, error) {
 		return records, nil
 	}
 
-	// Load each relationship directly on the records slice
 	for _, include := range originalIncludes {
 		if err := q.loadRelationship(records, include); err != nil {
 			return nil, fmt.Errorf("failed to load relationship %s: %w", include.name, err)
@@ -414,11 +403,9 @@ func (q *Query[T]) loadRelationship(records []T, include include) error {
 		return fmt.Errorf("relationship %s not found", include.name)
 	}
 
-	// Use reflection to dynamically load relationships
 	recordValue := reflect.ValueOf(&records[0]).Elem()
 	recordType := recordValue.Type()
 
-	// Find the relationship field in the struct
 	var relationshipField reflect.StructField
 	var fieldFound bool
 	for i := 0; i < recordType.NumField(); i++ {
@@ -450,7 +437,7 @@ func (q *Query[T]) loadRelationship(records []T, include include) error {
 
 // loadBelongsToRelationship loads belongs_to relationships
 func (q *Query[T]) loadBelongsToRelationship(records []T, relationship *relationshipDef, field reflect.StructField) error {
-	// Extract foreign key values from all records
+
 	foreignKeys := make([]interface{}, 0, len(records))
 	keyToRecordIndices := make(map[interface{}][]int)
 
@@ -472,16 +459,13 @@ func (q *Query[T]) loadBelongsToRelationship(records []T, relationship *relation
 		return nil
 	}
 
-	// Query the related records
 	relatedQuery := fmt.Sprintf("SELECT * FROM %s WHERE %s = ANY($1)", relationship.Target, relationship.TargetKey)
 
-	// Execute query and scan into appropriate type based on field type
 	fieldType := field.Type
 	if fieldType.Kind() == reflect.Ptr {
 		fieldType = fieldType.Elem()
 	}
 
-	// Create slice of the target type
 	sliceType := reflect.SliceOf(fieldType)
 	relatedRecords := reflect.New(sliceType).Elem()
 
@@ -496,7 +480,6 @@ func (q *Query[T]) loadBelongsToRelationship(records []T, relationship *relation
 		return fmt.Errorf("failed to load belongs_to relationship %s: %w", relationship.FieldName, err)
 	}
 
-	// Create map of related records by their primary key
 	relatedMap := make(map[interface{}]reflect.Value)
 	for i := 0; i < relatedRecords.Len(); i++ {
 		relatedRecord := relatedRecords.Index(i)
@@ -506,7 +489,6 @@ func (q *Query[T]) loadBelongsToRelationship(records []T, relationship *relation
 		}
 	}
 
-	// Assign related records to the original records
 	for fkValue, recordIndices := range keyToRecordIndices {
 		if relatedRecord, exists := relatedMap[fkValue]; exists {
 			for _, idx := range recordIndices {
@@ -515,12 +497,12 @@ func (q *Query[T]) loadBelongsToRelationship(records []T, relationship *relation
 
 				if relationshipFieldValue.CanSet() {
 					if field.Type.Kind() == reflect.Ptr {
-						// Set pointer to the related record
+
 						ptr := reflect.New(field.Type.Elem())
 						ptr.Elem().Set(relatedRecord)
 						relationshipFieldValue.Set(ptr)
 					} else {
-						// Set the value directly
+
 						relationshipFieldValue.Set(relatedRecord)
 					}
 				}
@@ -533,7 +515,7 @@ func (q *Query[T]) loadBelongsToRelationship(records []T, relationship *relation
 
 // loadHasOneRelationship loads has_one relationships
 func (q *Query[T]) loadHasOneRelationship(records []T, relationship *relationshipDef, field reflect.StructField) error {
-	// Extract source key values
+
 	sourceKeys := make([]interface{}, 0, len(records))
 	keyToRecordIndex := make(map[interface{}]int)
 
@@ -553,7 +535,6 @@ func (q *Query[T]) loadHasOneRelationship(records []T, relationship *relationshi
 		return nil
 	}
 
-	// Query related records
 	relatedQuery := fmt.Sprintf("SELECT * FROM %s WHERE %s = ANY($1)", relationship.Target, relationship.ForeignKey)
 
 	fieldType := field.Type
@@ -575,7 +556,6 @@ func (q *Query[T]) loadHasOneRelationship(records []T, relationship *relationshi
 		return fmt.Errorf("failed to load has_one relationship %s: %w", relationship.FieldName, err)
 	}
 
-	// Assign related records
 	for i := 0; i < relatedRecords.Len(); i++ {
 		relatedRecord := relatedRecords.Index(i)
 		fkField := relatedRecord.FieldByName(relationship.ForeignKey)
@@ -603,7 +583,7 @@ func (q *Query[T]) loadHasOneRelationship(records []T, relationship *relationshi
 
 // loadHasManyRelationship loads has_many relationships
 func (q *Query[T]) loadHasManyRelationship(records []T, relationship *relationshipDef, field reflect.StructField) error {
-	// Extract source key values
+
 	sourceKeys := make([]interface{}, 0, len(records))
 	keyToRecordIndices := make(map[interface{}][]int)
 
@@ -625,10 +605,8 @@ func (q *Query[T]) loadHasManyRelationship(records []T, relationship *relationsh
 		return nil
 	}
 
-	// Query related records
 	relatedQuery := fmt.Sprintf("SELECT * FROM %s WHERE %s = ANY($1)", relationship.Target, relationship.ForeignKey)
 
-	// Determine the element type of the slice
 	fieldType := field.Type
 	if fieldType.Kind() == reflect.Slice {
 		fieldType = fieldType.Elem()
@@ -648,7 +626,6 @@ func (q *Query[T]) loadHasManyRelationship(records []T, relationship *relationsh
 		return fmt.Errorf("failed to load has_many relationship %s: %w", relationship.FieldName, err)
 	}
 
-	// Group related records by foreign key
 	relatedGroups := make(map[interface{}][]reflect.Value)
 	for i := 0; i < relatedRecords.Len(); i++ {
 		relatedRecord := relatedRecords.Index(i)
@@ -659,16 +636,14 @@ func (q *Query[T]) loadHasManyRelationship(records []T, relationship *relationsh
 		}
 	}
 
-	// Assign related record slices to original records
 	for sourceValue, recordIndices := range keyToRecordIndices {
 		if relatedGroup, exists := relatedGroups[sourceValue]; exists {
-			// Create slice of related records
+
 			sliceValue := reflect.MakeSlice(field.Type, len(relatedGroup), len(relatedGroup))
 			for i, relatedRecord := range relatedGroup {
 				sliceValue.Index(i).Set(relatedRecord)
 			}
 
-			// Assign to all records with this source key
 			for _, idx := range recordIndices {
 				recordValue := reflect.ValueOf(&records[idx]).Elem()
 				relationshipFieldValue := recordValue.FieldByName(field.Name)
@@ -685,7 +660,7 @@ func (q *Query[T]) loadHasManyRelationship(records []T, relationship *relationsh
 
 // loadHasManyThroughRelationship loads has_many_through relationships
 func (q *Query[T]) loadHasManyThroughRelationship(records []T, relationship *relationshipDef, field reflect.StructField) error {
-	// Extract source key values
+
 	sourceKeys := make([]interface{}, 0, len(records))
 	keyToRecordIndices := make(map[interface{}][]int)
 
@@ -707,7 +682,6 @@ func (q *Query[T]) loadHasManyThroughRelationship(records []T, relationship *rel
 		return nil
 	}
 
-	// Build JOIN query through the junction table
 	relatedQuery := fmt.Sprintf(`
 		SELECT t.* FROM %s t
 		INNER JOIN %s jt ON t.%s = jt.%s
@@ -716,7 +690,6 @@ func (q *Query[T]) loadHasManyThroughRelationship(records []T, relationship *rel
 		relationship.TargetKey, relationship.TargetFK,
 		relationship.SourceFK)
 
-	// Determine the element type of the slice
 	fieldType := field.Type
 	if fieldType.Kind() == reflect.Slice {
 		fieldType = fieldType.Elem()
@@ -736,7 +709,6 @@ func (q *Query[T]) loadHasManyThroughRelationship(records []T, relationship *rel
 		return fmt.Errorf("failed to load has_many_through relationship %s: %w", relationship.FieldName, err)
 	}
 
-	// For has_many_through, we need another query to get the junction mapping
 	junctionQuery := fmt.Sprintf("SELECT %s, %s FROM %s WHERE %s = ANY($1)",
 		relationship.SourceFK, relationship.TargetFK,
 		relationship.JoinTable, relationship.SourceFK)
@@ -757,13 +729,11 @@ func (q *Query[T]) loadHasManyThroughRelationship(records []T, relationship *rel
 		return fmt.Errorf("failed to load junction table for has_many_through relationship %s: %w", relationship.FieldName, err)
 	}
 
-	// Create mapping from source key to target keys
 	sourceToTargets := make(map[interface{}][]interface{})
 	for _, junction := range junctionRecords {
 		sourceToTargets[junction.SourceKey] = append(sourceToTargets[junction.SourceKey], junction.TargetKey)
 	}
 
-	// Create mapping from target key to related record
 	targetToRecord := make(map[interface{}]reflect.Value)
 	for i := 0; i < relatedRecords.Len(); i++ {
 		relatedRecord := relatedRecords.Index(i)
@@ -773,10 +743,9 @@ func (q *Query[T]) loadHasManyThroughRelationship(records []T, relationship *rel
 		}
 	}
 
-	// Assign related records to original records
 	for sourceValue, recordIndices := range keyToRecordIndices {
 		if targetKeys, exists := sourceToTargets[sourceValue]; exists {
-			// Collect related records for this source
+
 			var relatedGroup []reflect.Value
 			for _, targetKey := range targetKeys {
 				if relatedRecord, exists := targetToRecord[targetKey]; exists {
@@ -785,13 +754,12 @@ func (q *Query[T]) loadHasManyThroughRelationship(records []T, relationship *rel
 			}
 
 			if len(relatedGroup) > 0 {
-				// Create slice of related records
+
 				sliceValue := reflect.MakeSlice(field.Type, len(relatedGroup), len(relatedGroup))
 				for i, relatedRecord := range relatedGroup {
 					sliceValue.Index(i).Set(relatedRecord)
 				}
 
-				// Assign to all records with this source key
 				for _, idx := range recordIndices {
 					recordValue := reflect.ValueOf(&records[idx]).Elem()
 					relationshipFieldValue := recordValue.FieldByName(field.Name)

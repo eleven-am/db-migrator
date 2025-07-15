@@ -27,7 +27,6 @@ func NewORM(config *storm.Config, logger storm.Logger) *ORMImpl {
 func (o *ORMImpl) Generate(ctx context.Context, opts storm.GenerateOptions) error {
 	o.logger.Info("Generating ORM code...", "package", opts.PackagePath)
 
-	// Use the existing working ORM generator
 	config := orm_generator.GenerationConfig{
 		PackageName:  filepath.Base(opts.PackagePath),
 		OutputDir:    opts.OutputDir,
@@ -37,17 +36,14 @@ func (o *ORMImpl) Generate(ctx context.Context, opts storm.GenerateOptions) erro
 
 	generator := orm_generator.NewCodeGenerator(config)
 
-	// Discover models from package
 	if err := generator.DiscoverModels(opts.PackagePath); err != nil {
 		return fmt.Errorf("failed to discover models: %w", err)
 	}
 
-	// Validate models
 	if err := generator.ValidateModels(); err != nil {
 		return fmt.Errorf("failed to validate models: %w", err)
 	}
 
-	// Generate all code
 	if err := generator.GenerateAll(); err != nil {
 		return fmt.Errorf("failed to generate ORM code: %w", err)
 	}

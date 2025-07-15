@@ -42,18 +42,15 @@ type TestProfile struct {
 }
 
 func TestCodeGeneration(t *testing.T) {
-	// Create a temporary directory for output
 	tmpDir := os.TempDir()
 	outputDir := filepath.Join(tmpDir, "orm_test_output")
 	modelDir := filepath.Join(tmpDir, "test_models")
 	defer os.RemoveAll(tmpDir)
 
-	// Create test model directory
 	if err := os.MkdirAll(modelDir, 0755); err != nil {
 		t.Fatalf("Failed to create model directory: %v", err)
 	}
 
-	// Write test models to files
 	testModelCode := `package models
 
 import "time"
@@ -98,7 +95,6 @@ type TestProfile struct {
 		t.Fatalf("Failed to write test models: %v", err)
 	}
 
-	// Create code generator
 	config := GenerationConfig{
 		PackageName: "models",
 		OutputDir:   outputDir,
@@ -106,25 +102,21 @@ type TestProfile struct {
 
 	generator := NewCodeGenerator(config)
 
-	// Discover models from directory
 	err := generator.DiscoverModels(modelDir)
 	if err != nil {
 		t.Fatalf("Failed to discover models: %v", err)
 	}
 
-	// Validate models
 	err = generator.ValidateModels()
 	if err != nil {
 		t.Fatalf("Model validation failed: %v", err)
 	}
 
-	// Generate all code
 	err = generator.GenerateAll()
 	if err != nil {
 		t.Fatalf("Code generation failed: %v", err)
 	}
 
-	// Check that files were created
 	expectedFiles := []string{
 		"columns.go",
 		"test_user_repository.go",
@@ -144,14 +136,12 @@ type TestProfile struct {
 		}
 	}
 
-	// Check that the generated files contain expected content
 	columnsFile := filepath.Join(outputDir, "columns.go")
 	content, err := os.ReadFile(columnsFile)
 	if err != nil {
 		t.Fatalf("Failed to read columns.go: %v", err)
 	}
 
-	// Check for expected column constants
 	expectedContent := []string{
 		"TestUsers",
 		"TestPosts",
@@ -187,17 +177,14 @@ func findSubstring(s, substr string) bool {
 }
 
 func TestModelDiscovery(t *testing.T) {
-	// Create a temporary directory for test models
 	tmpDir := os.TempDir()
 	modelDir := filepath.Join(tmpDir, "test_models_discovery")
 	defer os.RemoveAll(modelDir)
 
-	// Create test model directory
 	if err := os.MkdirAll(modelDir, 0755); err != nil {
 		t.Fatalf("Failed to create model directory: %v", err)
 	}
 
-	// Write a simple test model
 	testModelCode := `package test
 
 import "time"
@@ -216,25 +203,22 @@ type TestUser struct {
 	}
 
 	config := GenerationConfig{
-		PackageName: "", // Should auto-detect
+		PackageName: "",
 		OutputDir:   "/tmp/test",
 	}
 
 	generator := NewCodeGenerator(config)
 
-	// Test discovering models
 	err := generator.DiscoverModels(modelDir)
 	if err != nil {
 		t.Fatalf("Failed to discover models: %v", err)
 	}
 
-	// Check that the model was discovered
 	models := generator.GetModelNames()
 	if len(models) != 1 || models[0] != "TestUser" {
 		t.Errorf("Expected 1 model named 'TestUser', got: %v", models)
 	}
 
-	// Test getting a specific model
 	model, exists := generator.GetModel("TestUser")
 	if !exists {
 		t.Error("Expected TestUser model to exist")
@@ -248,12 +232,10 @@ type TestUser struct {
 		t.Errorf("Expected table name 'test_users', got: %s", model.TableName)
 	}
 
-	// Check that columns were parsed correctly
 	if len(model.Columns) != 4 {
 		t.Errorf("Expected model to have 4 columns, got %d", len(model.Columns))
 	}
 
-	// Verify package name was auto-detected
 	if generator.packageName != "test" {
 		t.Errorf("Expected auto-detected package name 'test', got: %s", generator.packageName)
 	}

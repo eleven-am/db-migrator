@@ -31,8 +31,7 @@ func init() {
 	rootCmd.AddCommand(verifyCmd)
 	rootCmd.AddCommand(introspectCmd)
 	rootCmd.AddCommand(versionCmd)
-	
-	// Add ORM commands
-	ormCLI := orm_generator.NewCLICommands() // No DB connection needed for code generation
+
+	ormCLI := orm_generator.NewCLICommands()
 	rootCmd.AddCommand(ormCLI.GetRootCommand())
 }

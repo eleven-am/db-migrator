@@ -44,20 +44,19 @@ func FullVersionInfo() string {
 	info := fmt.Sprintf("Storm %s\n", BuildInfo.Version)
 	info += fmt.Sprintf("API Version: %s\n", BuildInfo.APIVersion)
 	info += fmt.Sprintf("Go Version: %s\n", BuildInfo.GoVersion)
-	
+
 	if BuildInfo.GitCommit != "" {
 		info += fmt.Sprintf("Git Commit: %s\n", BuildInfo.GitCommit)
 	}
-	
+
 	if BuildInfo.BuildDate != "" {
 		info += fmt.Sprintf("Build Date: %s\n", BuildInfo.BuildDate)
 	}
-	
+
 	return info
 }
 
 // IsVersionCompatible checks if the current version is compatible with the minimum required version
 func IsVersionCompatible(required string) bool {
-	// Simple version comparison - in production, use a proper semver library
 	return Version >= required
 }

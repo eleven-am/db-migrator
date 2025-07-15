@@ -50,7 +50,6 @@ func runIntrospect(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
-	// Create Storm client
 	config := storm.NewConfig()
 	config.DatabaseURL = introspectDBURL
 	config.Debug = debug
@@ -61,12 +60,10 @@ func runIntrospect(cmd *cobra.Command, args []string) error {
 	}
 	defer stormClient.Close()
 
-	// Test connection
 	if err := stormClient.Ping(ctx); err != nil {
 		return fmt.Errorf("failed to ping database: %w", err)
 	}
 
-	// Handle Go struct generation
 	if introspectFormat == "go" {
 		output, err := stormClient.Schema().ExportGo(ctx)
 		if err != nil {
@@ -84,7 +81,6 @@ func runIntrospect(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Handle SQL export
 	if introspectFormat == "sql" {
 		output, err := stormClient.Schema().ExportSQL(ctx)
 		if err != nil {
@@ -102,16 +98,14 @@ func runIntrospect(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// For other formats, get schema and inspect
 	schema, err := stormClient.Introspect(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to introspect database: %w", err)
 	}
 
-	// Simple markdown output for now
 	if introspectFormat == "markdown" || introspectFormat == "md" {
 		output := generateMarkdownOutput(schema)
-		
+
 		if introspectOutput != "" {
 			if err := os.WriteFile(introspectOutput, []byte(output), 0644); err != nil {
 				return fmt.Errorf("failed to write output file: %w", err)
@@ -129,31 +123,29 @@ func runIntrospect(cmd *cobra.Command, args []string) error {
 func generateMarkdownOutput(schema *storm.Schema) string {
 	output := "# Database Schema\n\n"
 	output += fmt.Sprintf("Generated at: %s\n\n", time.Now().Format("2006-01-02 15:04:05"))
-	
+
 	output += fmt.Sprintf("## Tables (%d)\n\n", len(schema.Tables))
-	
+
 	for tableName, table := range schema.Tables {
 		output += fmt.Sprintf("### %s\n\n", tableName)
 		output += "| Column | Type | Nullable | Default |\n"
 		output += "|--------|------|----------|----------|\n"
-		
+
 		for columnName, column := range table.Columns {
 			nullable := "NO"
 			if column.Nullable {
 				nullable = "YES"
 			}
-			output += fmt.Sprintf("| %s | %s | %s | %s |\n", 
+			output += fmt.Sprintf("| %s | %s | %s | %s |\n",
 				columnName, column.Type, nullable, column.Default)
 		}
-		
+
 		output += "\n"
-		
-		// Add primary key info
+
 		if table.PrimaryKey != nil {
 			output += fmt.Sprintf("**Primary Key**: %s\n\n", table.PrimaryKey.Name)
 		}
-		
-		// Add foreign keys
+
 		if len(table.ForeignKeys) > 0 {
 			output += "**Foreign Keys**:\n\n"
 			for _, fk := range table.ForeignKeys {
@@ -161,8 +153,7 @@ func generateMarkdownOutput(schema *storm.Schema) string {
 			}
 			output += "\n"
 		}
-		
-		// Add indexes
+
 		if len(table.Indexes) > 0 {
 			output += "**Indexes**:\n\n"
 			for _, idx := range table.Indexes {
@@ -175,6 +166,6 @@ func generateMarkdownOutput(schema *storm.Schema) string {
 			output += "\n"
 		}
 	}
-	
+
 	return output
 }

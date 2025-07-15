@@ -160,7 +160,6 @@ func (g *StructGenerator) generateField(col *ColumnSchema, table *TableSchema) (
 
 	b.WriteString(fmt.Sprintf("\t%s %s", fieldName, goType))
 
-	// Build tags
 	var tags []string
 
 	if g.useDBTags {
@@ -453,7 +452,6 @@ func (g *StructGenerator) collectImports() []string {
 		}
 	}
 
-	// Convert map to slice
 	var result []string
 	for imp := range imports {
 		result = append(result, imp)

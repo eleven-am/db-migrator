@@ -26,7 +26,7 @@ func WithMaxConnections(max int) Option {
 			return fmt.Errorf("max connections must be at least 1")
 		}
 		c.MaxOpenConns = max
-		c.MaxIdleConns = max / 4 // reasonable default
+		c.MaxIdleConns = max / 4
 		return nil
 	}
 }
@@ -172,8 +172,7 @@ func WithConfig(other *Config) Option {
 		if other == nil {
 			return fmt.Errorf("config cannot be nil")
 		}
-		
-		// Merge non-zero values
+
 		if other.Driver != "" {
 			c.Driver = other.Driver
 		}
@@ -204,15 +203,14 @@ func WithConfig(other *Config) Option {
 		if other.Logger != nil {
 			c.Logger = other.Logger
 		}
-		
-		// Bool values are always merged
+
 		c.AutoMigrate = other.AutoMigrate
 		c.GenerateHooks = other.GenerateHooks
 		c.GenerateTests = other.GenerateTests
 		c.GenerateMocks = other.GenerateMocks
 		c.StrictMode = other.StrictMode
 		c.Debug = other.Debug
-		
+
 		return nil
 	}
 }

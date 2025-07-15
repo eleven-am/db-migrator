@@ -35,30 +35,25 @@ func NewMigrator(db *sqlx.DB, config *storm.Config, logger storm.Logger) *Migrat
 func (m *MigratorImpl) Generate(ctx context.Context, opts storm.MigrateOptions) (*storm.Migration, error) {
 	m.logger.Info("Generating migration...", "package", opts.PackagePath)
 
-	// Ensure migrations directory exists
 	if err := os.MkdirAll(opts.OutputDir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create migrations directory: %w", err)
 	}
 
-	// Get current schema from database
 	currentSchema, err := m.getCurrentSchema(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get current schema: %w", err)
 	}
 
-	// Get desired schema from models
 	desiredSchema, err := m.getDesiredSchema(opts.PackagePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get desired schema: %w", err)
 	}
 
-	// Generate migration from differences
 	migration, err := m.generateMigration(currentSchema, desiredSchema)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate migration: %w", err)
 	}
 
-	// Save migration to file
 	if !opts.DryRun {
 		if err := m.saveMigration(migration, opts.OutputDir); err != nil {
 			return nil, fmt.Errorf("failed to save migration: %w", err)
@@ -72,12 +67,10 @@ func (m *MigratorImpl) Generate(ctx context.Context, opts storm.MigrateOptions) 
 func (m *MigratorImpl) Apply(ctx context.Context, migration *storm.Migration) error {
 	m.logger.Info("Applying migration...", "name", migration.Name)
 
-	// Create migrations table if it doesn't exist
 	if err := m.createMigrationsTable(ctx); err != nil {
 		return fmt.Errorf("failed to create migrations table: %w", err)
 	}
 
-	// Check if migration already applied
 	applied, err := m.isMigrationApplied(ctx, migration.Name)
 	if err != nil {
 		return fmt.Errorf("failed to check migration status: %w", err)
@@ -88,24 +81,20 @@ func (m *MigratorImpl) Apply(ctx context.Context, migration *storm.Migration) er
 		return nil
 	}
 
-	// Begin transaction
 	tx, err := m.db.BeginTxx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
 	defer tx.Rollback()
 
-	// Execute migration
 	if err := m.executeMigration(ctx, tx, migration); err != nil {
 		return fmt.Errorf("failed to execute migration: %w", err)
 	}
 
-	// Record migration
 	if err := m.recordMigration(ctx, tx, migration); err != nil {
 		return fmt.Errorf("failed to record migration: %w", err)
 	}
 
-	// Commit transaction
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("failed to commit migration: %w", err)
 	}
@@ -118,7 +107,6 @@ func (m *MigratorImpl) Apply(ctx context.Context, migration *storm.Migration) er
 func (m *MigratorImpl) Rollback(ctx context.Context, migration *storm.Migration) error {
 	m.logger.Info("Rolling back migration...", "name", migration.Name)
 
-	// Check if migration is applied
 	applied, err := m.isMigrationApplied(ctx, migration.Name)
 	if err != nil {
 		return fmt.Errorf("failed to check migration status: %w", err)
@@ -129,24 +117,20 @@ func (m *MigratorImpl) Rollback(ctx context.Context, migration *storm.Migration)
 		return nil
 	}
 
-	// Begin transaction
 	tx, err := m.db.BeginTxx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
 	defer tx.Rollback()
 
-	// Execute rollback
 	if err := m.executeRollback(ctx, tx, migration); err != nil {
 		return fmt.Errorf("failed to execute rollback: %w", err)
 	}
 
-	// Remove migration record
 	if err := m.removeMigrationRecord(ctx, tx, migration); err != nil {
 		return fmt.Errorf("failed to remove migration record: %w", err)
 	}
 
-	// Commit transaction
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("failed to commit rollback: %w", err)
 	}
@@ -157,18 +141,15 @@ func (m *MigratorImpl) Rollback(ctx context.Context, migration *storm.Migration)
 
 // Status returns the current migration status
 func (m *MigratorImpl) Status(ctx context.Context) (*storm.MigrationStatus, error) {
-	// Create migrations table if it doesn't exist
 	if err := m.createMigrationsTable(ctx); err != nil {
 		return nil, fmt.Errorf("failed to create migrations table: %w", err)
 	}
 
-	// Get applied migrations
 	applied, err := m.getAppliedMigrations(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get applied migrations: %w", err)
 	}
 
-	// Get pending migrations
 	pending, err := m.getPendingMigrations(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get pending migrations: %w", err)
@@ -184,7 +165,6 @@ func (m *MigratorImpl) Status(ctx context.Context) (*storm.MigrationStatus, erro
 
 // History returns migration history
 func (m *MigratorImpl) History(ctx context.Context) ([]*storm.MigrationRecord, error) {
-	// Create migrations table if it doesn't exist
 	if err := m.createMigrationsTable(ctx); err != nil {
 		return nil, fmt.Errorf("failed to create migrations table: %w", err)
 	}
@@ -258,13 +238,11 @@ func (m *MigratorImpl) getAppliedMigrations(ctx context.Context) ([]string, erro
 }
 
 func (m *MigratorImpl) getPendingMigrations(ctx context.Context) ([]*storm.Migration, error) {
-	// Get all migration files
 	files, err := filepath.Glob(filepath.Join(m.config.MigrationsDir, "*.sql"))
 	if err != nil {
 		return nil, fmt.Errorf("failed to glob migration files: %w", err)
 	}
 
-	// Get applied migrations
 	applied, err := m.getAppliedMigrations(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get applied migrations: %w", err)
@@ -301,7 +279,6 @@ func (m *MigratorImpl) loadMigration(filename string) (*storm.Migration, error) 
 	name := filepath.Base(filename)
 	name = strings.TrimSuffix(name, ".sql")
 
-	// Split into up and down parts
 	parts := strings.Split(string(content), "-- +migrate Down")
 	up := strings.TrimSpace(parts[0])
 	down := ""
@@ -309,7 +286,6 @@ func (m *MigratorImpl) loadMigration(filename string) (*storm.Migration, error) 
 		down = strings.TrimSpace(parts[1])
 	}
 
-	// Remove up marker
 	up = strings.TrimPrefix(up, "-- +migrate Up")
 	up = strings.TrimSpace(up)
 
@@ -327,7 +303,6 @@ func (m *MigratorImpl) executeMigration(ctx context.Context, tx *sqlx.Tx, migrat
 		return nil
 	}
 
-	// Split statements by semicolon
 	statements := strings.Split(migration.UpSQL, ";")
 	for _, stmt := range statements {
 		stmt = strings.TrimSpace(stmt)
@@ -348,7 +323,6 @@ func (m *MigratorImpl) executeRollback(ctx context.Context, tx *sqlx.Tx, migrati
 		return fmt.Errorf("no rollback script available for migration %s", migration.Name)
 	}
 
-	// Split statements by semicolon
 	statements := strings.Split(migration.DownSQL, ";")
 	for _, stmt := range statements {
 		stmt = strings.TrimSpace(stmt)
@@ -384,13 +358,11 @@ func (m *MigratorImpl) removeMigrationRecord(ctx context.Context, tx *sqlx.Tx, m
 }
 
 func (m *MigratorImpl) getCurrentSchema(ctx context.Context) (*storm.Schema, error) {
-	// Use the existing introspection functionality
 	schemaInspector := NewSchemaInspector(m.db, m.config, m.logger)
 	return schemaInspector.Inspect(ctx)
 }
 
 func (m *MigratorImpl) getDesiredSchema(packagePath string) (*storm.Schema, error) {
-	// Use the existing parser and generator functionality
 	structParser := NewStructParser()
 	models, err := structParser.ParseDirectory(packagePath)
 	if err != nil {
@@ -403,15 +375,12 @@ func (m *MigratorImpl) getDesiredSchema(packagePath string) (*storm.Schema, erro
 		return nil, fmt.Errorf("failed to generate schema: %w", err)
 	}
 
-	// Convert the generator schema to storm schema
 	return m.convertGeneratorSchemaToStorm(schema), nil
 }
 
 func (m *MigratorImpl) generateMigration(current, desired *storm.Schema) (*storm.Migration, error) {
-	// Use the existing Atlas migration functionality
 	atlasMigrator := NewAtlasMigrator(m.config.DatabaseURL)
 
-	// Create migration options
 	opts := MigrationOptions{
 		PackagePath:      m.config.ModelsPackage,
 		OutputDir:        m.config.MigrationsDir,
@@ -420,14 +389,12 @@ func (m *MigratorImpl) generateMigration(current, desired *storm.Schema) (*storm
 		PushToDB:         false,
 	}
 
-	// Generate migration using Atlas
 	ctx := context.Background()
 	result, err := atlasMigrator.GenerateMigration(ctx, m.db.DB, opts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate migration: %w", err)
 	}
 
-	// Convert result to Storm migration
 	timestamp := time.Now().Format("20060102150405")
 	name := fmt.Sprintf("%s_auto_migration", timestamp)
 
@@ -448,11 +415,8 @@ func (m *MigratorImpl) saveMigration(migration *storm.Migration, outputDir strin
 }
 
 func (m *MigratorImpl) calculateChecksum(content string) string {
-	// Simple checksum - in production, use proper hash like SHA256
 	return fmt.Sprintf("%x", len(content))
 }
-
-// Helper functions to interface with existing db-migrator functionality
 
 func NewStructParser() *parser.StructParser {
 	return parser.NewStructParser()

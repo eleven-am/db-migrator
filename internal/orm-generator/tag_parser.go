@@ -49,29 +49,25 @@ func (p *ORMTagParser) ParseORMTag(tag string) (*ParsedORMTag, error) {
 		return nil, fmt.Errorf("empty ORM tag")
 	}
 
-	// Check cache first
 	if cached, exists := p.tagCache[tag]; exists {
 		return cached, nil
 	}
 
 	parsed := &ParsedORMTag{
 		Raw:      tag,
-		Validate: true, // Default to validation
+		Validate: true,
 	}
 
-	// Split by comma for different parts
 	parts := strings.Split(tag, ",")
 	if len(parts) == 0 {
 		return nil, fmt.Errorf("invalid ORM tag format")
 	}
 
-	// Parse the main relationship definition (first part)
 	mainPart := strings.TrimSpace(parts[0])
 	if err := p.parseMainRelationship(mainPart, parsed); err != nil {
 		return nil, fmt.Errorf("failed to parse main relationship: %w", err)
 	}
 
-	// Parse additional options
 	for i := 1; i < len(parts); i++ {
 		part := strings.TrimSpace(parts[i])
 		if part == "" {
@@ -83,19 +79,16 @@ func (p *ORMTagParser) ParseORMTag(tag string) (*ParsedORMTag, error) {
 		}
 	}
 
-	// Validate and set defaults
 	if err := p.validateAndSetDefaults(parsed); err != nil {
 		return nil, fmt.Errorf("validation failed: %w", err)
 	}
 
-	// Cache the result
 	p.tagCache[tag] = parsed
 	return parsed, nil
 }
 
 // parseMainRelationship parses the main relationship definition
 func (p *ORMTagParser) parseMainRelationship(main string, parsed *ParsedORMTag) error {
-	// Format: "relationship_type:target_model"
 	parts := strings.Split(main, ":")
 	if len(parts) != 2 {
 		return fmt.Errorf("invalid relationship format, expected 'type:target'")
@@ -104,7 +97,6 @@ func (p *ORMTagParser) parseMainRelationship(main string, parsed *ParsedORMTag) 
 	relType := strings.TrimSpace(parts[0])
 	target := strings.TrimSpace(parts[1])
 
-	// Validate relationship type
 	switch relType {
 	case "belongs_to", "has_one", "has_many", "has_many_through":
 		parsed.Type = relType
@@ -112,7 +104,6 @@ func (p *ORMTagParser) parseMainRelationship(main string, parsed *ParsedORMTag) 
 		return fmt.Errorf("invalid relationship type: %s", relType)
 	}
 
-	// Validate target is not empty
 	if target == "" {
 		return fmt.Errorf("target model cannot be empty")
 	}
@@ -123,7 +114,6 @@ func (p *ORMTagParser) parseMainRelationship(main string, parsed *ParsedORMTag) 
 
 // parseRelationshipOption parses a relationship option
 func (p *ORMTagParser) parseRelationshipOption(option string, parsed *ParsedORMTag) error {
-	// Handle boolean flags
 	switch option {
 	case "validate":
 		parsed.Validate = true
@@ -139,7 +129,6 @@ func (p *ORMTagParser) parseRelationshipOption(option string, parsed *ParsedORMT
 		return nil
 	}
 
-	// Handle key-value pairs
 	if strings.Contains(option, ":") {
 		parts := strings.SplitN(option, ":", 2)
 		if len(parts) != 2 {
@@ -194,7 +183,6 @@ func (p *ORMTagParser) validateAndSetDefaults(parsed *ParsedORMTag) error {
 	switch parsed.Type {
 	case "belongs_to":
 		if parsed.ForeignKey == "" {
-			// Default: target_id
 			parsed.ForeignKey = toSnakeCase(parsed.Target) + "_id"
 		}
 		if parsed.TargetKey == "" {
@@ -290,7 +278,7 @@ type ConstraintMetadata struct {
 func (p *ORMTagParser) ParseModelFromTable(table parser.TableDefinition) (*ModelMetadata, error) {
 	metadata := &ModelMetadata{
 		Name:          table.StructName,
-		Package:       "", // Package path not available from AST parsing
+		Package:       "",
 		TableName:     table.TableName,
 		Fields:        make([]FieldMetadata, 0),
 		Relationships: make([]FieldMetadata, 0),
@@ -300,7 +288,6 @@ func (p *ORMTagParser) ParseModelFromTable(table parser.TableDefinition) (*Model
 		Constraints:   make([]ConstraintMetadata, 0),
 	}
 
-	// Parse each field from AST
 	for _, field := range table.Fields {
 		fieldMeta, err := p.parseFieldFromAST(field)
 		if err != nil {
@@ -309,13 +296,11 @@ func (p *ORMTagParser) ParseModelFromTable(table parser.TableDefinition) (*Model
 
 		metadata.Fields = append(metadata.Fields, fieldMeta)
 
-		// Categorize fields
 		if fieldMeta.Relationship != nil {
 			metadata.Relationships = append(metadata.Relationships, fieldMeta)
 		} else {
 			metadata.Columns = append(metadata.Columns, fieldMeta)
 
-			// Track primary keys
 			if fieldMeta.IsPrimaryKey {
 				metadata.PrimaryKeys = append(metadata.PrimaryKeys, fieldMeta.DBName)
 			}
@@ -337,27 +322,22 @@ func (p *ORMTagParser) parseFieldFromAST(field parser.FieldDefinition) (FieldMet
 		DBDef:     field.DBDef,
 	}
 
-	// Set up tags from parsed field
 	fieldMeta.Tags["db"] = field.DBTag
 	fieldMeta.Tags["dbdef"] = field.DBDefTag
 	fieldMeta.Tags["json"] = field.JSONTag
 
-	// Check for primary key
 	if _, isPK := field.DBDef["primary_key"]; isPK {
 		fieldMeta.IsPrimaryKey = true
 	}
 
-	// Check for unique constraint
 	if _, isUnique := field.DBDef["unique"]; isUnique {
 		fieldMeta.IsUnique = true
 	}
 
-	// Handle default values
 	if defaultVal, hasDefault := field.DBDef["default"]; hasDefault {
 		fieldMeta.DefaultValue = defaultVal
 	}
 
-	// Parse ORM relationship tags - this is the key part!
 	ormTag := field.ORMTag
 
 	if ormTag != "" {
@@ -366,7 +346,6 @@ func (p *ORMTagParser) parseFieldFromAST(field parser.FieldDefinition) (FieldMet
 			return fieldMeta, fmt.Errorf("invalid orm tag: %w", err)
 		}
 
-		// Set the ParsedORMTag directly (FieldMetadata.Relationship is *ParsedORMTag)
 		fieldMeta.Relationship = parsedRel
 		fieldMeta.Tags["orm"] = ormTag
 	}
@@ -383,13 +362,11 @@ func (p *ORMTagParser) parseField(field reflect.StructField) (FieldMetadata, err
 		DBDef: make(map[string]string),
 	}
 
-	// Parse all tags
 	fieldMeta.Tags["json"] = field.Tag.Get("json")
 	fieldMeta.Tags["db"] = field.Tag.Get("db")
 	fieldMeta.Tags["dbdef"] = field.Tag.Get("dbdef")
 	fieldMeta.Tags["orm"] = field.Tag.Get("orm")
 
-	// Determine field characteristics
 	fieldType := field.Type
 	if fieldType.Kind() == reflect.Ptr {
 		fieldMeta.IsPointer = true
@@ -400,10 +377,8 @@ func (p *ORMTagParser) parseField(field reflect.StructField) (FieldMetadata, err
 		fieldMeta.IsArray = true
 	}
 
-	// Parse db tag
 	if dbTag := field.Tag.Get("db"); dbTag != "" {
 		if dbTag == "-" {
-			// This is a relationship field
 			fieldMeta.DBName = ""
 		} else {
 			fieldMeta.DBName = dbTag
@@ -412,11 +387,9 @@ func (p *ORMTagParser) parseField(field reflect.StructField) (FieldMetadata, err
 		fieldMeta.DBName = toSnakeCase(field.Name)
 	}
 
-	// Parse dbdef tag
 	if dbdefTag := field.Tag.Get("dbdef"); dbdefTag != "" {
 		fieldMeta.DBDef = parseDBDefTag(dbdefTag)
 
-		// Extract common properties
 		if _, exists := fieldMeta.DBDef["primary_key"]; exists {
 			fieldMeta.IsPrimaryKey = true
 		}
@@ -434,7 +407,6 @@ func (p *ORMTagParser) parseField(field reflect.StructField) (FieldMetadata, err
 		}
 	}
 
-	// Parse ORM relationship tag
 	if ormTag := field.Tag.Get("orm"); ormTag != "" {
 		relationship, err := p.ParseORMTag(ormTag)
 		if err != nil {
@@ -458,7 +430,6 @@ func parseDBDefTag(tag string) map[string]string {
 		}
 
 		if strings.Contains(part, ":") {
-			// Key-value pair
 			kv := strings.SplitN(part, ":", 2)
 			if len(kv) == 2 {
 				key := strings.TrimSpace(kv[0])
@@ -466,7 +437,6 @@ func parseDBDefTag(tag string) map[string]string {
 				result[key] = value
 			}
 		} else {
-			// Boolean flag
 			result[part] = "true"
 		}
 	}

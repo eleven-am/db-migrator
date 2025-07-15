@@ -35,11 +35,9 @@ func (r *Repository[T]) Upsert(ctx context.Context, record *T, opts UpsertOption
 		}
 	}
 
-	// Build insert query
 	query := squirrel.Insert(r.tableName).
 		PlaceholderFormat(squirrel.Dollar)
 
-	// Extract values
 	recordValue := reflect.ValueOf(record).Elem()
 	recordType := recordValue.Type()
 
@@ -73,15 +71,13 @@ func (r *Repository[T]) Upsert(ctx context.Context, record *T, opts UpsertOption
 		}
 	}
 
-	// Add ON CONFLICT clause
 	onConflict := fmt.Sprintf(" ON CONFLICT (%s)", strings.Join(opts.ConflictColumns, ", "))
 
-	// Determine what to update
 	var updateColumns []string
 	if len(opts.UpdateColumns) > 0 {
 		updateColumns = opts.UpdateColumns
 	} else {
-		// Update all columns except conflict columns
+
 		conflictSet := make(map[string]bool)
 		for _, col := range opts.ConflictColumns {
 			conflictSet[col] = true
@@ -108,7 +104,6 @@ func (r *Repository[T]) Upsert(ctx context.Context, record *T, opts UpsertOption
 		onConflict += " DO NOTHING"
 	}
 
-	// Execute upsert
 	finalQuery := sqlQuery + onConflict
 	_, err = r.db.ExecContext(ctx, finalQuery, args...)
 	if err != nil {
@@ -136,15 +131,14 @@ func (r *Repository[T]) UpsertMany(ctx context.Context, records []T, opts Upsert
 		}
 	}
 
-	// Check if we're already in a transaction
 	var executor DBExecutor
 	needsCommit := false
 
 	if _, isTransaction := r.db.(*sqlx.Tx); isTransaction {
-		// Already in a transaction, use it
+
 		executor = r.db
 	} else {
-		// Not in a transaction, create one
+
 		db := r.db.(*sqlx.DB)
 		tx, err := db.BeginTxx(ctx, nil)
 		if err != nil {
@@ -157,9 +151,8 @@ func (r *Repository[T]) UpsertMany(ctx context.Context, records []T, opts Upsert
 		defer tx.Rollback()
 		executor = tx
 		needsCommit = true
-	} // Will be ignored if commit succeeds
+	}
 
-	// Build batch insert query
 	query := squirrel.Insert(r.tableName).
 		PlaceholderFormat(squirrel.Dollar).
 		Columns(r.insertColumns...)
@@ -170,7 +163,6 @@ func (r *Repository[T]) UpsertMany(ctx context.Context, records []T, opts Upsert
 			continue
 		}
 
-		// Extract values for this record
 		recordValue := reflect.ValueOf(record).Elem()
 		recordType := recordValue.Type()
 
@@ -204,15 +196,13 @@ func (r *Repository[T]) UpsertMany(ctx context.Context, records []T, opts Upsert
 		}
 	}
 
-	// Add ON CONFLICT clause
 	onConflict := fmt.Sprintf(" ON CONFLICT (%s)", strings.Join(opts.ConflictColumns, ", "))
 
-	// Determine what to update
 	var updateColumns []string
 	if len(opts.UpdateColumns) > 0 {
 		updateColumns = opts.UpdateColumns
 	} else {
-		// Update all columns except conflict columns
+
 		conflictSet := make(map[string]bool)
 		for _, col := range opts.ConflictColumns {
 			conflictSet[col] = true
@@ -239,7 +229,6 @@ func (r *Repository[T]) UpsertMany(ctx context.Context, records []T, opts Upsert
 		onConflict += " DO NOTHING"
 	}
 
-	// Execute batch upsert
 	finalQuery := sqlQuery + onConflict
 	_, err = executor.ExecContext(ctx, finalQuery, args...)
 	if err != nil {
@@ -250,7 +239,6 @@ func (r *Repository[T]) UpsertMany(ctx context.Context, records []T, opts Upsert
 		}
 	}
 
-	// Commit transaction only if we created it
 	if needsCommit {
 		tx := executor.(*sqlx.Tx)
 		if err := tx.Commit(); err != nil {
@@ -277,7 +265,6 @@ func (r *Repository[T]) BulkUpdate(ctx context.Context, records []T, opts BulkUp
 		return 0, nil
 	}
 
-	// Determine which columns to update and match on
 	updateColumns := opts.UpdateColumns
 	if len(updateColumns) == 0 {
 		updateColumns = r.updateColumns
@@ -296,15 +283,14 @@ func (r *Repository[T]) BulkUpdate(ctx context.Context, records []T, opts BulkUp
 		}
 	}
 
-	// Check if we're already in a transaction
 	var executor DBExecutor
 	needsCommit := false
 
 	if _, isTransaction := r.db.(*sqlx.Tx); isTransaction {
-		// Already in a transaction, use it
+
 		executor = r.db
 	} else {
-		// Not in a transaction, create one
+
 		db := r.db.(*sqlx.DB)
 		tx, err := db.BeginTxx(ctx, nil)
 		if err != nil {
@@ -319,7 +305,6 @@ func (r *Repository[T]) BulkUpdate(ctx context.Context, records []T, opts BulkUp
 		needsCommit = true
 	}
 
-	// Build CTE query for bulk update
 	var valueParts []string
 	var args []interface{}
 	argIndex := 1
@@ -362,12 +347,11 @@ func (r *Repository[T]) BulkUpdate(ctx context.Context, records []T, opts BulkUp
 		return 0, nil
 	}
 
-	// Build the complete query
 	var columnNames []string
 	var columnTypes []string
 	for _, column := range allColumns {
 		columnNames = append(columnNames, column)
-		columnTypes = append(columnTypes, "text") // Simplified - in practice you'd want proper types
+		columnTypes = append(columnTypes, "text")
 	}
 
 	cteQuery := fmt.Sprintf(`
@@ -403,7 +387,6 @@ func (r *Repository[T]) BulkUpdate(ctx context.Context, records []T, opts BulkUp
 		}
 	}
 
-	// Commit transaction only if we created it
 	if needsCommit {
 		tx := executor.(*sqlx.Tx)
 		if err := tx.Commit(); err != nil {

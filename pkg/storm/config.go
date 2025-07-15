@@ -66,13 +66,11 @@ func NewConfig() *Config {
 func LoadConfig(path string) (*Config, error) {
 	config := NewConfig()
 
-	// Load from file if exists
 	if path != "" {
 		if err := config.LoadFile(path); err != nil {
 			return nil, NewConfigError("load_file", err)
 		}
 	} else {
-		// Try to find config file in common locations
 		locations := []string{"storm.yaml", "storm.yml", ".storm.yaml", ".storm.yml"}
 		for _, loc := range locations {
 			if _, err := os.Stat(loc); err == nil {
@@ -84,10 +82,8 @@ func LoadConfig(path string) (*Config, error) {
 		}
 	}
 
-	// Override with environment variables
 	config.LoadEnv()
 
-	// Validate final configuration
 	if err := config.Validate(); err != nil {
 		return nil, NewConfigError("validate", err)
 	}
@@ -209,7 +205,6 @@ func (c *Config) Clone() *Config {
 
 // SaveFile saves the configuration to a YAML file
 func (c *Config) SaveFile(path string) error {
-	// Create directory if it doesn't exist
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return fmt.Errorf("failed to create directory: %w", err)
 	}

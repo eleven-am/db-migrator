@@ -20,7 +20,6 @@ func (i *Inspector) getPostgreSQLSchema(ctx context.Context) (*DatabaseSchema, e
 		Sequences: make(map[string]*SequenceSchema),
 	}
 
-	// Get database name
 	var dbName string
 	err := i.db.QueryRowContext(ctx, "SELECT current_database()").Scan(&dbName)
 	if err != nil {

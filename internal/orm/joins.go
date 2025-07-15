@@ -112,21 +112,21 @@ func (q *Query[T]) JoinRelationship(relationshipName string, joinType JoinType) 
 
 	switch rel.Type {
 	case "belongs_to":
-		// JOIN target_table ON source_table.foreign_key = target_table.target_key
+
 		condition := fmt.Sprintf("%s.%s = %s.%s",
 			repo.tableName, rel.ForeignKey,
 			rel.Target, rel.TargetKey)
 		q.Join(InnerJoin, rel.Target, condition)
 
 	case "has_one", "has_many":
-		// JOIN target_table ON source_table.source_key = target_table.foreign_key
+
 		condition := fmt.Sprintf("%s.%s = %s.%s",
 			repo.tableName, rel.SourceKey,
 			rel.Target, rel.ForeignKey)
 		q.Join(InnerJoin, rel.Target, condition)
 
 	case "has_many_through":
-		// First join to join table, then to target table
+
 		condition1 := fmt.Sprintf("%s.%s = %s.%s",
 			repo.tableName, rel.SourceKey,
 			rel.JoinTable, rel.SourceFK)
@@ -147,7 +147,7 @@ func (q *Query[T]) JoinRelationship(relationshipName string, joinType JoinType) 
 // RawJoin allows completely custom join logic
 func (q *Query[T]) RawJoin(joinClause string, args ...interface{}) *Query[T] {
 	join := join{
-		Type:      "", // Will be included in the raw clause
+		Type:      "",
 		Table:     "",
 		Condition: joinClause,
 		Args:      args,

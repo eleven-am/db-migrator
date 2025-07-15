@@ -195,7 +195,7 @@ func (c TimeColumn) Today() Condition {
 func (c TimeColumn) ThisWeek() Condition {
 	now := time.Now()
 	weekday := int(now.Weekday())
-	if weekday == 0 { // Sunday
+	if weekday == 0 {
 		weekday = 7
 	}
 	startOfWeek := now.AddDate(0, 0, -weekday+1)

@@ -88,7 +88,6 @@ func runIntrospect(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Get export format for other formats
 	var format introspect.ExportFormat
 	switch introspectFormat {
 	case "json":

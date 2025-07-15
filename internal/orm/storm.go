@@ -26,7 +26,6 @@ func NewStorm(db *sqlx.DB) *Storm {
 		repositories: make(map[string]interface{}),
 	}
 
-	// Repository initialization will be handled by generated code
 	storm.initializeRepositories()
 
 	return storm
@@ -40,7 +39,6 @@ func newStormWithExecutor(db *sqlx.DB, executor DBExecutor) *Storm {
 		repositories: make(map[string]interface{}),
 	}
 
-	// Repository initialization will be handled by generated code
 	storm.initializeRepositories()
 
 	return storm
@@ -49,37 +47,32 @@ func newStormWithExecutor(db *sqlx.DB, executor DBExecutor) *Storm {
 // WithTransaction executes a function within a database transaction
 // It returns a transaction-aware Storm instance to the callback
 func (s *Storm) WithTransaction(ctx context.Context, fn func(*Storm) error) error {
-	// Only start a new transaction if we're not already in one
+
 	if _, isTransaction := s.executor.(*sqlx.Tx); isTransaction {
-		// Already in a transaction, just use the current Storm
+
 		return fn(s)
 	}
 
-	// Get the actual DB connection
 	db, ok := s.db.(*sqlx.DB)
 	if !ok {
 		return fmt.Errorf("cannot start transaction: executor is not a database connection")
 	}
 
-	// Start transaction
 	tx, err := db.BeginTxx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
 
-	// Create transaction-aware Storm
 	txStorm := newStormWithExecutor(db, tx)
 
-	// Execute the function with the transaction Storm
 	if err := fn(txStorm); err != nil {
-		// Rollback on error
+
 		if rbErr := tx.Rollback(); rbErr != nil {
 			return fmt.Errorf("failed to rollback transaction: %v (original error: %w)", rbErr, err)
 		}
 		return err
 	}
 
-	// Commit on success
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
@@ -89,40 +82,34 @@ func (s *Storm) WithTransaction(ctx context.Context, fn func(*Storm) error) erro
 
 // WithTransactionOptions executes a function within a database transaction with specific options
 func (s *Storm) WithTransactionOptions(ctx context.Context, opts *TransactionOptions, fn func(*Storm) error) error {
-	// Only start a new transaction if we're not already in one
+
 	if _, isTransaction := s.executor.(*sqlx.Tx); isTransaction {
-		// Already in a transaction, just use the current Storm
+
 		return fn(s)
 	}
 
-	// Get the actual DB connection
 	db, ok := s.db.(*sqlx.DB)
 	if !ok {
 		return fmt.Errorf("cannot start transaction: executor is not a database connection")
 	}
 
-	// Convert options to TxOptions
 	txOpts := opts.ToTxOptions()
 
-	// Start transaction with options
 	tx, err := db.BeginTxx(ctx, txOpts)
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
 
-	// Create transaction-aware Storm
 	txStorm := newStormWithExecutor(db, tx)
 
-	// Execute the function with the transaction Storm
 	if err := fn(txStorm); err != nil {
-		// Rollback on error
+
 		if rbErr := tx.Rollback(); rbErr != nil {
 			return fmt.Errorf("failed to rollback transaction: %v (original error: %w)", rbErr, err)
 		}
 		return err
 	}
 
-	// Commit on success
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
@@ -171,5 +158,5 @@ func (s *Storm) GetDB() *sqlx.DB {
 // initializeRepositories is a placeholder that will be replaced by generated code
 // The generated code will initialize all repository fields
 func (s *Storm) initializeRepositories() {
-	// This method will be overridden by the generated code
+
 }

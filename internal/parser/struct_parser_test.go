@@ -102,7 +102,6 @@ type Team struct {
 		t.Errorf("Expected 2 tables, got %d", len(tables))
 	}
 
-	// Find User table
 	var userTable *TableDefinition
 	for _, table := range tables {
 		if table.StructName == "User" {
@@ -142,7 +141,6 @@ type Team struct {
 		}
 	})
 
-	// Find Team table
 	var teamTable *TableDefinition
 	for _, table := range tables {
 		if table.StructName == "Team" {

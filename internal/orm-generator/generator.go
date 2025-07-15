@@ -13,7 +13,7 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/eleven-am/storm/internal/generator"
+	stormParser "github.com/eleven-am/storm/internal/parser"
 )
 
 // CodeGenerator handles generation of type-safe ORM code
@@ -50,7 +50,6 @@ func NewCodeGenerator(config GenerationConfig) *CodeGenerator {
 
 // DiscoverModels auto-discovers models from a package directory using migrator's proven pipeline
 func (g *CodeGenerator) DiscoverModels(packagePath string) error {
-	// Auto-detect package name if not provided
 	if g.packageName == "" {
 		packageName, err := g.detectPackageName(packagePath)
 		if err != nil {
@@ -59,24 +58,19 @@ func (g *CodeGenerator) DiscoverModels(packagePath string) error {
 		g.packageName = packageName
 	}
 
-	// Step 1: Use migrator's struct parser (same as migrate command)
-	parser := structParser.NewStructParser()
-	tables, err := parser.ParseDirectory(packagePath)
+	structParser := stormParser.NewStructParser()
+	tables, err := structParser.ParseDirectory(packagePath)
 	if err != nil {
 		return fmt.Errorf("failed to parse directory %s: %w", packagePath, err)
 	}
 
-	// Filter to only include structs that are actual database models (have explicit table definitions)
-	var dbModels []structParser.TableDefinition
+	var dbModels []stormParser.TableDefinition
 	for _, table := range tables {
-		// Check if the table has an explicit table definition (not just derived name)
 		if _, hasExplicitTable := table.TableLevel["table"]; hasExplicitTable {
 			dbModels = append(dbModels, table)
 		}
-		// Skip structs without explicit table definitions - they're utility structs, not database models
 	}
 
-	// Step 2: Convert table definitions directly to our ModelMetadata
 	for _, tableDef := range dbModels {
 		metadata := g.convertTableDefinitionToModelMetadata(tableDef)
 		g.models[metadata.Name] = metadata
@@ -86,65 +80,54 @@ func (g *CodeGenerator) DiscoverModels(packagePath string) error {
 }
 
 // convertTableDefinitionToModelMetadata converts parser's TableDefinition to ModelMetadata
-func (g *CodeGenerator) convertTableDefinitionToModelMetadata(tableDef structParser.TableDefinition) *ModelMetadata {
+func (g *CodeGenerator) convertTableDefinitionToModelMetadata(tableDef stormParser.TableDefinition) *ModelMetadata {
 	metadata := &ModelMetadata{
-		Name:          tableDef.StructName, // Use Go struct name, not table name
-		TableName:     tableDef.TableName,  // Database table name
+		Name:          tableDef.StructName,
+		TableName:     tableDef.TableName,
 		Columns:       make([]FieldMetadata, 0, len(tableDef.Fields)),
 		PrimaryKeys:   make([]string, 0),
 		Indexes:       make([]IndexMetadata, 0),
 		Relationships: make([]FieldMetadata, 0),
 	}
 
-	// Convert fields from parser format
 	for _, field := range tableDef.Fields {
 		fieldMeta := FieldMetadata{
-			Name:   field.Name,   // Go field name
-			DBName: field.DBName, // Database column name
-			Type:   field.Type,   // Go type from parser
+			Name:   field.Name,
+			DBName: field.DBName,
+			Type:   field.Type,
 		}
 
-		// Check if field is nullable (pointer type)
 		fieldMeta.IsPointer = field.IsPointer
 		fieldMeta.IsArray = field.IsArray
 
-		// Parse ORM relationship tag if present
 		if field.ORMTag != "" {
 			parsedRel, err := g.tagParser.ParseORMTag(field.ORMTag)
 			if err != nil {
-				// Log error but continue processing
 				fmt.Printf("Warning: failed to parse ORM tag for field %s.%s: %v\n", tableDef.StructName, field.Name, err)
 			} else {
 				fieldMeta.Relationship = parsedRel
-				// This is a relationship field
 				metadata.Relationships = append(metadata.Relationships, fieldMeta)
-				continue // Don't add to columns
+				continue
 			}
 		}
 
-		// This is a database column field
-		// Check for primary key
 		if _, isPK := field.DBDef["primary_key"]; isPK {
 			fieldMeta.IsPrimaryKey = true
 			metadata.PrimaryKeys = append(metadata.PrimaryKeys, field.DBName)
 		}
 
-		// Check for unique constraint
 		if _, isUnique := field.DBDef["unique"]; isUnique {
 			fieldMeta.IsUnique = true
 		}
 
-		// Check for default value
 		if defaultVal, hasDefault := field.DBDef["default"]; hasDefault {
 			fieldMeta.DefaultValue = defaultVal
 		}
 
-		// Set database type from dbdef
 		if dbType, hasType := field.DBDef["type"]; hasType {
 			fieldMeta.DBType = dbType
 		}
 
-		// Only add to columns if it's not a relationship field
 		metadata.Columns = append(metadata.Columns, fieldMeta)
 	}
 
@@ -153,7 +136,6 @@ func (g *CodeGenerator) convertTableDefinitionToModelMetadata(tableDef structPar
 
 // detectPackageName extracts the package name from Go files in the directory
 func (g *CodeGenerator) detectPackageName(packagePath string) (string, error) {
-	// Parse just one file to get the package name
 	pattern := filepath.Join(packagePath, "*.go")
 	matches, err := filepath.Glob(pattern)
 	if err != nil {
@@ -164,7 +146,6 @@ func (g *CodeGenerator) detectPackageName(packagePath string) (string, error) {
 		return "", fmt.Errorf("no Go files found in directory %s", packagePath)
 	}
 
-	// Parse the first non-test file using Go's AST parser
 	fileSet := token.NewFileSet()
 	for _, file := range matches {
 		if strings.HasSuffix(file, "_test.go") {
@@ -173,7 +154,7 @@ func (g *CodeGenerator) detectPackageName(packagePath string) (string, error) {
 
 		src, err := parser.ParseFile(fileSet, file, nil, parser.ParseComments)
 		if err != nil {
-			continue // Try next file
+			continue
 		}
 
 		if src.Name != nil {
@@ -182,42 +163,6 @@ func (g *CodeGenerator) detectPackageName(packagePath string) (string, error) {
 	}
 
 	return "", fmt.Errorf("could not detect package name from files in %s", packagePath)
-}
-
-// convertSchemaTableToModelMetadata converts migrator's SchemaTable to ModelMetadata
-func (g *CodeGenerator) convertSchemaTableToModelMetadata(schemaTable *generator.SchemaTable) *ModelMetadata {
-	metadata := &ModelMetadata{
-		Name:          schemaTable.Name,
-		TableName:     schemaTable.Name,
-		Columns:       make([]FieldMetadata, 0, len(schemaTable.Columns)),
-		PrimaryKeys:   make([]string, 0),
-		Indexes:       make([]IndexMetadata, 0),
-		Relationships: make([]FieldMetadata, 0),
-	}
-
-	// Convert columns from migrator's format
-	for _, col := range schemaTable.Columns {
-		fieldMeta := FieldMetadata{
-			Name:         col.Name,
-			DBName:       col.Name,
-			Type:         g.mapSchemaTypeToGo(col.Type),
-			IsPointer:    col.IsNullable,
-			IsPrimaryKey: col.IsPrimaryKey,
-			IsUnique:     col.IsUnique,
-		}
-
-		if col.DefaultValue != nil {
-			fieldMeta.DefaultValue = *col.DefaultValue
-		}
-
-		metadata.Columns = append(metadata.Columns, fieldMeta)
-
-		if col.IsPrimaryKey {
-			metadata.PrimaryKeys = append(metadata.PrimaryKeys, col.Name)
-		}
-	}
-
-	return metadata
 }
 
 // mapSchemaTypeToGo maps schema column types to Go types
@@ -254,32 +199,26 @@ func (g *CodeGenerator) mapSchemaTypeToGo(schemaType string) string {
 
 // GenerateAll generates all code for registered models
 func (g *CodeGenerator) GenerateAll() error {
-	// Load templates
 	if err := g.loadTemplates(); err != nil {
 		return fmt.Errorf("failed to load templates: %w", err)
 	}
 
-	// Generate column constants
 	if err := g.generateColumnConstants(); err != nil {
 		return fmt.Errorf("failed to generate column constants: %w", err)
 	}
 
-	// Generate repositories
 	if err := g.generateRepositories(); err != nil {
 		return fmt.Errorf("failed to generate repositories: %w", err)
 	}
 
-	// Generate query builders
 	if err := g.generateQueryBuilders(); err != nil {
 		return fmt.Errorf("failed to generate query builders: %w", err)
 	}
 
-	// Generate relationship helpers
 	if err := g.generateRelationshipHelpers(); err != nil {
 		return fmt.Errorf("failed to generate relationship helpers: %w", err)
 	}
 
-	// Generate Storm struct
 	if err := g.generateStorm(); err != nil {
 		return fmt.Errorf("failed to generate Storm: %w", err)
 	}
@@ -289,7 +228,6 @@ func (g *CodeGenerator) GenerateAll() error {
 
 // loadTemplates loads code generation templates
 func (g *CodeGenerator) loadTemplates() error {
-	// Create template functions
 	funcMap := template.FuncMap{
 		"lower":          strings.ToLower,
 		"upper":          strings.ToUpper,
@@ -310,7 +248,6 @@ func (g *CodeGenerator) loadTemplates() error {
 		"sanitizeGoName": sanitizeGoName,
 	}
 
-	// Load built-in templates
 	g.templates["columns"] = template.Must(template.New("columns").Funcs(funcMap).Parse(columnTemplate))
 	g.templates["repository"] = template.Must(template.New("repository").Funcs(funcMap).Parse(repositoryTemplate))
 	g.templates["query"] = template.Must(template.New("query").Funcs(funcMap).Parse(queryTemplate))
@@ -379,7 +316,6 @@ func (g *CodeGenerator) generateQueryBuilders() error {
 
 // generateRelationshipHelpers generates relationship helper code
 func (g *CodeGenerator) generateRelationshipHelpers() error {
-	// Find all models with relationships
 	modelsWithRelationships := make(map[string]*ModelMetadata)
 	for name, model := range g.models {
 		if len(model.Relationships) > 0 {
@@ -388,7 +324,7 @@ func (g *CodeGenerator) generateRelationshipHelpers() error {
 	}
 
 	if len(modelsWithRelationships) == 0 {
-		return nil // No relationships to generate
+		return nil
 	}
 
 	data := struct {
@@ -431,13 +367,11 @@ func (g *CodeGenerator) executeTemplate(templateName, filename string, data inte
 		return fmt.Errorf("failed to execute template %s: %w", templateName, err)
 	}
 
-	// Format the generated code
 	formatted, err := format.Source(buf.Bytes())
 	if err != nil {
 		return fmt.Errorf("failed to format generated code for %s: %w", filename, err)
 	}
 
-	// Write to file
 	outputPath := filepath.Join(g.outputDir, filename)
 	return writeFile(outputPath, formatted)
 }
@@ -562,12 +496,10 @@ func (g *CodeGenerator) ValidateModels() error {
 
 // validateModel validates a single model
 func (g *CodeGenerator) validateModel(model *ModelMetadata) error {
-	// Check for primary key
 	if len(model.PrimaryKeys) == 0 {
 		return fmt.Errorf("model %s has no primary key", model.Name)
 	}
 
-	// Validate relationships
 	for _, rel := range model.Relationships {
 		if err := g.validateRelationship(model, rel); err != nil {
 			return fmt.Errorf("relationship %s validation failed: %w", rel.Name, err)
@@ -583,13 +515,11 @@ func (g *CodeGenerator) validateRelationship(model *ModelMetadata, rel FieldMeta
 		return fmt.Errorf("relationship %s has no metadata", rel.Name)
 	}
 
-	// Check if target model exists
 	targetModel, exists := g.models[rel.Relationship.Target]
 	if !exists {
 		return fmt.Errorf("target model %s not found for relationship %s", rel.Relationship.Target, rel.Name)
 	}
 
-	// Validate foreign key references
 	switch rel.Relationship.Type {
 	case "belongs_to":
 		if !g.hasColumn(model, rel.Relationship.ForeignKey) {
@@ -608,8 +538,6 @@ func (g *CodeGenerator) validateRelationship(model *ModelMetadata, rel FieldMeta
 		}
 
 	case "has_many_through":
-		// For now, we'll assume join tables are valid
-		// In a real implementation, you'd validate the join table structure
 	}
 
 	return nil
@@ -632,12 +560,10 @@ func (g *CodeGenerator) GenerateForModel(modelName string) error {
 		return fmt.Errorf("model %s not found", modelName)
 	}
 
-	// Load templates
 	if err := g.loadTemplates(); err != nil {
 		return fmt.Errorf("failed to load templates: %w", err)
 	}
 
-	// Generate repository
 	data := struct {
 		Package string
 		Model   *ModelMetadata
@@ -653,7 +579,6 @@ func (g *CodeGenerator) GenerateForModel(modelName string) error {
 		return fmt.Errorf("failed to generate repository: %w", err)
 	}
 
-	// Generate query builder
 	filename = fmt.Sprintf("%s_query.go", toSnakeCase(model.Name))
 	if err := g.executeTemplate("query", filename, data); err != nil {
 		return fmt.Errorf("failed to generate query builder: %w", err)
@@ -664,14 +589,12 @@ func (g *CodeGenerator) GenerateForModel(modelName string) error {
 
 // CleanOutput removes all generated files
 func (g *CodeGenerator) CleanOutput() error {
-	// Remove all .go files in output directory that look generated
 	return filepath.Walk(g.outputDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
 
 		if !info.IsDir() && strings.HasSuffix(path, ".go") {
-			// Check if file contains generation marker
 			content, err := os.ReadFile(path)
 			if err != nil {
 				return err
@@ -688,7 +611,6 @@ func (g *CodeGenerator) CleanOutput() error {
 
 // sanitizeGoName converts database names to valid Go identifiers
 func sanitizeGoName(name string) string {
-	// Map of Go keywords that need to be escaped
 	goKeywords := map[string]string{
 		"type":      "type_",
 		"interface": "interface_",

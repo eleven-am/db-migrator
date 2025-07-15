@@ -31,7 +31,6 @@ func New(databaseURL string, opts ...Option) (*Storm, error) {
 	config := NewConfig()
 	config.DatabaseURL = databaseURL
 
-	// Apply options
 	for _, opt := range opts {
 		if err := opt(config); err != nil {
 			return nil, NewConfigError("apply_option", err)
@@ -51,13 +50,11 @@ func NewWithConfig(config *Config) (*Storm, error) {
 		return nil, NewConfigError("validate", err)
 	}
 
-	// Open database connection
 	db, err := sqlx.Open(config.Driver, config.DatabaseURL)
 	if err != nil {
 		return nil, NewConnectionError("open", err)
 	}
 
-	// Configure connection pool
 	db.SetMaxOpenConns(config.MaxOpenConns)
 	db.SetMaxIdleConns(config.MaxIdleConns)
 	db.SetConnMaxLifetime(config.ConnMaxLifetime)
@@ -68,7 +65,6 @@ func NewWithConfig(config *Config) (*Storm, error) {
 		logger: config.Logger,
 	}
 
-	// Initialize sub-systems
 	if err := storm.initialize(); err != nil {
 		db.Close()
 		return nil, err
@@ -79,21 +75,18 @@ func NewWithConfig(config *Config) (*Storm, error) {
 
 // initialize sets up all sub-systems
 func (s *Storm) initialize() error {
-	// Initialize migrator
 	if migrator, err := s.newMigrator(); err != nil {
 		return NewMigrationError("initialize_migrator", err)
 	} else {
 		s.migrator = migrator
 	}
 
-	// Initialize ORM
 	if orm, err := s.newORM(); err != nil {
 		return NewORMError("initialize_orm", err)
 	} else {
 		s.orm = orm
 	}
 
-	// Initialize schema inspector
 	if schema, err := s.newSchemaInspector(); err != nil {
 		return NewSchemaError("initialize_schema", err)
 	} else {
@@ -105,8 +98,8 @@ func (s *Storm) initialize() error {
 
 // Factory functions for implementations
 var (
-	MigratorFactory       func(db *sqlx.DB, config *Config, logger Logger) Migrator
-	ORMFactory            func(config *Config, logger Logger) ORMGenerator
+	MigratorFactory        func(db *sqlx.DB, config *Config, logger Logger) Migrator
+	ORMFactory             func(config *Config, logger Logger) ORMGenerator
 	SchemaInspectorFactory func(db *sqlx.DB, config *Config, logger Logger) SchemaInspector
 )
 
@@ -191,7 +184,6 @@ func (s *Storm) Migrate(ctx context.Context, opts ...MigrateOptions) error {
 	if len(opts) > 0 {
 		options = opts[0]
 	} else {
-		// Use defaults from config
 		options = MigrateOptions{
 			PackagePath: s.config.ModelsPackage,
 			OutputDir:   s.config.MigrationsDir,
@@ -218,7 +210,6 @@ func (s *Storm) Generate(ctx context.Context, opts ...GenerateOptions) error {
 	if len(opts) > 0 {
 		options = opts[0]
 	} else {
-		// Use defaults from config
 		options = GenerateOptions{
 			PackagePath:  s.config.ModelsPackage,
 			IncludeHooks: s.config.GenerateHooks,
@@ -240,7 +231,6 @@ func (s *Storm) Introspect(ctx context.Context) (*Schema, error) {
 	return s.schema.Inspect(ctx)
 }
 
-// Temporary placeholder implementations
 type migrator struct {
 	storm *Storm
 }

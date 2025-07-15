@@ -8,8 +8,7 @@ import (
 )
 
 func TestBuildMigrator(t *testing.T) {
-	// This is a basic test to ensure the builder works
-	mockDB := &sqlx.DB{} // In real tests, this would be properly mocked
+	mockDB := &sqlx.DB{}
 	config := &storm.Config{
 		ModelsPackage: "./models",
 	}
@@ -34,8 +33,7 @@ func TestBuildORM(t *testing.T) {
 }
 
 func TestBuildSchemaInspector(t *testing.T) {
-	// This is a basic test to ensure the builder works
-	mockDB := &sqlx.DB{} // In real tests, this would be properly mocked
+	mockDB := &sqlx.DB{}
 	config := &storm.Config{
 		ModelsPackage: "./models",
 	}
@@ -84,7 +82,6 @@ func TestBuilderIntegration(t *testing.T) {
 	logger := &TestLogger{}
 	mockDB := &sqlx.DB{}
 
-	// Test that all builders can be created together
 	migrator := BuildMigrator(mockDB, config, logger)
 	orm := BuildORM(config, logger)
 	inspector := BuildSchemaInspector(mockDB, config, logger)
@@ -99,8 +96,6 @@ func TestBuilderIntegration(t *testing.T) {
 		t.Error("expected schema inspector to be created")
 	}
 }
-
-// Helper types for testing
 
 type TestLogger struct{}
 
