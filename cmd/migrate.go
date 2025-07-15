@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/eleven-am/db-migrator/internal/migrator"
+	"github.com/eleven-am/storm/internal/migrator"
 	_ "github.com/lib/pq"
 	"github.com/spf13/cobra"
 )

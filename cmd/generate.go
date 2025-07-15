@@ -5,8 +5,8 @@ import (
 	"os"
 	"path/filepath"
 
-	generator2 "github.com/eleven-am/db-migrator/internal/generator"
-	"github.com/eleven-am/db-migrator/internal/parser"
+	generator2 "github.com/eleven-am/storm/internal/generator"
+	"github.com/eleven-am/storm/internal/parser"
 
 	"github.com/spf13/cobra"
 )

@@ -45,7 +45,7 @@ func (g *StructGenerator) GenerateStructs() (string, error) {
 	b.WriteString("//   db-migrator introspect --database=\"<connection-url>\" --format=go --package=" + g.packageName + "\n")
 	b.WriteString("//\n")
 	b.WriteString("// For more information, see:\n")
-	b.WriteString("//   https://github.com/eleven-am/db-migrator\n")
+	b.WriteString("//   https://github.com/eleven-am/storm\n")
 	b.WriteString("\n")
 
 	b.WriteString(fmt.Sprintf("package %s\n\n", g.packageName))

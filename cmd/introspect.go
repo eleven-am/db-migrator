@@ -7,7 +7,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/eleven-am/db-migrator/internal/introspect"
+	"github.com/eleven-am/storm/internal/introspect"
 	_ "github.com/lib/pq"
 	"github.com/spf13/cobra"
 )

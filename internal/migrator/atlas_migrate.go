@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"ariga.io/atlas/sql/schema"
-	"github.com/eleven-am/db-migrator/internal/generator"
-	"github.com/eleven-am/db-migrator/internal/parser"
+	"github.com/eleven-am/storm/internal/generator"
+	"github.com/eleven-am/storm/internal/parser"
 )
 
 // MigrationOptions contains options for migration generation

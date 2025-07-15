@@ -6,6 +6,7 @@
 *~
 
 # Binaries
+storm-cli
 db-migrator
 *.exe
 *.dll
@@ -59,3 +60,7 @@ __debug_bin
 # Project specific
 *.sql
 *.md~
+migrations/
+test_*
+test-output/
+generated/

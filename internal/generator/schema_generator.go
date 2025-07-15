@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	parser2 "github.com/eleven-am/db-migrator/internal/parser"
+	parser2 "github.com/eleven-am/storm/internal/parser"
 )
 
 // SchemaColumn represents a column in the target database schema

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/eleven-am/storm/internal/orm-generator"
 	"github.com/spf13/cobra"
 )
 
@@ -30,4 +31,8 @@ func init() {
 	rootCmd.AddCommand(verifyCmd)
 	rootCmd.AddCommand(introspectCmd)
 	rootCmd.AddCommand(versionCmd)
+	
+	// Add ORM commands
+	ormCLI := orm_generator.NewCLICommands() // No DB connection needed for code generation
+	rootCmd.AddCommand(ormCLI.GetRootCommand())
 }

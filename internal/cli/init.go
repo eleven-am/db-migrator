@@ -1,0 +1,90 @@
+package cli
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+
+	"github.com/spf13/cobra"
+)
+
+var (
+	initProject   string
+	initDriver    string
+	initForce     bool
+)
+
+var initCmd = &cobra.Command{
+	Use:   "init",
+	Short: "Initialize a new Storm configuration file",
+	Long: `Creates a storm.yaml configuration file with default settings.
+This helps you get started with Storm by creating a template configuration
+that you can customize for your project.`,
+	RunE: runInit,
+}
+
+func init() {
+	initCmd.Flags().StringVar(&initProject, "project", "", "Project name")
+	initCmd.Flags().StringVar(&initDriver, "driver", "postgres", "Database driver (postgres, mysql, sqlite)")
+	initCmd.Flags().BoolVar(&initForce, "force", false, "Overwrite existing configuration file")
+}
+
+func runInit(cmd *cobra.Command, args []string) error {
+	// Check if config file already exists
+	configPath := "storm.yaml"
+	if _, err := os.Stat(configPath); err == nil && !initForce {
+		return fmt.Errorf("storm.yaml already exists. Use --force to overwrite")
+	}
+
+	// Get project name from current directory if not specified
+	if initProject == "" {
+		dir, err := os.Getwd()
+		if err == nil {
+			initProject = filepath.Base(dir)
+		} else {
+			initProject = "my-project"
+		}
+	}
+
+	// Create default configuration
+	config := &StormConfig{
+		Version: "1",
+		Project: initProject,
+	}
+
+	// Set database defaults
+	config.Database.Driver = initDriver
+	config.Database.URL = fmt.Sprintf("%s://user:password@localhost:5432/dbname?sslmode=disable", initDriver)
+	config.Database.MaxConnections = 25
+
+	// Set models defaults
+	config.Models.Package = "./models"
+
+	// Set migrations defaults
+	config.Migrations.Directory = "./migrations"
+	config.Migrations.Table = "schema_migrations"
+	config.Migrations.AutoApply = false
+
+	// Set ORM defaults
+	config.ORM.GenerateHooks = true
+	config.ORM.GenerateTests = false
+	config.ORM.GenerateMocks = false
+
+	// Set schema defaults
+	config.Schema.StrictMode = true
+	config.Schema.NamingConvention = "snake_case"
+
+	// Save configuration
+	if err := SaveStormConfig(config, configPath); err != nil {
+		return fmt.Errorf("failed to save configuration: %w", err)
+	}
+
+	fmt.Printf("Created storm.yaml configuration file\n")
+	fmt.Printf("\nNext steps:\n")
+	fmt.Printf("1. Update the database URL in storm.yaml\n")
+	fmt.Printf("2. Adjust the models package path if needed\n")
+	fmt.Printf("3. Run 'storm migrate' to generate migrations\n")
+	fmt.Printf("4. Run 'storm orm' to generate ORM code\n")
+
+	return nil
+}

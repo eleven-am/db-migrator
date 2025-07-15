@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/eleven-am/db-migrator/cmd"
+	"github.com/eleven-am/storm/cmd"
 )
 
 func main() {

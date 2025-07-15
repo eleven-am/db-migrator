@@ -21,6 +21,7 @@ type FieldDefinition struct {
 	DBTag     string
 	DBDefTag  string
 	JSONTag   string
+	ORMTag    string
 }
 
 // TableDefinition represents a complete table structure
@@ -181,6 +182,7 @@ func (p *StructParser) parseField(field *ast.Field) ([]FieldDefinition, map[stri
 			fieldDef.DBTag = p.extractTag(tagValue, "db")
 			fieldDef.DBDefTag = p.extractTag(tagValue, "dbdef")
 			fieldDef.JSONTag = p.extractTag(tagValue, "json")
+			fieldDef.ORMTag = p.extractTag(tagValue, "orm")
 
 			if fieldDef.DBTag != "" {
 				fieldDef.DBName = fieldDef.DBTag
@@ -221,6 +223,12 @@ func (p *StructParser) parseFieldType(expr ast.Expr) (string, bool, bool) {
 	case *ast.SelectorExpr:
 		pkg := p.exprToString(t.X)
 		return pkg + "." + t.Sel.Name, false, false
+		
+	case *ast.IndexExpr:
+		// Handle generic types like JSONField[StageAction]
+		baseType := p.exprToString(t.X)
+		indexType := p.exprToString(t.Index)
+		return baseType + "[" + indexType + "]", false, false
 	}
 	return "", false, false
 }
