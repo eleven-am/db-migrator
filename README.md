@@ -32,9 +32,9 @@ Storm follows a simple workflow:
 ```go
 // 1. Define your model
 type User struct {
-    ID    string `db:"id" dbdef:"type:uuid;primary_key"`
-    Email string `db:"email" dbdef:"type:varchar(255);not_null;unique"`
-    Posts []Post `db:"-" orm:"has_many:Post,foreign_key:user_id"`
+    ID    string `db:"id" storm:"type:uuid;primary_key"`
+    Email string `db:"email" storm:"type:varchar(255);not_null;unique"`
+    Posts []Post `storm:"relation:has_many:Post;foreign_key:user_id"`
 }
 
 // 2. storm migrate  (generates SQL migrations)
@@ -114,32 +114,32 @@ package models
 
 import "time"
 
-// User model with dbdef tags for schema definition
+// User model with storm tags for schema definition
 type User struct {
-    _ struct{} `dbdef:"table:users;index:idx_users_email,email"`
+    _ struct{} `storm:"table:users;index:idx_users_email,email"`
     
-    ID        string    `db:"id" dbdef:"type:uuid;primary_key;default:gen_random_uuid()"`
-    Email     string    `db:"email" dbdef:"type:varchar(255);not_null;unique"`
-    Name      string    `db:"name" dbdef:"type:varchar(100);not_null"`
-    CreatedAt time.Time `db:"created_at" dbdef:"type:timestamptz;not_null;default:now()"`
+    ID        string    `db:"id" storm:"type:uuid;primary_key;default:gen_random_uuid()"`
+    Email     string    `db:"email" storm:"type:varchar(255);not_null;unique"`
+    Name      string    `db:"name" storm:"type:varchar(100);not_null"`
+    CreatedAt time.Time `db:"created_at" storm:"type:timestamptz;not_null;default:now()"`
     
     // ORM relationships
-    Posts []Post `db:"-" orm:"has_many:Post,foreign_key:user_id"`
+    Posts []Post `storm:"relation:has_many:Post;foreign_key:user_id"`
 }
 
 // Post model
 type Post struct {
-    _ struct{} `dbdef:"table:posts;index:idx_posts_user,user_id"`
+    _ struct{} `storm:"table:posts;index:idx_posts_user,user_id"`
     
-    ID        string    `db:"id" dbdef:"type:uuid;primary_key;default:gen_random_uuid()"`
-    UserID    string    `db:"user_id" dbdef:"type:uuid;not_null;foreign_key:users.id"`
-    Title     string    `db:"title" dbdef:"type:varchar(255);not_null"`
-    Content   string    `db:"content" dbdef:"type:text"`
-    Published bool      `db:"published" dbdef:"type:boolean;not_null;default:false"`
-    CreatedAt time.Time `db:"created_at" dbdef:"type:timestamptz;not_null;default:now()"`
+    ID        string    `db:"id" storm:"type:uuid;primary_key;default:gen_random_uuid()"`
+    UserID    string    `db:"user_id" storm:"type:uuid;not_null;foreign_key:users.id"`
+    Title     string    `db:"title" storm:"type:varchar(255);not_null"`
+    Content   string    `db:"content" storm:"type:text"`
+    Published bool      `db:"published" storm:"type:boolean;not_null;default:false"`
+    CreatedAt time.Time `db:"created_at" storm:"type:timestamptz;not_null;default:now()"`
     
     // ORM relationships
-    User *User `db:"-" orm:"belongs_to:User,foreign_key:user_id"`
+    User *User `storm:"relation:belongs_to:User;foreign_key:user_id"`
 }
 ```
 
@@ -358,7 +358,7 @@ func main() {
 
 ### 🏗️ Struct-Driven Development
 
-Your Go structs define your database schema using `dbdef` tags. Storm ensures your database always matches your structs.
+Your Go structs define your database schema using `storm` tags. Storm ensures your database always matches your structs.
 
 ### 🔄 Intelligent Migration Engine
 
@@ -410,7 +410,7 @@ See [Configuration Guide](docs/configuration.md) for details.
 ## Documentation
 
 - 📘 **[Getting Started Guide](docs/getting-started.md)** - Step-by-step tutorial
-- 🏷️ **[Schema Definition (dbdef tags)](docs/schema-definition.md)** - Complete tag reference
+- 🏷️ **[Schema Definition (storm tags)](docs/schema-definition.md)** - Complete tag reference
 - 🔄 **[Migrations Guide](docs/migrations.md)** - Managing database changes
 - 📊 **[ORM Guide](docs/orm-guide.md)** - Using the generated ORM
 - 🔍 **[Query Builder](docs/query-builder.md)** - Building complex queries
@@ -427,23 +427,23 @@ See [Configuration Guide](docs/configuration.md) for details.
 ```go
 // Product model with rich validation
 type Product struct {
-    _ struct{} `dbdef:"table:products;index:idx_products_category,category_id;index:idx_products_price,price"`
+    _ struct{} `storm:"table:products;index:idx_products_category,category_id;index:idx_products_price,price"`
     
-    ID          string          `db:"id" dbdef:"type:uuid;primary_key;default:gen_random_uuid()"`
-    SKU         string          `db:"sku" dbdef:"type:varchar(50);not_null;unique"`
-    Name        string          `db:"name" dbdef:"type:varchar(255);not_null"`
-    Description string          `db:"description" dbdef:"type:text"`
-    Price       decimal.Decimal `db:"price" dbdef:"type:decimal(10,2);not_null"`
-    Stock       int             `db:"stock" dbdef:"type:integer;not_null;default:0"`
-    CategoryID  string          `db:"category_id" dbdef:"type:uuid;not_null;foreign_key:categories.id"`
-    IsActive    bool            `db:"is_active" dbdef:"type:boolean;not_null;default:true"`
-    CreatedAt   time.Time       `db:"created_at" dbdef:"type:timestamptz;not_null;default:now()"`
-    UpdatedAt   time.Time       `db:"updated_at" dbdef:"type:timestamptz;not_null;default:now()"`
+    ID          string          `db:"id" storm:"type:uuid;primary_key;default:gen_random_uuid()"`
+    SKU         string          `db:"sku" storm:"type:varchar(50);not_null;unique"`
+    Name        string          `db:"name" storm:"type:varchar(255);not_null"`
+    Description string          `db:"description" storm:"type:text"`
+    Price       decimal.Decimal `db:"price" storm:"type:decimal(10,2);not_null"`
+    Stock       int             `db:"stock" storm:"type:integer;not_null;default:0"`
+    CategoryID  string          `db:"category_id" storm:"type:uuid;not_null;foreign_key:categories.id"`
+    IsActive    bool            `db:"is_active" storm:"type:boolean;not_null;default:true"`
+    CreatedAt   time.Time       `db:"created_at" storm:"type:timestamptz;not_null;default:now()"`
+    UpdatedAt   time.Time       `db:"updated_at" storm:"type:timestamptz;not_null;default:now()"`
     
     // Relationships
-    Category *Category `db:"-" orm:"belongs_to:Category,foreign_key:category_id"`
-    Reviews  []Review  `db:"-" orm:"has_many:Review,foreign_key:product_id"`
-    Tags     []Tag     `db:"-" orm:"has_many_through:Tag,join_table:product_tags,source_fk:product_id,target_fk:tag_id"`
+    Category *Category `storm:"relation:belongs_to:Category;foreign_key:category_id"`
+    Reviews  []Review  `storm:"relation:has_many:Review;foreign_key:product_id"`
+    Tags     []Tag     `storm:"relation:has_many_through:Tag;join_table:product_tags;source_fk:product_id;target_fk:tag_id"`
 }
 
 // Advanced product queries
@@ -506,21 +506,21 @@ func ProductExamples(storm *models.Storm, ctx context.Context) {
 ```go
 // Event with complex scheduling
 type Event struct {
-    _ struct{} `dbdef:"table:events;index:idx_events_datetime,start_time,end_time;index:idx_events_venue,venue_id"`
+    _ struct{} `storm:"table:events;index:idx_events_datetime,start_time,end_time;index:idx_events_venue,venue_id"`
     
-    ID          string    `db:"id" dbdef:"type:uuid;primary_key;default:gen_random_uuid()"`
-    Title       string    `db:"title" dbdef:"type:varchar(255);not_null"`
-    StartTime   time.Time `db:"start_time" dbdef:"type:timestamptz;not_null"`
-    EndTime     time.Time `db:"end_time" dbdef:"type:timestamptz;not_null"`
-    VenueID     string    `db:"venue_id" dbdef:"type:uuid;not_null;foreign_key:venues.id"`
-    MaxCapacity int       `db:"max_capacity" dbdef:"type:integer;not_null"`
-    TicketPrice float64   `db:"ticket_price" dbdef:"type:decimal(8,2);not_null"`
-    Status      string    `db:"status" dbdef:"type:varchar(50);not_null;default:'scheduled'"`
+    ID          string    `db:"id" storm:"type:uuid;primary_key;default:gen_random_uuid()"`
+    Title       string    `db:"title" storm:"type:varchar(255);not_null"`
+    StartTime   time.Time `db:"start_time" storm:"type:timestamptz;not_null"`
+    EndTime     time.Time `db:"end_time" storm:"type:timestamptz;not_null"`
+    VenueID     string    `db:"venue_id" storm:"type:uuid;not_null;foreign_key:venues.id"`
+    MaxCapacity int       `db:"max_capacity" storm:"type:integer;not_null"`
+    TicketPrice float64   `db:"ticket_price" storm:"type:decimal(8,2);not_null"`
+    Status      string    `db:"status" storm:"type:varchar(50);not_null;default:'scheduled'"`
     
     // Relationships
-    Venue        *Venue        `db:"-" orm:"belongs_to:Venue,foreign_key:venue_id"`
-    Registrations []Registration `db:"-" orm:"has_many:Registration,foreign_key:event_id"`
-    Speakers     []Speaker     `db:"-" orm:"has_many_through:Speaker,join_table:event_speakers,source_fk:event_id,target_fk:speaker_id"`
+    Venue        *Venue        `storm:"relation:belongs_to:Venue;foreign_key:venue_id"`
+    Registrations []Registration `storm:"relation:has_many:Registration;foreign_key:event_id"`
+    Speakers     []Speaker     `storm:"relation:has_many_through:Speaker;join_table:event_speakers;source_fk:event_id;target_fk:speaker_id"`
 }
 
 func EventExamples(storm *models.Storm, ctx context.Context) {
@@ -642,27 +642,27 @@ func AnalyticsExamples(storm *models.Storm, ctx context.Context) {
 ```go
 // Tenant-aware models
 type Organization struct {
-    _ struct{} `dbdef:"table:organizations;index:idx_orgs_subdomain,subdomain"`
+    _ struct{} `storm:"table:organizations;index:idx_orgs_subdomain,subdomain"`
     
-    ID        string `db:"id" dbdef:"type:uuid;primary_key;default:gen_random_uuid()"`
-    Name      string `db:"name" dbdef:"type:varchar(255);not_null"`
-    Subdomain string `db:"subdomain" dbdef:"type:varchar(50);not_null;unique"`
-    Plan      string `db:"plan" dbdef:"type:varchar(50);not_null;default:'free'"`
-    IsActive  bool   `db:"is_active" dbdef:"type:boolean;not_null;default:true"`
+    ID        string `db:"id" storm:"type:uuid;primary_key;default:gen_random_uuid()"`
+    Name      string `db:"name" storm:"type:varchar(255);not_null"`
+    Subdomain string `db:"subdomain" storm:"type:varchar(50);not_null;unique"`
+    Plan      string `db:"plan" storm:"type:varchar(50);not_null;default:'free'"`
+    IsActive  bool   `db:"is_active" storm:"type:boolean;not_null;default:true"`
     
-    Users    []User    `db:"-" orm:"has_many:User,foreign_key:org_id"`
-    Projects []Project `db:"-" orm:"has_many:Project,foreign_key:org_id"`
+    Users    []User    `storm:"relation:has_many:User;foreign_key:org_id"`
+    Projects []Project `storm:"relation:has_many:Project;foreign_key:org_id"`
 }
 
 type User struct {
-    _ struct{} `dbdef:"table:users;index:idx_users_org,org_id;index:idx_users_email,email"`
+    _ struct{} `storm:"table:users;index:idx_users_org,org_id;index:idx_users_email,email"`
     
-    ID    string `db:"id" dbdef:"type:uuid;primary_key;default:gen_random_uuid()"`
-    OrgID string `db:"org_id" dbdef:"type:uuid;not_null;foreign_key:organizations.id"`
-    Email string `db:"email" dbdef:"type:varchar(255);not_null"`
-    Role  string `db:"role" dbdef:"type:varchar(50);not_null;default:'member'"`
+    ID    string `db:"id" storm:"type:uuid;primary_key;default:gen_random_uuid()"`
+    OrgID string `db:"org_id" storm:"type:uuid;not_null;foreign_key:organizations.id"`
+    Email string `db:"email" storm:"type:varchar(255);not_null"`
+    Role  string `db:"role" storm:"type:varchar(50);not_null;default:'member'"`
     
-    Organization *Organization `db:"-" orm:"belongs_to:Organization,foreign_key:org_id"`
+    Organization *Organization `storm:"relation:belongs_to:Organization;foreign_key:org_id"`
 }
 
 func MultiTenantExamples(storm *models.Storm, ctx context.Context, orgID string) {
