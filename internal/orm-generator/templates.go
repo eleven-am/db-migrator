@@ -195,8 +195,38 @@ import (
 )
 
 // {{ .Model.Name }}Repository provides type-safe operations for {{ .Model.Name }}
-// Inherits standard CRUD operations from orm.Repository:
-// Find, FindAll, Create, Update, Delete, UpsertMany, BulkUpdate, etc.
+//
+// The repository inherits these operations from orm.Repository:
+//
+// Single Record Operations:
+//   - Create(ctx, record) - Insert single record
+//   - FindByID(ctx, id) - Find record by primary key
+//   - Update(ctx, record) - Update single record by primary key
+//   - Delete(ctx, id) - Delete record by primary key ID
+//   - DeleteRecord(ctx, record) - Delete record using the record instance
+//
+// Batch Operations:
+//   - CreateMany(ctx, records) - Insert multiple records in transaction
+//   - UpdateMany(ctx, updates, condition) - Update multiple records with condition
+//   - BulkUpdate(ctx, records, opts) - Bulk update using CTE with VALUES
+//   - Upsert(ctx, record, opts) - Insert or update on conflict
+//   - UpsertMany(ctx, records, opts) - Batch upsert operations
+//
+// Query Building:
+//   - Query() - Create new query builder for complex queries
+//   - QueryContext(ctx) - Create query builder with context support
+//
+// Example usage:
+//   // Single operations
+//   {{ lower .Model.Name }}, err := repo.FindByID(ctx, "123")
+//   err = repo.Create(ctx, &new{{ .Model.Name }})
+//   
+//   // Batch operations
+//   err = repo.CreateMany(ctx, multiple{{ .Model.Name }}s)
+//   rowsAffected, err := repo.UpdateMany(ctx, updates, condition)
+//   
+//   // Complex queries
+//   results, err := repo.Query().Where(condition).OrderBy("created_at DESC").Find()
 type {{ .Model.Name }}Repository struct {
 	*orm.Repository[{{ .Model.Name }}]
 }
@@ -259,6 +289,42 @@ func (r *{{ .Model.Name }}Repository) Query() *{{ .Model.Name }}Query {
 	}
 }
 
+// QueryContext returns a type-safe query builder for {{ .Model.Name }} with context support.
+// Use this when you need to control query timeouts, cancellation, or pass context values.
+//
+// Examples:
+{{- $firstStringField := "" }}
+{{- $firstBoolField := "" }}
+{{- $firstTimeField := "" }}
+{{- range .Model.Columns }}
+{{- if and (eq .Type "string") (eq $firstStringField "") (not .IsPrimaryKey) }}{{ $firstStringField = .Name }}{{ end }}
+{{- if and (eq .Type "bool") (eq $firstBoolField "") }}{{ $firstBoolField = .Name }}{{ end }}
+{{- if and (eq .Type "time.Time") (eq $firstTimeField "") }}{{ $firstTimeField = .Name }}{{ end }}
+{{- end }}
+//   // With timeout context
+//   ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+//   defer cancel()
+//   results, err := repo.QueryContext(ctx).Find()
+//
+//   // With cancellation
+//   ctx, cancel := context.WithCancel(context.Background())
+//   go func() { time.Sleep(time.Second); cancel() }()
+//   results, err := repo.QueryContext(ctx).Find()
+//
+{{- if $firstStringField }}
+//   // Complex query with context
+//   results, err := repo.QueryContext(ctx).
+//       Where({{ .Model.Name }}s.{{ sanitizeGoName $firstStringField }}.Like("%search%")).
+//       Limit(100).Find()
+{{- else if $firstBoolField }}
+//   // Filtered query with context
+//   results, err := repo.QueryContext(ctx).
+//       Where({{ .Model.Name }}s.{{ sanitizeGoName $firstBoolField }}.Eq(true)).
+//       Find()
+{{- else }}
+//   // Simple query with context
+//   results, err := repo.QueryContext(ctx).Find()
+{{- end }}
 func (r *{{ .Model.Name }}Repository) QueryContext(ctx context.Context) *{{ .Model.Name }}Query {
 	return &{{ .Model.Name }}Query{
 		Query: r.Repository.QueryContext(ctx),
@@ -291,47 +357,227 @@ func (r *{{ $.Model.Name }}Repository) With{{ .Name }}() *{{ $.Model.Name }}Quer
 {{end}}
 
 // {{ .Model.Name }}Query provides type-safe query building for {{ .Model.Name }}
+//
+// Query Methods (returned by Query()):
+//   - Where(condition) - Add WHERE conditions
+//   - OrderBy(expressions...) - Add ORDER BY
+//   - Limit(limit) - Set LIMIT
+//   - Offset(offset) - Set OFFSET
+//   - Join(type, table, condition) - Generic join
+//   - InnerJoin(table, condition) - Inner join
+//   - LeftJoin(table, condition) - Left join
+//   - RightJoin(table, condition) - Right join
+//   - FullJoin(table, condition) - Full outer join
+//   - Include(relationships...) - Load relationships
+//   - IncludeWhere(relationship, conditions...) - Load relationships with conditions
+//   - WithTx(tx) - Execute within transaction
+//
+// Execution Methods:
+//   - Find() - Execute query and return all records
+//   - First() - Execute query and return first record
+//   - Count() - Execute count query
+//   - Exists() - Check if any records exist
+//   - Delete() - Execute DELETE query
+//   - ExecuteRaw(query, args...) - Execute raw SQL
+//
+// Example usage:
+//   // Simple query
+//   results, err := repo.Query().Where({{ .Model.Name }}s.FieldName.Eq("value")).Find()
+//   
+//   // Complex query with joins and ordering
+//   results, err := repo.Query().
+//       Where(condition).
+//       OrderBy("created_at DESC").
+//       Limit(10).
+//       Find()
+//   
+//   // Query with relationships
+//   results, err := repo.Query().
+//       Include("RelationshipName").
+//       Where(condition).
+//       Find()
 type {{ .Model.Name }}Query struct {
 	*orm.Query[{{ .Model.Name }}]
 	repo *{{ .Model.Name }}Repository
 }
 
+// Where applies a filtering condition to the query.
+// Use the type-safe column references from {{ .Model.Name }}s for conditions.
+//
+// Examples:
+{{- $firstStringField := "" }}
+{{- $firstBoolField := "" }}
+{{- $firstNumericField := "" }}
+{{- $firstTimeField := "" }}
+{{- range .Model.Columns }}
+{{- if and (eq .Type "string") (eq $firstStringField "") (not .IsPrimaryKey) }}{{ $firstStringField = .Name }}{{ end }}
+{{- if and (eq .Type "bool") (eq $firstBoolField "") }}{{ $firstBoolField = .Name }}{{ end }}
+{{- if and (or (eq .Type "int") (eq .Type "int32") (eq .Type "int64")) (eq $firstNumericField "") }}{{ $firstNumericField = .Name }}{{ end }}
+{{- if and (eq .Type "time.Time") (eq $firstTimeField "") }}{{ $firstTimeField = .Name }}{{ end }}
+{{- end }}
+{{- if $firstStringField }}
+//   // Exact match
+//   query.Where({{ .Model.Name }}s.{{ sanitizeGoName $firstStringField }}.Eq("exact-value"))
+//   // Pattern matching
+//   query.Where({{ .Model.Name }}s.{{ sanitizeGoName $firstStringField }}.Like("%search%"))
+//   // Multiple values
+//   query.Where({{ .Model.Name }}s.{{ sanitizeGoName $firstStringField }}.In([]string{"value1", "value2"}))
+{{- end }}
+{{- if $firstBoolField }}
+//   // Boolean condition
+//   query.Where({{ .Model.Name }}s.{{ sanitizeGoName $firstBoolField }}.Eq(true))
+{{- end }}
+{{- if $firstNumericField }}
+//   // Numeric comparisons
+//   query.Where({{ .Model.Name }}s.{{ sanitizeGoName $firstNumericField }}.Gt(100))
+//   query.Where({{ .Model.Name }}s.{{ sanitizeGoName $firstNumericField }}.Between(10, 50))
+{{- end }}
+{{- if $firstTimeField }}
+//   // Time-based queries
+//   query.Where({{ .Model.Name }}s.{{ sanitizeGoName $firstTimeField }}.After(time.Now().AddDate(0, -1, 0)))
+{{- end }}
+//   // Combine conditions
+//   query.Where({{ .Model.Name }}s.{{ sanitizeGoName (index .Model.Columns 0).Name }}.Eq("value").And({{ .Model.Name }}s.{{ sanitizeGoName (index .Model.Columns 1).Name }}.IsNotNull()))
 func (q *{{ .Model.Name }}Query) Where(condition orm.Condition) *{{ .Model.Name }}Query {
 	q.Query = q.Query.Where(condition)
 	return q
 }
 
+// OrderBy specifies the order of results using column names or expressions.
+// Use DESC suffix for descending order, ASC (or no suffix) for ascending.
+//
+// Examples:
+{{- if $firstTimeField }}
+//   // Order by time field (most recent first)
+//   query.OrderBy("{{ (index .Model.Columns 0).DBName }} DESC")
+{{- end }}
+{{- if $firstStringField }}
+//   // Order by string field alphabetically
+//   query.OrderBy("{{ (index .Model.Columns 0).DBName }}")
+{{- end }}
+//   // Multiple columns
+//   query.OrderBy("{{ (index .Model.Columns 0).DBName }} DESC", "{{ (index .Model.Columns 1).DBName }}")
+//   // Complex expressions
+//   query.OrderBy("CASE WHEN active THEN 0 ELSE 1 END", "created_at DESC")
 func (q *{{ .Model.Name }}Query) OrderBy(expressions ...string) *{{ .Model.Name }}Query {
 	q.Query = q.Query.OrderBy(expressions...)
 	return q
 }
 
+// Limit restricts the number of results returned.
+// Useful for pagination and preventing large result sets.
+//
+// Examples:
+//   // Get first 10 results
+//   query.Limit(10)
+//   // Get top 100 most recent {{ lower .Model.Name }}s
+//   query.OrderBy("created_at DESC").Limit(100)
 func (q *{{ .Model.Name }}Query) Limit(limit uint64) *{{ .Model.Name }}Query {
 	q.Query = q.Query.Limit(limit)
 	return q
 }
 
+// Offset skips the specified number of results.
+// Typically used with Limit for pagination.
+//
+// Examples:
+//   // Skip first 20 results (page 3 with 10 per page)
+//   query.Offset(20).Limit(10)
+//   // Get results 51-100
+//   query.Offset(50).Limit(50)
 func (q *{{ .Model.Name }}Query) Offset(offset uint64) *{{ .Model.Name }}Query {
 	q.Query = q.Query.Offset(offset)
 	return q
 }
 
+// Find executes the query and returns all matching {{ .Model.Name }} records.
+// Returns an empty slice if no records are found.
+//
+// Examples:
+//   // Get all {{ lower .Model.Name }}s
+//   all{{ .Model.Name }}s, err := repo.Query().Find()
+{{- if $firstBoolField }}
+//   // Get all active {{ lower .Model.Name }}s
+//   active{{ .Model.Name }}s, err := repo.Query().Where({{ .Model.Name }}s.{{ sanitizeGoName $firstBoolField }}.Eq(true)).Find()
+{{- end }}
+{{- if $firstStringField }}
+//   // Search {{ lower .Model.Name }}s by {{ lower $firstStringField }}
+//   matching{{ .Model.Name }}s, err := repo.Query().Where({{ .Model.Name }}s.{{ sanitizeGoName $firstStringField }}.Like("%search%")).Find()
+{{- end }}
 func (q *{{ .Model.Name }}Query) Find() ([]{{ .Model.Name }}, error) {
 	return q.Query.Find()
 }
 
+// First executes the query and returns the first matching {{ .Model.Name }} record.
+// Returns nil if no record is found. Use with OrderBy to get specific record.
+//
+// Examples:
+//   // Get first {{ lower .Model.Name }}
+//   first{{ .Model.Name }}, err := repo.Query().First()
+{{- if $firstTimeField }}
+//   // Get most recent {{ lower .Model.Name }}
+//   latest{{ .Model.Name }}, err := repo.Query().OrderBy("{{ $firstTimeField }} DESC").First()
+{{- end }}
+{{- if $firstStringField }}
+//   // Get specific {{ lower .Model.Name }} by {{ lower $firstStringField }}
+//   specific{{ .Model.Name }}, err := repo.Query().Where({{ .Model.Name }}s.{{ sanitizeGoName $firstStringField }}.Eq("value")).First()
+{{- end }}
 func (q *{{ .Model.Name }}Query) First() (*{{ .Model.Name }}, error) {
 	return q.Query.First()
 }
 
+// Count returns the number of {{ .Model.Name }} records matching the query conditions.
+// Does not load the actual records, making it efficient for large datasets.
+//
+// Examples:
+//   // Count all {{ lower .Model.Name }}s
+//   total, err := repo.Query().Count()
+{{- if $firstBoolField }}
+//   // Count active {{ lower .Model.Name }}s
+//   activeCount, err := repo.Query().Where({{ .Model.Name }}s.{{ sanitizeGoName $firstBoolField }}.Eq(true)).Count()
+{{- end }}
+{{- if $firstStringField }}
+//   // Count {{ lower .Model.Name }}s matching criteria
+//   matchingCount, err := repo.Query().Where({{ .Model.Name }}s.{{ sanitizeGoName $firstStringField }}.Like("%search%")).Count()
+{{- end }}
 func (q *{{ .Model.Name }}Query) Count() (int64, error) {
 	return q.Query.Count()
 }
 
+// Exists checks if any {{ .Model.Name }} records match the query conditions.
+// Returns true if at least one record exists, false otherwise.
+// More efficient than Count() when you only need to know if records exist.
+//
+// Examples:
+//   // Check if any {{ lower .Model.Name }}s exist
+//   hasAny, err := repo.Query().Exists()
+{{- if $firstStringField }}
+//   // Check if {{ lower .Model.Name }} with specific {{ lower $firstStringField }} exists
+//   exists, err := repo.Query().Where({{ .Model.Name }}s.{{ sanitizeGoName $firstStringField }}.Eq("value")).Exists()
+{{- end }}
+{{- if $firstBoolField }}
+//   // Check if any active {{ lower .Model.Name }}s exist
+//   hasActive, err := repo.Query().Where({{ .Model.Name }}s.{{ sanitizeGoName $firstBoolField }}.Eq(true)).Exists()
+{{- end }}
 func (q *{{ .Model.Name }}Query) Exists() (bool, error) {
 	return q.Query.Exists()
 }
 
+// Delete removes all {{ .Model.Name }} records matching the query conditions.
+// Returns the number of records deleted.
+// WARNING: This is a bulk operation that cannot be undone.
+//
+// Examples:
+//   // Delete all {{ lower .Model.Name }}s (use with caution!)
+//   deleted, err := repo.Query().Delete()
+{{- if $firstBoolField }}
+//   // Delete inactive {{ lower .Model.Name }}s
+//   deleted, err := repo.Query().Where({{ .Model.Name }}s.{{ sanitizeGoName $firstBoolField }}.Eq(false)).Delete()
+{{- end }}
+{{- if $firstStringField }}
+//   // Delete {{ lower .Model.Name }}s matching criteria
+//   deleted, err := repo.Query().Where({{ .Model.Name }}s.{{ sanitizeGoName $firstStringField }}.Like("temp_%")).Delete()
+{{- end }}
 func (q *{{ .Model.Name }}Query) Delete() (int64, error) {
 	return q.Query.Delete()
 }
@@ -444,13 +690,20 @@ import (
 //   users, err := storm.Users.Query().Where(Users.IsActive.Eq(true)).Find()
 //
 // All repositories inherit these methods from the base repository:
-//   - Find(ctx, id) - Find a single record by primary key
-//   - FindAll(ctx) - Find all records
-//   - Create(ctx, model) - Create a new record
-//   - Update(ctx, model) - Update an existing record
-//   - Delete(ctx, id) - Delete a record by primary key
-//   - UpsertMany(ctx, records, options) - Bulk upsert with conflict resolution
-//   - BulkUpdate(ctx, records, options) - Update multiple records efficiently
+//
+// Single Record Operations:
+//   - Create(ctx, record) - Insert single record
+//   - FindByID(ctx, id) - Find record by primary key
+//   - Update(ctx, record) - Update single record by primary key
+//   - Delete(ctx, id) - Delete record by primary key ID
+//   - DeleteRecord(ctx, record) - Delete record using the record instance
+//
+// Batch Operations:
+//   - CreateMany(ctx, records) - Insert multiple records in transaction
+//   - UpdateMany(ctx, updates, condition) - Update multiple records with condition
+//   - BulkUpdate(ctx, records, opts) - Bulk update using CTE with VALUES
+//   - Upsert(ctx, record, opts) - Insert or update on conflict
+//   - UpsertMany(ctx, records, opts) - Batch upsert operations
 //
 // Transaction support:
 //   err := storm.WithTransaction(ctx, func(txStorm *Storm) error {
