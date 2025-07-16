@@ -182,3 +182,55 @@ func TestMigrationReverser_EdgeCases(t *testing.T) {
 		})
 	}
 }
+
+func TestMigrationReverser_DropOperations(t *testing.T) {
+	tests := []struct {
+		name     string
+		sql      string
+		expected string
+	}{
+		{
+			name:     "DROP INDEX",
+			sql:      "DROP INDEX idx_users_email",
+			expected: "-- WARNING: Cannot reverse DROP INDEX without original index definition",
+		},
+		{
+			name:     "DROP SEQUENCE",
+			sql:      "DROP SEQUENCE user_id_seq",
+			expected: "-- WARNING: Cannot reverse DROP SEQUENCE without original sequence definition",
+		},
+		{
+			name:     "DROP TYPE",
+			sql:      "DROP TYPE user_role",
+			expected: "-- WARNING: Cannot reverse DROP TYPE without original type definition",
+		},
+		{
+			name:     "DROP FUNCTION",
+			sql:      "DROP FUNCTION get_user_count()",
+			expected: "-- WARNING: Cannot reverse DROP FUNCTION without original function definition",
+		},
+		{
+			name:     "DROP TRIGGER",
+			sql:      "DROP TRIGGER update_timestamp ON users",
+			expected: "-- WARNING: Cannot reverse DROP TRIGGER without original trigger definition",
+		},
+	}
+
+	reverser := NewMigrationReverser()
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := reverser.ReverseSQL(tt.sql)
+			if err != nil {
+				t.Errorf("ReverseSQL() error = %v", err)
+			}
+
+			gotNormalized := strings.TrimSpace(got)
+			expectedNormalized := strings.TrimSpace(tt.expected)
+
+			if gotNormalized != expectedNormalized {
+				t.Errorf("ReverseSQL() mismatch:\nGot:      %s\nExpected: %s", gotNormalized, expectedNormalized)
+			}
+		})
+	}
+}

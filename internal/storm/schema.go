@@ -16,7 +16,6 @@ type SchemaInspectorImpl struct {
 	logger storm.Logger
 }
 
-// NewSchemaInspector creates a new schema inspector
 func NewSchemaInspector(db *sqlx.DB, config *storm.Config, logger storm.Logger) *SchemaInspectorImpl {
 	return &SchemaInspectorImpl{
 		db:     db,
@@ -25,7 +24,6 @@ func NewSchemaInspector(db *sqlx.DB, config *storm.Config, logger storm.Logger) 
 	}
 }
 
-// Inspect analyzes the database schema
 func (s *SchemaInspectorImpl) Inspect(ctx context.Context) (*storm.Schema, error) {
 	s.logger.Info("Inspecting database schema...")
 
@@ -42,7 +40,6 @@ func (s *SchemaInspectorImpl) Inspect(ctx context.Context) (*storm.Schema, error
 	return stormSchema, nil
 }
 
-// Compare compares two schemas and returns differences
 func (s *SchemaInspectorImpl) Compare(ctx context.Context, from, to *storm.Schema) (*storm.SchemaDiff, error) {
 	s.logger.Info("Comparing schemas...")
 
@@ -77,7 +74,6 @@ func (s *SchemaInspectorImpl) Compare(ctx context.Context, from, to *storm.Schem
 	return diff, nil
 }
 
-// ExportSQL exports the schema as SQL DDL
 func (s *SchemaInspectorImpl) ExportSQL(ctx context.Context) (string, error) {
 	s.logger.Info("Exporting schema as SQL...")
 
@@ -96,7 +92,6 @@ func (s *SchemaInspectorImpl) ExportSQL(ctx context.Context) (string, error) {
 	return string(sqlExport), nil
 }
 
-// ExportGo exports the schema as Go structs
 func (s *SchemaInspectorImpl) ExportGo(ctx context.Context) (string, error) {
 	s.logger.Info("Exporting schema as Go structs...")
 

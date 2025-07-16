@@ -130,7 +130,7 @@ func TestParsePostgreSQLError(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := ParsePostgreSQLError(tt.err, tt.op, tt.table)
+			result := parsePostgreSQLError(tt.err, tt.op, tt.table)
 
 			if tt.wantType == nil {
 				if result != nil && tt.err != nil {

@@ -8,14 +8,10 @@ import (
 // TagParser handles parsing of dbdef struct tags
 type TagParser struct{}
 
-// NewTagParser creates a new tag parser instance
 func NewTagParser() *TagParser {
 	return &TagParser{}
 }
 
-// ParseDBDefTag parses a dbdef tag string into a map of attributes
-// Format: "type:uuid;primary_key;default:gen_random_uuid();not_null"
-// Returns: map[string]string{"type": "uuid", "primary_key": "", "default": "gen_random_uuid()", "not_null": ""}
 func (p *TagParser) ParseDBDefTag(tagValue string) map[string]string {
 	attributes := make(map[string]string)
 
@@ -51,7 +47,6 @@ func (p *TagParser) ParseDBDefTag(tagValue string) map[string]string {
 	return attributes
 }
 
-// ValidateDBDefTag validates a dbdef tag for common errors
 func (p *TagParser) ValidateDBDefTag(tagValue string) error {
 	if tagValue == "" {
 		return nil
@@ -105,7 +100,6 @@ func (p *TagParser) ValidateDBDefTag(tagValue string) error {
 	return nil
 }
 
-// validateType validates PostgreSQL column types
 func (p *TagParser) validateType(typeValue string) error {
 	if typeValue == "" {
 		return fmt.Errorf("type cannot be empty")
@@ -151,7 +145,6 @@ func (p *TagParser) validateType(typeValue string) error {
 	return nil
 }
 
-// validateDefault validates default value expressions
 func (p *TagParser) validateDefault(defaultValue string) error {
 	if defaultValue == "" {
 		return fmt.Errorf("default value cannot be empty")
@@ -185,7 +178,6 @@ func (p *TagParser) validateDefault(defaultValue string) error {
 	return nil
 }
 
-// validateForeignKey validates foreign key references
 func (p *TagParser) validateForeignKey(fkValue string) error {
 	if fkValue == "" {
 		return fmt.Errorf("foreign key reference cannot be empty")
@@ -209,7 +201,6 @@ func (p *TagParser) validateForeignKey(fkValue string) error {
 	return nil
 }
 
-// validateCheck validates check constraint expressions
 func (p *TagParser) validateCheck(checkValue string) error {
 	if checkValue == "" {
 		return fmt.Errorf("check constraint cannot be empty")
@@ -266,7 +257,6 @@ func (p *TagParser) validateCheck(checkValue string) error {
 	return nil
 }
 
-// validatePrev validates previous column name hints for renames
 func (p *TagParser) validatePrev(prevValue string) error {
 	if prevValue == "" {
 		return fmt.Errorf("prev hint cannot be empty")
@@ -279,7 +269,6 @@ func (p *TagParser) validatePrev(prevValue string) error {
 	return nil
 }
 
-// validateOnDeleteUpdate validates ON DELETE/UPDATE actions
 func (p *TagParser) validateOnDeleteUpdate(action string) error {
 	validActions := []string{"CASCADE", "SET NULL", "SET DEFAULT", "RESTRICT", "NO ACTION"}
 	action = strings.ToUpper(action)
@@ -293,7 +282,6 @@ func (p *TagParser) validateOnDeleteUpdate(action string) error {
 	return fmt.Errorf("must be one of: CASCADE, SET NULL, SET DEFAULT, RESTRICT, NO ACTION")
 }
 
-// validateEnum validates enum values
 func (p *TagParser) validateEnum(enumValue string) error {
 	if enumValue == "" {
 		return fmt.Errorf("enum values cannot be empty")
@@ -324,7 +312,6 @@ func (p *TagParser) validateEnum(enumValue string) error {
 	return nil
 }
 
-// isValidEnumValue checks if a string is a valid enum value
 func isValidEnumValue(s string) bool {
 	if len(s) == 0 {
 		return false
@@ -340,7 +327,6 @@ func isValidEnumValue(s string) bool {
 	return true
 }
 
-// validateArrayType validates array element type
 func (p *TagParser) validateArrayType(arrayType string) error {
 	if arrayType == "" {
 		return fmt.Errorf("array type cannot be empty")
@@ -373,7 +359,6 @@ func (p *TagParser) validateArrayType(arrayType string) error {
 	return fmt.Errorf("unsupported array element type: %s", arrayType)
 }
 
-// isValidIdentifier checks if a string is a valid SQL identifier
 func isValidIdentifier(s string) bool {
 	if len(s) == 0 {
 		return false
@@ -395,7 +380,6 @@ func isValidIdentifier(s string) bool {
 	return true
 }
 
-// GetType extracts the PostgreSQL type from dbdef attributes
 func (p *TagParser) GetType(attributes map[string]string) string {
 	if typeVal, exists := attributes["type"]; exists {
 		return typeVal
@@ -403,13 +387,11 @@ func (p *TagParser) GetType(attributes map[string]string) string {
 	return ""
 }
 
-// HasFlag checks if a flag attribute is present
 func (p *TagParser) HasFlag(attributes map[string]string, flag string) bool {
 	_, exists := attributes[flag]
 	return exists
 }
 
-// GetDefault extracts the default value from dbdef attributes
 func (p *TagParser) GetDefault(attributes map[string]string) string {
 	if defaultVal, exists := attributes["default"]; exists {
 		return defaultVal
@@ -417,7 +399,6 @@ func (p *TagParser) GetDefault(attributes map[string]string) string {
 	return ""
 }
 
-// GetForeignKey extracts the foreign key reference from dbdef attributes
 func (p *TagParser) GetForeignKey(attributes map[string]string) string {
 	if fkVal, exists := attributes["foreign_key"]; exists {
 		return fkVal
@@ -428,7 +409,6 @@ func (p *TagParser) GetForeignKey(attributes map[string]string) string {
 	return ""
 }
 
-// GetArrayType extracts array element type from dbdef attributes
 func (p *TagParser) GetArrayType(attributes map[string]string) string {
 	if arrayType, exists := attributes["array_type"]; exists {
 		return arrayType
@@ -439,7 +419,6 @@ func (p *TagParser) GetArrayType(attributes map[string]string) string {
 	return ""
 }
 
-// GetEnum extracts enum values from dbdef attributes
 func (p *TagParser) GetEnum(attributes map[string]string) []string {
 	if enumVal, exists := attributes["enum"]; exists {
 		var values []string
@@ -454,7 +433,6 @@ func (p *TagParser) GetEnum(attributes map[string]string) []string {
 	return nil
 }
 
-// GetPrevName extracts the previous column name for rename detection
 func (p *TagParser) GetPrevName(attributes map[string]string) string {
 	if prevVal, exists := attributes["prev"]; exists {
 		return prevVal

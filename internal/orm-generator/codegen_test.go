@@ -120,11 +120,8 @@ type TestProfile struct {
 	expectedFiles := []string{
 		"columns.go",
 		"test_user_repository.go",
-		"test_user_query.go",
 		"test_post_repository.go",
-		"test_post_query.go",
 		"test_profile_repository.go",
-		"test_profile_query.go",
 		"relationships.go",
 		"storm.go",
 	}

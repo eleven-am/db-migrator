@@ -9,12 +9,10 @@ import (
 // MigrationReverser handles the reversal of migration statements
 type MigrationReverser struct{}
 
-// NewMigrationReverser creates a new instance of MigrationReverser
 func NewMigrationReverser() *MigrationReverser {
 	return &MigrationReverser{}
 }
 
-// ReverseSQL reverses a SQL statement string (exported for testing)
 func (mr *MigrationReverser) ReverseSQL(sql string) (string, error) {
 
 	normalizedSQL := strings.TrimSpace(strings.ToUpper(sql))
@@ -55,7 +53,6 @@ func (mr *MigrationReverser) ReverseSQL(sql string) (string, error) {
 	}
 }
 
-// reverseCreateTable generates DROP TABLE statement
 func (mr *MigrationReverser) reverseCreateTable(sql string) (string, error) {
 
 	re := regexp.MustCompile(`(?i)CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([^\s(]+)`)
@@ -68,13 +65,11 @@ func (mr *MigrationReverser) reverseCreateTable(sql string) (string, error) {
 	return fmt.Sprintf("DROP TABLE IF EXISTS %s CASCADE", tableName), nil
 }
 
-// reverseDropTable would need the original CREATE TABLE statement
 func (mr *MigrationReverser) reverseDropTable(sql string) (string, error) {
 
 	return "-- WARNING: Cannot reverse DROP TABLE without original schema. Backup required for restoration", nil
 }
 
-// reverseAlterTable handles various ALTER TABLE operations
 func (mr *MigrationReverser) reverseAlterTable(sql string) (string, error) {
 	normalizedSQL := strings.ToUpper(sql)
 
@@ -146,7 +141,6 @@ func (mr *MigrationReverser) reverseAlterTable(sql string) (string, error) {
 	return "", fmt.Errorf("unhandled ALTER TABLE case: %s", sql)
 }
 
-// reverseCreateIndex generates DROP INDEX statement
 func (mr *MigrationReverser) reverseCreateIndex(sql string) (string, error) {
 
 	re := regexp.MustCompile(`(?i)CREATE\s+(?:UNIQUE\s+)?INDEX\s+(?:CONCURRENTLY\s+)?(?:IF\s+NOT\s+EXISTS\s+)?([^\s]+)`)
@@ -159,12 +153,10 @@ func (mr *MigrationReverser) reverseCreateIndex(sql string) (string, error) {
 	return fmt.Sprintf("DROP INDEX IF EXISTS %s", indexName), nil
 }
 
-// reverseDropIndex would need the original CREATE INDEX statement
 func (mr *MigrationReverser) reverseDropIndex(sql string) (string, error) {
 	return "-- WARNING: Cannot reverse DROP INDEX without original index definition", nil
 }
 
-// reverseCreateSequence generates DROP SEQUENCE statement
 func (mr *MigrationReverser) reverseCreateSequence(sql string) (string, error) {
 	re := regexp.MustCompile(`(?i)CREATE\s+SEQUENCE\s+(?:IF\s+NOT\s+EXISTS\s+)?([^\s]+)`)
 	matches := re.FindStringSubmatch(sql)
@@ -176,12 +168,10 @@ func (mr *MigrationReverser) reverseCreateSequence(sql string) (string, error) {
 	return fmt.Sprintf("DROP SEQUENCE IF EXISTS %s CASCADE", sequenceName), nil
 }
 
-// reverseDropSequence would need the original CREATE SEQUENCE statement
 func (mr *MigrationReverser) reverseDropSequence(sql string) (string, error) {
 	return "-- WARNING: Cannot reverse DROP SEQUENCE without original sequence definition", nil
 }
 
-// reverseCreateType generates DROP TYPE statement
 func (mr *MigrationReverser) reverseCreateType(sql string) (string, error) {
 	re := regexp.MustCompile(`(?i)CREATE\s+TYPE\s+([^\s]+)`)
 	matches := re.FindStringSubmatch(sql)
@@ -193,12 +183,10 @@ func (mr *MigrationReverser) reverseCreateType(sql string) (string, error) {
 	return fmt.Sprintf("DROP TYPE IF EXISTS %s CASCADE", typeName), nil
 }
 
-// reverseDropType would need the original CREATE TYPE statement
 func (mr *MigrationReverser) reverseDropType(sql string) (string, error) {
 	return "-- WARNING: Cannot reverse DROP TYPE without original type definition", nil
 }
 
-// reverseCreateFunction generates DROP FUNCTION statement
 func (mr *MigrationReverser) reverseCreateFunction(sql string) (string, error) {
 
 	re := regexp.MustCompile(`(?i)CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+([^\s(]+)\s*\(([^)]*)\)`)
@@ -212,12 +200,10 @@ func (mr *MigrationReverser) reverseCreateFunction(sql string) (string, error) {
 	return fmt.Sprintf("DROP FUNCTION IF EXISTS %s CASCADE", functionName), nil
 }
 
-// reverseDropFunction would need the original CREATE FUNCTION statement
 func (mr *MigrationReverser) reverseDropFunction(sql string) (string, error) {
 	return "-- WARNING: Cannot reverse DROP FUNCTION without original function definition", nil
 }
 
-// reverseCreateTrigger generates DROP TRIGGER statement
 func (mr *MigrationReverser) reverseCreateTrigger(sql string) (string, error) {
 
 	re := regexp.MustCompile(`(?i)CREATE\s+TRIGGER\s+([^\s]+)\s+.*?\s+ON\s+([^\s]+)`)
@@ -231,7 +217,6 @@ func (mr *MigrationReverser) reverseCreateTrigger(sql string) (string, error) {
 	return fmt.Sprintf("DROP TRIGGER IF EXISTS %s ON %s", triggerName, tableName), nil
 }
 
-// reverseDropTrigger would need the original CREATE TRIGGER statement
 func (mr *MigrationReverser) reverseDropTrigger(sql string) (string, error) {
 	return "-- WARNING: Cannot reverse DROP TRIGGER without original trigger definition", nil
 }

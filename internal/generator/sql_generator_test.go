@@ -337,6 +337,132 @@ func TestSQLGenerator_GenerateCreateDatabase(t *testing.T) {
 	}
 }
 
+func TestSQLGenerator_generateEnumType(t *testing.T) {
+	gen := NewSQLGenerator()
+
+	t.Run("generates enum type", func(t *testing.T) {
+		sql := gen.generateEnumType("user_status_enum", []string{"active", "inactive", "pending"})
+
+		expected := "CREATE TYPE user_status_enum AS ENUM ('active', 'inactive', 'pending');"
+		if sql != expected {
+			t.Errorf("Expected %q, got %q", expected, sql)
+		}
+	})
+
+	t.Run("generates enum type with single value", func(t *testing.T) {
+		sql := gen.generateEnumType("single_enum", []string{"only"})
+
+		expected := "CREATE TYPE single_enum AS ENUM ('only');"
+		if sql != expected {
+			t.Errorf("Expected %q, got %q", expected, sql)
+		}
+	})
+
+	t.Run("generates enum type with empty values", func(t *testing.T) {
+		sql := gen.generateEnumType("empty_enum", []string{})
+
+		expected := "CREATE TYPE empty_enum AS ENUM ();"
+		if sql != expected {
+			t.Errorf("Expected %q, got %q", expected, sql)
+		}
+	})
+}
+
+func TestSQLGenerator_GenerateSchema_WithEnums(t *testing.T) {
+	gen := NewSQLGenerator()
+
+	schema := DatabaseSchema{
+		Tables: map[string]SchemaTable{
+			"users": {
+				Name: "users",
+				Columns: []SchemaColumn{
+					{
+						Name:         "id",
+						Type:         "SERIAL",
+						IsPrimaryKey: true,
+					},
+					{
+						Name: "status",
+						Type: "user_status_enum",
+					},
+				},
+			},
+		},
+		EnumTypes: map[string][]string{
+			"user_status_enum": {"active", "inactive", "pending"},
+		},
+	}
+
+	sql := gen.GenerateSchema(&schema)
+
+	if !strings.Contains(sql, "CREATE TYPE user_status_enum AS ENUM") {
+		t.Error("SQL should contain enum type creation")
+	}
+	if !strings.Contains(sql, "'active', 'inactive', 'pending'") {
+		t.Error("SQL should contain enum values")
+	}
+}
+
+func TestSQLGenerator_GenerateSchema_WithCUIDs(t *testing.T) {
+	gen := NewSQLGenerator()
+
+	schema := DatabaseSchema{
+		Tables: map[string]SchemaTable{
+			"users": {
+				Name: "users",
+				Columns: []SchemaColumn{
+					{
+						Name:         "id",
+						Type:         "CHAR(25)",
+						IsPrimaryKey: true,
+						DefaultValue: strPtr("gen_cuid()"),
+					},
+				},
+			},
+		},
+	}
+
+	sql := gen.GenerateSchema(&schema)
+
+	if !strings.Contains(sql, "CREATE OR REPLACE FUNCTION gen_cuid()") {
+		t.Error("SQL should contain CUID generation function")
+	}
+	if !strings.Contains(sql, "CREATE SEQUENCE IF NOT EXISTS cuid_counter_seq") {
+		t.Error("SQL should contain CUID counter sequence")
+	}
+	if !strings.Contains(sql, "CREATE OR REPLACE FUNCTION to_base36") {
+		t.Error("SQL should contain base36 function")
+	}
+}
+
+func TestSQLGenerator_GenerateSchema_Extensions(t *testing.T) {
+	gen := NewSQLGenerator()
+
+	schema := DatabaseSchema{
+		Tables: map[string]SchemaTable{
+			"users": {
+				Name: "users",
+				Columns: []SchemaColumn{
+					{
+						Name:         "id",
+						Type:         "UUID",
+						IsPrimaryKey: true,
+					},
+				},
+			},
+		},
+	}
+
+	sql := gen.GenerateSchema(&schema)
+
+	if !strings.Contains(sql, "CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\"") {
+		t.Error("SQL should contain uuid-ossp extension")
+	}
+	if !strings.Contains(sql, "CREATE EXTENSION IF NOT EXISTS \"pgcrypto\"") {
+		t.Error("SQL should contain pgcrypto extension")
+	}
+}
+
 // Helper function
 func strPtr(s string) *string {
 	return &s

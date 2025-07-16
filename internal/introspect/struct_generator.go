@@ -11,20 +11,18 @@ type StructGenerator struct {
 	schema       *DatabaseSchema
 	packageName  string
 	useDBTags    bool
-	useDBDefTags bool
+	useStormTags bool
 }
 
-// NewStructGenerator creates a new struct generator
 func NewStructGenerator(schema *DatabaseSchema, packageName string) *StructGenerator {
 	return &StructGenerator{
 		schema:       schema,
 		packageName:  packageName,
 		useDBTags:    true,
-		useDBDefTags: true,
+		useStormTags: true,
 	}
 }
 
-// GenerateStructs generates Go structs for all tables in the schema
 func (g *StructGenerator) GenerateStructs() (string, error) {
 	var b strings.Builder
 
@@ -76,7 +74,6 @@ func (g *StructGenerator) GenerateStructs() (string, error) {
 	return b.String(), nil
 }
 
-// generateTableStruct generates a Go struct for a single table
 func (g *StructGenerator) generateTableStruct(table *TableSchema) (string, error) {
 	var b strings.Builder
 
@@ -126,7 +123,7 @@ func (g *StructGenerator) generateTableStruct(table *TableSchema) (string, error
 	}
 
 	if len(tableDefParts) > 1 {
-		b.WriteString(fmt.Sprintf("\t_ struct{} `dbdef:\"%s\"`\n", strings.Join(tableDefParts, ";")))
+		b.WriteString(fmt.Sprintf("\t_ struct{} `storm:\"%s\"`\n", strings.Join(tableDefParts, ";")))
 		b.WriteString("\t\n")
 	}
 
@@ -138,12 +135,77 @@ func (g *StructGenerator) generateTableStruct(table *TableSchema) (string, error
 		b.WriteString(fieldDef)
 	}
 
+	relationshipFields, err := g.generateRelationshipFields(table)
+	if err != nil {
+		return "", fmt.Errorf("failed to generate relationship fields: %w", err)
+	}
+	b.WriteString(relationshipFields)
+
 	b.WriteString("}\n")
 
 	return b.String(), nil
 }
 
-// generateField generates a field definition for a column
+func (g *StructGenerator) generateRelationshipFields(table *TableSchema) (string, error) {
+	var b strings.Builder
+
+	for _, fk := range table.ForeignKeys {
+		if len(fk.Columns) == 1 {
+			relationshipField, err := g.generateBelongsToRelationship(fk, table)
+			if err != nil {
+				return "", fmt.Errorf("failed to generate belongs_to relationship for %s: %w", fk.Name, err)
+			}
+			b.WriteString(relationshipField)
+		}
+	}
+
+	for _, otherTable := range g.schema.Tables {
+		if otherTable.Name == table.Name {
+			continue
+		}
+		for _, fk := range otherTable.ForeignKeys {
+			if len(fk.Columns) == 1 && fk.ReferencedTable == table.Name {
+				relationshipField, err := g.generateHasManyRelationship(fk, table, otherTable)
+				if err != nil {
+					return "", fmt.Errorf("failed to generate has_many relationship for %s: %w", fk.Name, err)
+				}
+				b.WriteString(relationshipField)
+			}
+		}
+	}
+
+	return b.String(), nil
+}
+
+func (g *StructGenerator) generateBelongsToRelationship(fk *ForeignKeySchema, table *TableSchema) (string, error) {
+	var b strings.Builder
+
+	fieldName := toCamelCase(fk.Columns[0])
+	if strings.HasSuffix(fieldName, "Id") {
+		fieldName = fieldName[:len(fieldName)-2]
+	}
+
+	targetStructName := structNameFromTable(fk.ReferencedTable)
+
+	b.WriteString(fmt.Sprintf("\t%s *%s `storm:\"relation:belongs_to:%s;foreign_key:%s;target_key:%s\"`\n",
+		fieldName, targetStructName, targetStructName, fk.Columns[0], fk.ReferencedColumns[0]))
+
+	return b.String(), nil
+}
+
+func (g *StructGenerator) generateHasManyRelationship(fk *ForeignKeySchema, currentTable *TableSchema, otherTable *TableSchema) (string, error) {
+	var b strings.Builder
+
+	fieldName := pluralize(structNameFromTable(otherTable.Name))
+
+	targetStructName := structNameFromTable(otherTable.Name)
+
+	b.WriteString(fmt.Sprintf("\t%s []%s `storm:\"relation:has_many:%s;foreign_key:%s;source_key:%s\"`\n",
+		fieldName, targetStructName, targetStructName, fk.Columns[0], fk.ReferencedColumns[0]))
+
+	return b.String(), nil
+}
+
 func (g *StructGenerator) generateField(col *ColumnSchema, table *TableSchema) (string, error) {
 	var b strings.Builder
 
@@ -166,10 +228,10 @@ func (g *StructGenerator) generateField(col *ColumnSchema, table *TableSchema) (
 		tags = append(tags, fmt.Sprintf(`db:"%s"`, col.Name))
 	}
 
-	if g.useDBDefTags {
-		dbdefParts := g.buildDBDefTag(col, table)
-		if len(dbdefParts) > 0 {
-			tags = append(tags, fmt.Sprintf(`dbdef:"%s"`, strings.Join(dbdefParts, ";")))
+	if g.useStormTags {
+		stormParts := g.buildStormTag(col, table)
+		if len(stormParts) > 0 {
+			tags = append(tags, fmt.Sprintf(`storm:"%s"`, strings.Join(stormParts, ";")))
 		}
 	}
 
@@ -182,9 +244,10 @@ func (g *StructGenerator) generateField(col *ColumnSchema, table *TableSchema) (
 	return b.String(), nil
 }
 
-// buildDBDefTag builds the dbdef tag for a column
-func (g *StructGenerator) buildDBDefTag(col *ColumnSchema, table *TableSchema) []string {
+func (g *StructGenerator) buildStormTag(col *ColumnSchema, table *TableSchema) []string {
 	var parts []string
+
+	parts = append(parts, fmt.Sprintf("column:%s", col.Name))
 
 	dbType := g.getDBType(col)
 	parts = append(parts, fmt.Sprintf("type:%s", dbType))
@@ -235,7 +298,6 @@ func (g *StructGenerator) buildDBDefTag(col *ColumnSchema, table *TableSchema) [
 	return parts
 }
 
-// getDBType converts PostgreSQL column info to dbdef type
 func (g *StructGenerator) getDBType(col *ColumnSchema) string {
 
 	if col.DataType == "USER-DEFINED" && col.UDTName != "" {
@@ -306,7 +368,6 @@ func (g *StructGenerator) getDBType(col *ColumnSchema) string {
 	}
 }
 
-// postgresTypeToGoType converts PostgreSQL type to Go type
 func postgresTypeToGoType(dataType, udtName string, isNullable bool) (string, error) {
 	var goType string
 
@@ -468,7 +529,6 @@ func (g *StructGenerator) collectImports() []string {
 	return result
 }
 
-// generateEnumType generates a Go type for an enum
 func (g *StructGenerator) generateEnumType(name string, enum *EnumSchema) string {
 	var b strings.Builder
 
@@ -490,4 +550,20 @@ func (g *StructGenerator) generateEnumType(name string, enum *EnumSchema) string
 	b.WriteString(")\n")
 
 	return b.String()
+}
+
+func pluralize(s string) string {
+	lower := strings.ToLower(s)
+	if lower == "category" {
+		return s[:len(s)-1] + "ies"
+	}
+
+	if strings.HasSuffix(s, "y") && !strings.HasSuffix(s, "ey") {
+		return s[:len(s)-1] + "ies"
+	}
+	if strings.HasSuffix(s, "s") || strings.HasSuffix(s, "sh") ||
+		strings.HasSuffix(s, "ch") || strings.HasSuffix(s, "x") {
+		return s + "es"
+	}
+	return s + "s"
 }

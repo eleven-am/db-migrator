@@ -8,12 +8,10 @@ import (
 // SQLGenerator generates SQL DDL from database schema
 type SQLGenerator struct{}
 
-// NewSQLGenerator creates a new SQL generator
 func NewSQLGenerator() *SQLGenerator {
 	return &SQLGenerator{}
 }
 
-// GenerateCreateTable generates CREATE TABLE SQL for a schema table
 func (g *SQLGenerator) GenerateCreateTable(table SchemaTable) string {
 	var sql strings.Builder
 
@@ -62,7 +60,6 @@ func (g *SQLGenerator) GenerateCreateTable(table SchemaTable) string {
 	return sql.String()
 }
 
-// generateColumnDDL generates column definition SQL
 func (g *SQLGenerator) generateColumnDDL(col SchemaColumn) string {
 	var parts []string
 
@@ -99,7 +96,6 @@ func (g *SQLGenerator) generateColumnDDL(col SchemaColumn) string {
 	return strings.Join(parts, " ")
 }
 
-// GenerateIndexDDL generates CREATE INDEX SQL
 func (g *SQLGenerator) GenerateIndexDDL(tableName string, idx SchemaIndex) string {
 	var sql strings.Builder
 
@@ -132,7 +128,6 @@ func (g *SQLGenerator) GenerateIndexDDL(tableName string, idx SchemaIndex) strin
 	return sql.String()
 }
 
-// isImplicitIndex checks if an index is created implicitly by constraints
 func (g *SQLGenerator) isImplicitIndex(idx SchemaIndex, table SchemaTable) bool {
 	if idx.IsPrimary {
 		return true
@@ -149,7 +144,6 @@ func (g *SQLGenerator) isImplicitIndex(idx SchemaIndex, table SchemaTable) bool 
 	return false
 }
 
-// generateEnumType generates CREATE TYPE for enum
 func (g *SQLGenerator) generateEnumType(typeName string, values []string) string {
 	var sql strings.Builder
 
@@ -168,7 +162,6 @@ func (g *SQLGenerator) generateEnumType(typeName string, values []string) string
 	return sql.String()
 }
 
-// GenerateSchema generates CREATE statements for entire schema
 func (g *SQLGenerator) GenerateSchema(schema *DatabaseSchema) string {
 	var sql strings.Builder
 
@@ -255,7 +248,6 @@ func (g *SQLGenerator) GenerateSchema(schema *DatabaseSchema) string {
 	return sql.String()
 }
 
-// schemaUsesCUIDs checks if any table in the schema uses CUID type
 func (g *SQLGenerator) schemaUsesCUIDs(schema *DatabaseSchema) bool {
 	for _, table := range schema.Tables {
 		for _, col := range table.Columns {

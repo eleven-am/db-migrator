@@ -33,14 +33,12 @@ type ModelValidator struct {
 	tagParser *ORMTagParser
 }
 
-// NewModelValidator creates a new model validator
 func NewModelValidator() *ModelValidator {
 	return &ModelValidator{
 		tagParser: NewORMTagParser(),
 	}
 }
 
-// ValidateModel validates a single model struct
 func (v *ModelValidator) ValidateModel(modelType reflect.Type) ValidationResult {
 	result := ValidationResult{Valid: true}
 
@@ -77,7 +75,6 @@ func (v *ModelValidator) ValidateModel(modelType reflect.Type) ValidationResult 
 	return result
 }
 
-// ValidateModels validates multiple models and their relationships
 func (v *ModelValidator) ValidateModels(models map[string]reflect.Type) ValidationResult {
 	result := ValidationResult{Valid: true}
 
@@ -98,7 +95,6 @@ func (v *ModelValidator) ValidateModels(models map[string]reflect.Type) Validati
 	return result
 }
 
-// hasPrimaryKey checks if model has a primary key field
 func (v *ModelValidator) hasPrimaryKey(modelType reflect.Type) bool {
 	for i := 0; i < modelType.NumField(); i++ {
 		field := modelType.Field(i)
@@ -114,7 +110,6 @@ func (v *ModelValidator) hasPrimaryKey(modelType reflect.Type) bool {
 	return false
 }
 
-// validateField validates a single struct field
 func (v *ModelValidator) validateField(typeName string, field reflect.StructField) []ModelValidationError {
 	var errors []ModelValidationError
 
@@ -158,7 +153,6 @@ func (v *ModelValidator) validateField(typeName string, field reflect.StructFiel
 	return errors
 }
 
-// validateDbdefTag validates dbdef tag syntax
 func (v *ModelValidator) validateDbdefTag(tag string) error {
 	parts := strings.Split(tag, ",")
 	for _, part := range parts {
@@ -183,7 +177,6 @@ func (v *ModelValidator) validateDbdefTag(tag string) error {
 	return nil
 }
 
-// validateFieldType checks if field type is supported
 func (v *ModelValidator) validateFieldType(fieldType reflect.Type) error {
 	if fieldType.Kind() == reflect.Ptr {
 		fieldType = fieldType.Elem()
@@ -219,7 +212,6 @@ func (v *ModelValidator) validateFieldType(fieldType reflect.Type) error {
 	return nil
 }
 
-// validateRelationships validates relationships between models
 func (v *ModelValidator) validateRelationships(models map[string]reflect.Type) []ModelValidationError {
 	var errors []ModelValidationError
 
@@ -287,7 +279,6 @@ func (v *ModelValidator) validateRelationships(models map[string]reflect.Type) [
 	return errors
 }
 
-// hasField checks if a struct has a field with the given name
 func (v *ModelValidator) hasField(structType reflect.Type, fieldName string) bool {
 	for i := 0; i < structType.NumField(); i++ {
 		field := structType.Field(i)
@@ -299,7 +290,6 @@ func (v *ModelValidator) hasField(structType reflect.Type, fieldName string) boo
 	return false
 }
 
-// ValidateModelsFromDirectory auto-discovers and validates models using the migrator's proven parser
 func ValidateModelsFromDirectory(packagePath string) ValidationResult {
 	structParser := parser.NewStructParser()
 	tables, err := structParser.ParseDirectory(packagePath)
@@ -379,7 +369,6 @@ func ValidateModelsFromDirectory(packagePath string) ValidationResult {
 	return result
 }
 
-// validateTableDefinition validates a parser.TableDefinition
 func (v *ModelValidator) validateTableDefinition(table parser.TableDefinition) []ModelValidationError {
 	var errors []ModelValidationError
 
@@ -406,7 +395,6 @@ func (v *ModelValidator) validateTableDefinition(table parser.TableDefinition) [
 	return errors
 }
 
-// validateTableField validates a field from parser.FieldDefinition
 func (v *ModelValidator) validateTableField(typeName string, field parser.FieldDefinition) []ModelValidationError {
 	var errors []ModelValidationError
 
@@ -431,7 +419,6 @@ func (v *ModelValidator) validateTableField(typeName string, field parser.FieldD
 	return errors
 }
 
-// deriveTableName derives table name from struct name
 func deriveTableName(structName string) string {
 	var result strings.Builder
 
@@ -454,7 +441,6 @@ func deriveTableName(structName string) string {
 	return snake + "s"
 }
 
-// isValidTableName checks if table name follows valid conventions
 func isValidTableName(tableName string) bool {
 	if tableName == "" {
 		return false

@@ -11,7 +11,6 @@ import (
 	"ariga.io/atlas/sql/schema"
 )
 
-// GenerateAtlasSQL generates SQL from Atlas changes using the PlanChanges method
 func GenerateAtlasSQL(ctx context.Context, driver migrate.Driver, changes []schema.Change) ([]string, error) {
 
 	plan, err := driver.PlanChanges(ctx, "", changes)
@@ -36,7 +35,6 @@ type SimplifiedAtlasMigrator struct {
 	tempDBManager *TempDBManager
 }
 
-// NewSimplifiedAtlasMigrator creates a new simplified Atlas migrator
 func NewSimplifiedAtlasMigrator(config *DBConfig) *SimplifiedAtlasMigrator {
 	return &SimplifiedAtlasMigrator{
 		config:        config,
@@ -44,7 +42,6 @@ func NewSimplifiedAtlasMigrator(config *DBConfig) *SimplifiedAtlasMigrator {
 	}
 }
 
-// GenerateMigrationSimple generates migration using Atlas's Plan method
 func (m *SimplifiedAtlasMigrator) GenerateMigrationSimple(ctx context.Context, sourceDB *sql.DB, targetDDL string) (upSQL []string, changes []schema.Change, err error) {
 
 	sourceDriver, err := postgres.Open(sourceDB)
@@ -95,7 +92,6 @@ func (m *SimplifiedAtlasMigrator) GenerateMigrationSimple(ctx context.Context, s
 	return upSQL, changes, nil
 }
 
-// IsDestructiveChange checks if a change is potentially destructive
 func IsDestructiveChange(change schema.Change) bool {
 	switch change.(type) {
 	case *schema.DropTable, *schema.DropColumn, *schema.DropIndex, *schema.DropForeignKey:
@@ -112,7 +108,6 @@ func IsDestructiveChange(change schema.Change) bool {
 	return false
 }
 
-// DescribeChange returns a human-readable description of a change
 func DescribeChange(change schema.Change) string {
 	switch c := change.(type) {
 	case *schema.AddTable:
@@ -140,7 +135,6 @@ func DescribeChange(change schema.Change) string {
 	}
 }
 
-// CountDestructiveChanges counts destructive operations in a change list
 func CountDestructiveChanges(changes []schema.Change) (count int, descriptions []string) {
 	for _, change := range changes {
 		if IsDestructiveChange(change) {

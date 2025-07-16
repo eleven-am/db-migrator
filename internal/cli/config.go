@@ -41,7 +41,6 @@ type StormConfig struct {
 	} `yaml:"schema"`
 }
 
-// LoadStormConfig loads configuration from storm.yaml file
 func LoadStormConfig(path string) (*StormConfig, error) {
 	if path == "" {
 		locations := []string{"storm.yaml", "storm.yml", ".storm.yaml", ".storm.yml"}
@@ -88,7 +87,6 @@ func LoadStormConfig(path string) (*StormConfig, error) {
 	return &config, nil
 }
 
-// GetConfigPath returns the path to the config file
 func GetConfigPath() string {
 	if path := os.Getenv("STORM_CONFIG"); path != "" {
 		return path
@@ -104,7 +102,6 @@ func GetConfigPath() string {
 	return ""
 }
 
-// SaveStormConfig saves the configuration to a file
 func SaveStormConfig(config *StormConfig, path string) error {
 	if path == "" {
 		path = "storm.yaml"

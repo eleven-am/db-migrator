@@ -145,3 +145,40 @@ func getDBConfig() (interface{}, error) {
 
 	return struct{}{}, nil
 }
+
+func TestRunMigrate_BasicValidation(t *testing.T) {
+	// Save original values
+	oldDBURL := dbURL
+	oldDBUser := dbUser
+	oldDBName := dbName
+
+	defer func() {
+		dbURL = oldDBURL
+		dbUser = oldDBUser
+		dbName = oldDBName
+	}()
+
+	// Test missing credentials
+	dbURL = ""
+	dbUser = ""
+	dbName = ""
+
+	err := runMigrate(migrateCmd, []string{})
+	if err == nil {
+		t.Error("Expected error for missing DB credentials")
+	}
+
+	// Test with URL
+	dbURL = "postgres://test:test@localhost/test"
+	err = runMigrate(migrateCmd, []string{})
+	// Will fail to connect but that's expected
+	_ = err
+
+	// Test with individual params
+	dbURL = ""
+	dbUser = "testuser"
+	dbName = "testdb"
+	err = runMigrate(migrateCmd, []string{})
+	// Will fail to connect but that's expected
+	_ = err
+}

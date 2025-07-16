@@ -39,7 +39,23 @@ go get github.com/eleven-am/storm
 
 ## Quick Start
 
-### 1. Initialize your project
+### Starting from Existing Database (Database-First)
+
+If you have an existing PostgreSQL database, Storm can generate a complete ORM from it:
+
+```bash
+# Generate complete ORM from your database
+storm introspect --database="postgres://user:pass@localhost/mydb" --output=./models
+
+# Use the generated ORM immediately
+# import "./models"
+# storm := models.NewStorm(db)
+# users, err := storm.Users.Query().Find()
+```
+
+### Starting from Go Structs (Code-First)
+
+#### 1. Initialize your project
 
 ```bash
 storm init
@@ -47,7 +63,7 @@ storm init
 
 This creates a `storm.yaml` configuration file with sensible defaults.
 
-### 2. Define your models
+#### 2. Define your models
 
 ```go
 package models
@@ -83,7 +99,7 @@ type Post struct {
 }
 ```
 
-### 3. Generate migrations
+#### 3. Generate migrations
 
 ```bash
 # Generate migration by comparing structs with database
@@ -93,7 +109,7 @@ storm migrate
 storm migrate --push
 ```
 
-### 4. Generate ORM code
+#### 4. Generate ORM code
 
 ```bash
 storm orm
@@ -105,7 +121,7 @@ This generates:
 - Column constants
 - Relationship loaders
 
-### 5. Use the generated ORM
+#### 5. Use the generated ORM
 
 ```go
 package main

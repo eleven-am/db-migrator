@@ -189,6 +189,111 @@ func TestSortedTables(t *testing.T) {
 	}
 }
 
+func TestExportSQL_WithViews(t *testing.T) {
+	schema := createTestSchema()
+	// Add a view to test views export
+	schema.Views["user_view"] = &ViewSchema{
+		Name:       "user_view",
+		Schema:     "public",
+		Definition: "SELECT id, email FROM users WHERE active = true",
+	}
+
+	inspector := &Inspector{}
+	output, err := inspector.ExportSchema(schema, ExportFormatSQL)
+	if err != nil {
+		t.Fatalf("Failed to export SQL with views: %v", err)
+	}
+
+	outputStr := string(output)
+	if !strings.Contains(outputStr, "CREATE VIEW user_view") {
+		t.Error("Expected SQL to contain view creation")
+	}
+}
+
+func TestExportSQL_WithSequences(t *testing.T) {
+	schema := createTestSchema()
+	// Add a sequence to test sequences export
+	schema.Sequences["users_id_seq"] = &SequenceSchema{
+		Name:        "users_id_seq",
+		Schema:      "public",
+		DataType:    "bigint",
+		StartValue:  1,
+		MinValue:    1,
+		MaxValue:    9223372036854775807,
+		Increment:   1,
+		CycleOption: false,
+		OwnedBy:     "users.id",
+	}
+
+	inspector := &Inspector{}
+	output, err := inspector.ExportSchema(schema, ExportFormatSQL)
+	if err != nil {
+		t.Fatalf("Failed to export SQL with sequences: %v", err)
+	}
+
+	outputStr := string(output)
+	if !strings.Contains(outputStr, "CREATE SEQUENCE users_id_seq") {
+		t.Error("Expected SQL to contain sequence creation")
+	}
+}
+
+func TestExportSQL_WithFunctions(t *testing.T) {
+	schema := createTestSchema()
+	// Add a function to test functions export
+	schema.Functions["test_func"] = &FunctionSchema{
+		Name:       "test_func",
+		Schema:     "public",
+		ReturnType: "integer",
+		Arguments: []FunctionArgument{
+			{
+				Name:     "input_val",
+				DataType: "integer",
+				Mode:     "IN",
+			},
+		},
+		Language:   "plpgsql",
+		Definition: "BEGIN RETURN input_val * 2; END;",
+		IsVolatile: false,
+	}
+
+	inspector := &Inspector{}
+	output, err := inspector.ExportSchema(schema, ExportFormatSQL)
+	if err != nil {
+		t.Fatalf("Failed to export SQL with functions: %v", err)
+	}
+
+	outputStr := string(output)
+	if !strings.Contains(outputStr, "CREATE FUNCTION test_func") {
+		t.Error("Expected SQL to contain function creation")
+	}
+}
+
+func TestExportMarkdown_EmptySchema(t *testing.T) {
+	schema := &DatabaseSchema{
+		Name:      "empty_db",
+		Tables:    map[string]*TableSchema{},
+		Enums:     map[string]*EnumSchema{},
+		Views:     map[string]*ViewSchema{},
+		Functions: map[string]*FunctionSchema{},
+		Sequences: map[string]*SequenceSchema{},
+		Metadata:  DatabaseMetadata{},
+	}
+
+	inspector := &Inspector{}
+	output, err := inspector.ExportSchema(schema, ExportFormatMarkdown)
+	if err != nil {
+		t.Fatalf("Failed to export empty schema: %v", err)
+	}
+
+	outputStr := string(output)
+	if !strings.Contains(outputStr, "# Database Schema: empty_db") {
+		t.Error("Expected markdown to contain database header")
+	}
+	if !strings.Contains(outputStr, "No tables found") {
+		t.Error("Expected markdown to indicate no tables")
+	}
+}
+
 // Helper function to create test schema
 func createTestSchema() *DatabaseSchema {
 	return &DatabaseSchema{

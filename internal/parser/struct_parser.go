@@ -19,9 +19,10 @@ type FieldDefinition struct {
 	IsArray   bool
 	DBDef     map[string]string
 	DBTag     string
-	DBDefTag  string
+	DBDefTag  string // Deprecated: use StormTag instead
 	JSONTag   string
-	ORMTag    string
+	ORMTag    string // Deprecated: use StormTag instead
+	StormTag  string // New unified tag
 }
 
 // TableDefinition represents a complete table structure
@@ -34,19 +35,19 @@ type TableDefinition struct {
 
 // StructParser handles parsing Go struct definitions
 type StructParser struct {
-	fileSet   *token.FileSet
-	tagParser *TagParser
+	fileSet        *token.FileSet
+	tagParser      *TagParser
+	stormTagParser *StormTagParser
 }
 
-// NewStructParser creates a new struct parser instance
 func NewStructParser() *StructParser {
 	return &StructParser{
-		fileSet:   token.NewFileSet(),
-		tagParser: NewTagParser(),
+		fileSet:        token.NewFileSet(),
+		tagParser:      NewTagParser(),
+		stormTagParser: NewStormTagParser(),
 	}
 }
 
-// ParseDirectory scans a directory for Go files and extracts struct definitions
 func (p *StructParser) ParseDirectory(dir string) ([]TableDefinition, error) {
 	pattern := filepath.Join(dir, "*.go")
 	matches, err := filepath.Glob(pattern)
@@ -72,7 +73,6 @@ func (p *StructParser) ParseDirectory(dir string) ([]TableDefinition, error) {
 	return allTables, nil
 }
 
-// ParseFile parses a single Go file for struct definitions
 func (p *StructParser) ParseFile(filename string) ([]TableDefinition, error) {
 	src, err := parser.ParseFile(p.fileSet, filename, nil, parser.ParseComments)
 	if err != nil {
@@ -102,7 +102,6 @@ func (p *StructParser) ParseFile(filename string) ([]TableDefinition, error) {
 	return tables, nil
 }
 
-// parseStruct converts an AST struct type to a TableDefinition
 func (p *StructParser) parseStruct(structName string, structType *ast.StructType) (TableDefinition, error) {
 	table := TableDefinition{
 		StructName: structName,
@@ -131,7 +130,6 @@ func (p *StructParser) parseStruct(structName string, structType *ast.StructType
 	return table, nil
 }
 
-// parseField converts an AST field to FieldDefinition(s)
 func (p *StructParser) parseField(field *ast.Field) ([]FieldDefinition, map[string]string, error) {
 	var fields []FieldDefinition
 	tableLevelAttrs := make(map[string]string)
@@ -139,11 +137,22 @@ func (p *StructParser) parseField(field *ast.Field) ([]FieldDefinition, map[stri
 	if len(field.Names) == 0 {
 		if field.Tag != nil {
 			tagValue := strings.Trim(field.Tag.Value, "`")
-			dbdefTag := p.extractTag(tagValue, "dbdef")
-			if dbdefTag != "" {
-				attrs := p.tagParser.ParseDBDefTag(dbdefTag)
-				for k, v := range attrs {
-					tableLevelAttrs[k] = v
+			stormTag := p.extractTag(tagValue, "storm")
+			if stormTag != "" {
+				parsed, err := p.stormTagParser.ParseStormTag(stormTag, false)
+				if err == nil {
+					attrs := parsed.ToTableLevelAttributes()
+					for k, v := range attrs {
+						tableLevelAttrs[k] = v
+					}
+				}
+			} else {
+				dbdefTag := p.extractTag(tagValue, "dbdef")
+				if dbdefTag != "" {
+					attrs := p.tagParser.ParseDBDefTag(dbdefTag)
+					for k, v := range attrs {
+						tableLevelAttrs[k] = v
+					}
 				}
 			}
 		}
@@ -157,11 +166,22 @@ func (p *StructParser) parseField(field *ast.Field) ([]FieldDefinition, map[stri
 
 		if name.Name == "_" && field.Tag != nil {
 			tagValue := strings.Trim(field.Tag.Value, "`")
-			dbdefTag := p.extractTag(tagValue, "dbdef")
-			if dbdefTag != "" {
-				attrs := p.tagParser.ParseDBDefTag(dbdefTag)
-				for k, v := range attrs {
-					tableLevelAttrs[k] = v
+			stormTag := p.extractTag(tagValue, "storm")
+			if stormTag != "" {
+				parsed, err := p.stormTagParser.ParseStormTag(stormTag, false)
+				if err == nil {
+					attrs := parsed.ToTableLevelAttributes()
+					for k, v := range attrs {
+						tableLevelAttrs[k] = v
+					}
+				}
+			} else {
+				dbdefTag := p.extractTag(tagValue, "dbdef")
+				if dbdefTag != "" {
+					attrs := p.tagParser.ParseDBDefTag(dbdefTag)
+					for k, v := range attrs {
+						tableLevelAttrs[k] = v
+					}
 				}
 			}
 			continue
@@ -183,14 +203,31 @@ func (p *StructParser) parseField(field *ast.Field) ([]FieldDefinition, map[stri
 			fieldDef.DBDefTag = p.extractTag(tagValue, "dbdef")
 			fieldDef.JSONTag = p.extractTag(tagValue, "json")
 			fieldDef.ORMTag = p.extractTag(tagValue, "orm")
+			fieldDef.StormTag = p.extractTag(tagValue, "storm")
 
 			if fieldDef.DBTag != "" {
 				fieldDef.DBName = fieldDef.DBTag
+			} else if fieldDef.StormTag != "" {
+				isRelationshipField := fieldDef.IsArray || fieldDef.IsPointer
+				parsed, err := p.stormTagParser.ParseStormTag(fieldDef.StormTag, isRelationshipField)
+				if err == nil && parsed.Column != "" {
+					fieldDef.DBName = parsed.Column
+				} else {
+					fieldDef.DBName = p.toSnakeCase(fieldDef.Name)
+				}
 			} else {
 				fieldDef.DBName = p.toSnakeCase(fieldDef.Name)
 			}
 
-			if fieldDef.DBDefTag != "" {
+			if fieldDef.StormTag != "" {
+				isRelationshipField := fieldDef.IsArray || fieldDef.IsPointer
+				parsed, err := p.stormTagParser.ParseStormTag(fieldDef.StormTag, isRelationshipField)
+				if err == nil && !parsed.IsRelationship {
+					fieldDef.DBDef = parsed.ToDBDefAttributes()
+				} else {
+					fieldDef.DBDef = make(map[string]string)
+				}
+			} else if fieldDef.DBDefTag != "" {
 				fieldDef.DBDef = p.tagParser.ParseDBDefTag(fieldDef.DBDefTag)
 			} else {
 				fieldDef.DBDef = make(map[string]string)
@@ -206,7 +243,6 @@ func (p *StructParser) parseField(field *ast.Field) ([]FieldDefinition, map[stri
 	return fields, tableLevelAttrs, nil
 }
 
-// parseFieldType extracts type information from an AST type expression
 func (p *StructParser) parseFieldType(expr ast.Expr) (string, bool, bool) {
 	switch t := expr.(type) {
 	case *ast.Ident:
@@ -232,17 +268,15 @@ func (p *StructParser) parseFieldType(expr ast.Expr) (string, bool, bool) {
 	return "", false, false
 }
 
-// extractTag extracts a specific tag value from a struct tag string
 func (p *StructParser) extractTag(tagString, tagName string) string {
 	tag := reflect.StructTag(tagString)
 	return tag.Get(tagName)
 }
 
-// isDatabaseStruct determines if a struct represents a database entity
 func (p *StructParser) isDatabaseStruct(table TableDefinition) bool {
 
 	for _, field := range table.Fields {
-		if field.DBTag != "" || field.DBDefTag != "" {
+		if field.DBTag != "" || field.DBDefTag != "" || field.StormTag != "" {
 			return true
 		}
 	}
@@ -254,7 +288,6 @@ func (p *StructParser) isDatabaseStruct(table TableDefinition) bool {
 	return false
 }
 
-// deriveTableName converts a struct name to a table name using conventions
 func (p *StructParser) deriveTableName(structName string) string {
 
 	snake := p.toSnakeCase(structName)
@@ -292,7 +325,6 @@ func (p *StructParser) deriveTableName(structName string) string {
 	return snake + "s"
 }
 
-// toSnakeCase converts PascalCase to snake_case
 func (p *StructParser) toSnakeCase(s string) string {
 
 	edgeCases := map[string]string{
@@ -345,7 +377,6 @@ func (p *StructParser) toSnakeCase(s string) string {
 	return result.String()
 }
 
-// isOrdinalSuffix checks if the string starts with an ordinal suffix like "st", "nd", "rd", "th"
 func isOrdinalSuffix(s string) bool {
 	if len(s) < 2 {
 		return false

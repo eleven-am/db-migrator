@@ -67,14 +67,12 @@ type SchemaGenerator struct {
 	tagParser *parser2.TagParser
 }
 
-// NewSchemaGenerator creates a new schema generator
 func NewSchemaGenerator() *SchemaGenerator {
 	return &SchemaGenerator{
 		tagParser: parser2.NewTagParser(),
 	}
 }
 
-// GenerateSchema converts table definitions to database schema
 func (g *SchemaGenerator) GenerateSchema(tables []parser2.TableDefinition) (*DatabaseSchema, error) {
 	schema := &DatabaseSchema{
 		Tables:    make(map[string]SchemaTable),
@@ -103,7 +101,6 @@ func (g *SchemaGenerator) GenerateSchema(tables []parser2.TableDefinition) (*Dat
 	return schema, nil
 }
 
-// generateTable converts a single table definition to schema table
 func (g *SchemaGenerator) generateTable(tableDef parser2.TableDefinition) (SchemaTable, error) {
 	table := SchemaTable{
 		Name:        tableDef.TableName,
@@ -130,7 +127,6 @@ func (g *SchemaGenerator) generateTable(tableDef parser2.TableDefinition) (Schem
 	return table, nil
 }
 
-// generateColumn converts a field definition to a schema column
 func (g *SchemaGenerator) generateColumn(field parser2.FieldDefinition, tableName string) (SchemaColumn, error) {
 	column := SchemaColumn{
 		Name: field.DBName,
@@ -204,7 +200,6 @@ func (g *SchemaGenerator) generateColumn(field parser2.FieldDefinition, tableNam
 	return column, nil
 }
 
-// mapGoTypeToPostgreSQL maps Go types to PostgreSQL types
 func (g *SchemaGenerator) mapGoTypeToPostgreSQL(goType string, dbDef map[string]string) (string, error) {
 	if pgType := g.tagParser.GetType(dbDef); pgType != "" {
 		switch strings.ToLower(pgType) {
@@ -269,7 +264,6 @@ func (g *SchemaGenerator) mapGoTypeToPostgreSQL(goType string, dbDef map[string]
 	}
 }
 
-// parseForeignKeyRef parses foreign key reference string
 func (g *SchemaGenerator) parseForeignKeyRef(fkRef string) (*ForeignKeyRef, error) {
 	parts := strings.Split(fkRef, ".")
 	if len(parts) != 2 {
@@ -284,7 +278,6 @@ func (g *SchemaGenerator) parseForeignKeyRef(fkRef string) (*ForeignKeyRef, erro
 	}, nil
 }
 
-// processTableLevel processes table-level dbdef attributes
 func (g *SchemaGenerator) processTableLevel(tableLevelDef map[string]string, table *SchemaTable) error {
 	for key, value := range tableLevelDef {
 		switch key {
@@ -357,13 +350,6 @@ func (g *SchemaGenerator) processTableLevel(tableLevelDef map[string]string, tab
 	return nil
 }
 
-// parseIndexDefinition parses index definition from dbdef
-// Formats supported:
-// - Basic: "idx_name,column1,column2"
-// - With options: "idx_name,column1,column2 desc"
-// - With type: "idx_name,column using:gin"
-// - With where clause: "idx_name,column where:status='active'"
-// - Functional: "idx_name,LOWER(column)"
 func (g *SchemaGenerator) parseIndexDefinition(indexDef, tableName string) ([]SchemaIndex, error) {
 	var indexes []SchemaIndex
 
@@ -437,7 +423,6 @@ func (g *SchemaGenerator) parseIndexDefinition(indexDef, tableName string) ([]Sc
 	return indexes, nil
 }
 
-// parseUniqueConstraint parses unique constraint definition
 func (g *SchemaGenerator) parseUniqueConstraint(uniqueDef, tableName string) (SchemaConstraint, error) {
 	parts := strings.Split(uniqueDef, ",")
 	if len(parts) < 2 {
@@ -469,7 +454,6 @@ func (g *SchemaGenerator) parseUniqueConstraint(uniqueDef, tableName string) (Sc
 	return constraint, nil
 }
 
-// parseCheckConstraint parses check constraint definition
 func (g *SchemaGenerator) parseCheckConstraint(checkDef, tableName string) (SchemaConstraint, error) {
 	parts := strings.SplitN(checkDef, ",", 2)
 	if len(parts) != 2 {
@@ -483,7 +467,6 @@ func (g *SchemaGenerator) parseCheckConstraint(checkDef, tableName string) (Sche
 	}, nil
 }
 
-// addImplicitConstraints adds constraints that are implied by column definitions
 func (g *SchemaGenerator) addImplicitConstraints(table *SchemaTable) {
 	var primaryKeyColumns []string
 
@@ -539,7 +522,6 @@ func (g *SchemaGenerator) addImplicitConstraints(table *SchemaTable) {
 	}
 }
 
-// GetTableNames returns sorted list of table names in the schema
 func (s *DatabaseSchema) GetTableNames() []string {
 	var names []string
 	for name := range s.Tables {
@@ -550,7 +532,6 @@ func (s *DatabaseSchema) GetTableNames() []string {
 	return sorted
 }
 
-// sortTablesByDependencies performs topological sort on tables based on foreign key dependencies
 func (s *DatabaseSchema) sortTablesByDependencies(tables []string) []string {
 	dependencies := make(map[string][]string)
 	dependents := make(map[string][]string)
@@ -610,19 +591,16 @@ func (s *DatabaseSchema) sortTablesByDependencies(tables []string) []string {
 	return result
 }
 
-// HasTable checks if a table exists in the schema
 func (s *DatabaseSchema) HasTable(tableName string) bool {
 	_, exists := s.Tables[tableName]
 	return exists
 }
 
-// GetTable retrieves a table from the schema
 func (s *DatabaseSchema) GetTable(tableName string) (SchemaTable, bool) {
 	table, exists := s.Tables[tableName]
 	return table, exists
 }
 
-// validateForeignKeys validates that all foreign key references point to existing tables
 func (g *SchemaGenerator) validateForeignKeys(schema *DatabaseSchema) error {
 	var errors []string
 

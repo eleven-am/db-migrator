@@ -15,7 +15,6 @@ type ORMImpl struct {
 	logger storm.Logger
 }
 
-// NewORM creates a new ORM generator
 func NewORM(config *storm.Config, logger storm.Logger) *ORMImpl {
 	return &ORMImpl{
 		config: config,
@@ -23,7 +22,6 @@ func NewORM(config *storm.Config, logger storm.Logger) *ORMImpl {
 	}
 }
 
-// Generate creates ORM code from models
 func (o *ORMImpl) Generate(ctx context.Context, opts storm.GenerateOptions) error {
 	o.logger.Info("Generating ORM code...", "package", opts.PackagePath)
 

@@ -11,12 +11,10 @@ type CLICommands struct {
 	// No database connection needed for code generation
 }
 
-// NewCLICommands creates new CLI commands for ORM code generation
 func NewCLICommands() *CLICommands {
 	return &CLICommands{}
 }
 
-// GetRootCommand returns the root ORM command
 func (cli *CLICommands) GetRootCommand() *cobra.Command {
 	ormCmd := &cobra.Command{
 		Use:   "orm",
@@ -30,7 +28,6 @@ func (cli *CLICommands) GetRootCommand() *cobra.Command {
 	return ormCmd
 }
 
-// getValidateCommand returns the validate command
 func (cli *CLICommands) getValidateCommand() *cobra.Command {
 	var packagePath string
 
@@ -66,7 +63,6 @@ func (cli *CLICommands) getValidateCommand() *cobra.Command {
 	return cmd
 }
 
-// getGenerateORMCommand returns the command for generating type-safe ORM code
 func (cli *CLICommands) getGenerateORMCommand() *cobra.Command {
 	var packagePath string
 	var packageName string

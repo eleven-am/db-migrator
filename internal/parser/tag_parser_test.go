@@ -123,3 +123,266 @@ func TestTagParser_ParseDBDefTag(t *testing.T) {
 		})
 	}
 }
+
+func TestTagParser_HasFlag(t *testing.T) {
+	parser := NewTagParser()
+
+	tests := []struct {
+		name     string
+		tag      string
+		flag     string
+		expected bool
+	}{
+		{
+			name:     "flag exists",
+			tag:      "type:uuid;primary_key;not_null",
+			flag:     "primary_key",
+			expected: true,
+		},
+		{
+			name:     "flag doesn't exist",
+			tag:      "type:uuid;not_null",
+			flag:     "primary_key",
+			expected: false,
+		},
+		{
+			name:     "empty tag",
+			tag:      "",
+			flag:     "primary_key",
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			attrs := parser.ParseDBDefTag(tt.tag)
+			result := parser.HasFlag(attrs, tt.flag)
+
+			if result != tt.expected {
+				t.Errorf("HasFlag() = %v, want %v", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestTagParser_GetType(t *testing.T) {
+	parser := NewTagParser()
+
+	tests := []struct {
+		name     string
+		tag      string
+		expected string
+	}{
+		{
+			name:     "has type",
+			tag:      "type:uuid;primary_key",
+			expected: "uuid",
+		},
+		{
+			name:     "no type",
+			tag:      "primary_key;not_null",
+			expected: "",
+		},
+		{
+			name:     "empty tag",
+			tag:      "",
+			expected: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			attrs := parser.ParseDBDefTag(tt.tag)
+			result := parser.GetType(attrs)
+
+			if result != tt.expected {
+				t.Errorf("GetType() = %v, want %v", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestTagParser_GetDefault(t *testing.T) {
+	parser := NewTagParser()
+
+	tests := []struct {
+		name     string
+		tag      string
+		expected string
+	}{
+		{
+			name:     "has default",
+			tag:      "type:varchar;default:'active'",
+			expected: "'active'",
+		},
+		{
+			name:     "no default",
+			tag:      "type:varchar;not_null",
+			expected: "",
+		},
+		{
+			name:     "empty tag",
+			tag:      "",
+			expected: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			attrs := parser.ParseDBDefTag(tt.tag)
+			result := parser.GetDefault(attrs)
+
+			if result != tt.expected {
+				t.Errorf("GetDefault() = %v, want %v", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestTagParser_GetForeignKey(t *testing.T) {
+	parser := NewTagParser()
+
+	tests := []struct {
+		name     string
+		tag      string
+		expected string
+	}{
+		{
+			name:     "has foreign key",
+			tag:      "type:uuid;fk:users.id",
+			expected: "users.id",
+		},
+		{
+			name:     "no foreign key",
+			tag:      "type:uuid;not_null",
+			expected: "",
+		},
+		{
+			name:     "empty tag",
+			tag:      "",
+			expected: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			attrs := parser.ParseDBDefTag(tt.tag)
+			result := parser.GetForeignKey(attrs)
+
+			if result != tt.expected {
+				t.Errorf("GetForeignKey() = %v, want %v", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestTagParser_GetArrayType(t *testing.T) {
+	parser := NewTagParser()
+
+	tests := []struct {
+		name     string
+		tag      string
+		expected string
+	}{
+		{
+			name:     "has array type",
+			tag:      "type:varchar[];array:varchar",
+			expected: "varchar",
+		},
+		{
+			name:     "no array type",
+			tag:      "type:varchar;not_null",
+			expected: "",
+		},
+		{
+			name:     "empty tag",
+			tag:      "",
+			expected: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			attrs := parser.ParseDBDefTag(tt.tag)
+			result := parser.GetArrayType(attrs)
+
+			if result != tt.expected {
+				t.Errorf("GetArrayType() = %v, want %v", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestTagParser_GetEnum(t *testing.T) {
+	parser := NewTagParser()
+
+	tests := []struct {
+		name     string
+		tag      string
+		expected []string
+	}{
+		{
+			name:     "has enum",
+			tag:      "type:enum;enum:active,inactive,pending",
+			expected: []string{"active", "inactive", "pending"},
+		},
+		{
+			name:     "no enum",
+			tag:      "type:varchar;not_null",
+			expected: nil,
+		},
+		{
+			name:     "empty tag",
+			tag:      "",
+			expected: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			attrs := parser.ParseDBDefTag(tt.tag)
+			result := parser.GetEnum(attrs)
+
+			if !reflect.DeepEqual(result, tt.expected) {
+				t.Errorf("GetEnum() = %v, want %v", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestTagParser_GetPrevName(t *testing.T) {
+	parser := NewTagParser()
+
+	tests := []struct {
+		name     string
+		tag      string
+		expected string
+	}{
+		{
+			name:     "has prev name",
+			tag:      "type:varchar;prev:old_column_name",
+			expected: "old_column_name",
+		},
+		{
+			name:     "no prev name",
+			tag:      "type:varchar;not_null",
+			expected: "",
+		},
+		{
+			name:     "empty tag",
+			tag:      "",
+			expected: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			attrs := parser.ParseDBDefTag(tt.tag)
+			result := parser.GetPrevName(attrs)
+
+			if result != tt.expected {
+				t.Errorf("GetPrevName() = %v, want %v", result, tt.expected)
+			}
+		})
+	}
+}

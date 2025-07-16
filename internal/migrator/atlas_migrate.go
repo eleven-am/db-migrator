@@ -46,7 +46,6 @@ type AtlasMigrator struct {
 	migrationReverser *MigrationReverser
 }
 
-// NewAtlasMigrator creates a new Atlas-based migrator
 func NewAtlasMigrator(config *DBConfig) *AtlasMigrator {
 	return &AtlasMigrator{
 		config:            config,
@@ -58,7 +57,6 @@ func NewAtlasMigrator(config *DBConfig) *AtlasMigrator {
 	}
 }
 
-// GenerateMigration generates a migration from Go structs
 func (m *AtlasMigrator) GenerateMigration(ctx context.Context, sourceDB *sql.DB, opts MigrationOptions) (*MigrationResult, error) {
 
 	fmt.Println("Parsing Go structs...")
@@ -189,7 +187,6 @@ func (m *AtlasMigrator) GenerateMigration(ctx context.Context, sourceDB *sql.DB,
 	return result, nil
 }
 
-// writeMigrationFiles writes UP and DOWN migration files
 func (m *AtlasMigrator) writeMigrationFiles(outputDir, migrationName, upSQL, downSQL string) error {
 
 	if err := os.MkdirAll(outputDir, 0755); err != nil {

@@ -211,7 +211,7 @@ storm verify --check-models=false
 
 ### storm introspect
 
-Introspect existing database and generate Go structs.
+Generate complete Storm ORM code from existing database schema.
 
 ```bash
 storm introspect [flags]
@@ -220,25 +220,47 @@ storm introspect [flags]
 **Flags:**
 | Flag | Description | Default |
 |------|-------------|---------|
-| `--schema` | Database schema | `public` |
-| `--tables` | Specific tables (comma-separated) | All tables |
-| `--output` | Output directory | `./models` |
-| `--package` | Package name | `models` |
-| `--include-views` | Include views | `false` |
+| `--database` | Database connection URL (required) | |
+| `--schema` | Database schema to inspect | `public` |
+| `--table` | Generate ORM for specific table only | All tables |
+| `--output` | Output directory for generated code | `./generated/<package>` |
+| `--package` | Package name for generated code | `models` |
+
+**Generated Files:**
+- `models.go` - Go struct definitions with proper tags
+- `columns.go` - Type-safe column constants
+- `storm.go` - Central ORM access point
+- `*_metadata.go` - Model metadata for zero-reflection ORM
+- `*_repository.go` - Repository implementations with CRUD operations
+- `*_query.go` - Type-safe query builders
 
 **Examples:**
 ```bash
-# Introspect all tables
-storm introspect
+# Generate ORM from entire database
+storm introspect --database="postgres://user:pass@localhost/mydb"
 
-# Introspect specific tables
-storm introspect --tables users,posts,comments
+# Generate to specific directory
+storm introspect --database="postgres://user:pass@localhost/mydb" \
+  --output=./internal/models \
+  --package=models
 
-# Introspect with custom package
-storm introspect --package internal/db --output ./internal/db
+# Generate for specific table only
+storm introspect --database="postgres://user:pass@localhost/mydb" \
+  --table=users
 
-# Include views
-storm introspect --include-views
+# Use different schema
+storm introspect --database="postgres://user:pass@localhost/mydb" \
+  --schema=myschema
+
+# Complete example with immediate usage
+storm introspect --database="postgres://user:pass@localhost/mydb" \
+  --output=./models \
+  --package=models
+
+# Then in your code:
+# import "./models"
+# storm := models.NewStorm(db)
+# users, err := storm.Users.Query().Find()
 ```
 
 ### storm version
@@ -341,14 +363,15 @@ storm orm
 ### Working with Existing Database
 
 ```bash
-# 1. Introspect database
-storm introspect
+# 1. Generate complete ORM from database
+storm introspect --database="postgres://user:pass@localhost/mydb"
 
-# 2. Review generated models
-# ... adjust as needed ...
+# 2. Review generated code in ./generated/models/
+# ... adjust models.go if needed ...
 
-# 3. Generate ORM code
-storm orm
+# 3. Use the generated ORM immediately
+# import "./generated/models"
+# storm := models.NewStorm(db)
 
 # 4. Future changes follow normal workflow
 storm migrate

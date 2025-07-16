@@ -22,7 +22,6 @@ type MigratorImpl struct {
 	logger storm.Logger
 }
 
-// NewMigrator creates a new migrator instance
 func NewMigrator(db *sqlx.DB, config *storm.Config, logger storm.Logger) *MigratorImpl {
 	return &MigratorImpl{
 		db:     db,
@@ -31,7 +30,6 @@ func NewMigrator(db *sqlx.DB, config *storm.Config, logger storm.Logger) *Migrat
 	}
 }
 
-// Generate creates a new migration based on model differences
 func (m *MigratorImpl) Generate(ctx context.Context, opts storm.MigrateOptions) (*storm.Migration, error) {
 	m.logger.Info("Generating migration...", "package", opts.PackagePath)
 
@@ -63,7 +61,6 @@ func (m *MigratorImpl) Generate(ctx context.Context, opts storm.MigrateOptions) 
 	return migration, nil
 }
 
-// Apply executes a migration
 func (m *MigratorImpl) Apply(ctx context.Context, migration *storm.Migration) error {
 	m.logger.Info("Applying migration...", "name", migration.Name)
 
@@ -103,7 +100,6 @@ func (m *MigratorImpl) Apply(ctx context.Context, migration *storm.Migration) er
 	return nil
 }
 
-// Rollback reverts a migration
 func (m *MigratorImpl) Rollback(ctx context.Context, migration *storm.Migration) error {
 	m.logger.Info("Rolling back migration...", "name", migration.Name)
 
@@ -139,7 +135,6 @@ func (m *MigratorImpl) Rollback(ctx context.Context, migration *storm.Migration)
 	return nil
 }
 
-// Status returns the current migration status
 func (m *MigratorImpl) Status(ctx context.Context) (*storm.MigrationStatus, error) {
 	if err := m.createMigrationsTable(ctx); err != nil {
 		return nil, fmt.Errorf("failed to create migrations table: %w", err)
@@ -163,7 +158,6 @@ func (m *MigratorImpl) Status(ctx context.Context) (*storm.MigrationStatus, erro
 	}, nil
 }
 
-// History returns migration history
 func (m *MigratorImpl) History(ctx context.Context) ([]*storm.MigrationRecord, error) {
 	if err := m.createMigrationsTable(ctx); err != nil {
 		return nil, fmt.Errorf("failed to create migrations table: %w", err)
@@ -197,12 +191,9 @@ func (m *MigratorImpl) History(ctx context.Context) ([]*storm.MigrationRecord, e
 	return records, nil
 }
 
-// Pending returns pending migrations
 func (m *MigratorImpl) Pending(ctx context.Context) ([]*storm.Migration, error) {
 	return m.getPendingMigrations(ctx)
 }
-
-// Helper methods
 
 func (m *MigratorImpl) createMigrationsTable(ctx context.Context) error {
 	query := fmt.Sprintf(`

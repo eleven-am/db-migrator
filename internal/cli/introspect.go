@@ -4,9 +4,13 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 
-	"github.com/eleven-am/storm/pkg/storm"
+	"github.com/eleven-am/storm/internal/introspect"
+	orm_generator "github.com/eleven-am/storm/internal/orm-generator"
+	"github.com/jmoiron/sqlx"
+	_ "github.com/lib/pq"
 	"github.com/spf13/cobra"
 )
 
@@ -21,27 +25,33 @@ var (
 
 var introspectCmd = &cobra.Command{
 	Use:   "introspect",
-	Short: "Inspect database schema and export in various formats",
-	Long: `Inspect database schema to analyze structure, relationships, and export documentation.
+	Short: "Generate complete Storm ORM code from existing database schema",
+	Long: `Generate complete Storm ORM code by introspecting your database schema.
 	
-This command provides read-only inspection of your database schema, including:
-- Tables, columns, and their properties
-- Foreign keys and relationships
-- Indexes and constraints
-- Views, functions, and sequences
-- Database metadata and statistics
+This command analyzes your existing database and generates:
+- Go struct models with proper tags
+- Type-safe column constants
+- Repository implementations with CRUD operations
+- Query builders for type-safe queries
+- Relationship mappings from foreign keys
+- Central Storm access point
 
-Export formats supported: json, yaml, markdown, sql, dot (GraphViz), go (structs)`,
+The generated code provides a complete ORM layer ready for immediate use.
+
+Example:
+  storm introspect --database="postgres://user:pass@localhost/mydb" --output=./models --package=models`,
 	RunE: runIntrospect,
 }
 
 func init() {
 	introspectCmd.Flags().StringVarP(&introspectDBURL, "database", "d", "", "Database connection URL (required)")
-	introspectCmd.Flags().StringVarP(&introspectFormat, "format", "f", "markdown", "Export format: json, yaml, markdown, sql, dot, go")
-	introspectCmd.Flags().StringVarP(&introspectOutput, "output", "o", "", "Output file (default: stdout)")
-	introspectCmd.Flags().StringVarP(&introspectTable, "table", "t", "", "Inspect specific table only")
+	introspectCmd.Flags().StringVarP(&introspectOutput, "output", "o", "", "Output directory for generated code (default: ./generated/<package>)")
+	introspectCmd.Flags().StringVarP(&introspectTable, "table", "t", "", "Generate ORM for specific table only")
 	introspectCmd.Flags().StringVarP(&introspectSchema, "schema", "s", "public", "Database schema to inspect")
-	introspectCmd.Flags().StringVarP(&introspectPackage, "package", "p", "models", "Package name for Go struct generation")
+	introspectCmd.Flags().StringVarP(&introspectPackage, "package", "p", "models", "Package name for generated code")
+
+	introspectCmd.Flags().StringVarP(&introspectFormat, "format", "f", "orm", "Export format (deprecated)")
+	introspectCmd.Flags().MarkHidden("format")
 
 	introspectCmd.MarkFlagRequired("database")
 }
@@ -50,122 +60,124 @@ func runIntrospect(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
-	config := storm.NewConfig()
-	config.DatabaseURL = introspectDBURL
-	config.Debug = debug
-
-	stormClient, err := storm.NewWithConfig(config)
+	db, err := sqlx.Open("postgres", introspectDBURL)
 	if err != nil {
-		return fmt.Errorf("failed to create Storm client: %w", err)
+		return fmt.Errorf("failed to connect to database: %w", err)
 	}
-	defer stormClient.Close()
+	defer db.Close()
 
-	if err := stormClient.Ping(ctx); err != nil {
+	if err := db.PingContext(ctx); err != nil {
 		return fmt.Errorf("failed to ping database: %w", err)
 	}
 
-	if introspectFormat == "go" {
-		output, err := stormClient.Schema().ExportGo(ctx)
+	inspector := introspect.NewInspector(db.DB, "postgres")
+
+	var schema *introspect.DatabaseSchema
+
+	if introspectTable != "" {
+		table, err := inspector.GetTable(ctx, introspectSchema, introspectTable)
 		if err != nil {
-			return fmt.Errorf("failed to generate Go structs: %w", err)
+			return fmt.Errorf("failed to inspect table: %w", err)
 		}
 
-		if introspectOutput != "" {
-			if err := os.WriteFile(introspectOutput, []byte(output), 0644); err != nil {
-				return fmt.Errorf("failed to write output file: %w", err)
-			}
-			fmt.Printf("Go structs generated to %s\n", introspectOutput)
-		} else {
-			fmt.Print(output)
+		schema = &introspect.DatabaseSchema{
+			Name:   introspectDBURL,
+			Tables: map[string]*introspect.TableSchema{table.Name: table},
+			Metadata: introspect.DatabaseMetadata{
+				InspectedAt: time.Now(),
+				TableCount:  1,
+			},
 		}
-		return nil
+	} else {
+		schema, err = inspector.GetSchema(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to inspect database: %w", err)
+		}
 	}
 
-	if introspectFormat == "sql" {
-		output, err := stormClient.Schema().ExportSQL(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to export SQL: %w", err)
-		}
-
-		if introspectOutput != "" {
-			if err := os.WriteFile(introspectOutput, []byte(output), 0644); err != nil {
-				return fmt.Errorf("failed to write output file: %w", err)
-			}
-			fmt.Printf("SQL schema exported to %s\n", introspectOutput)
-		} else {
-			fmt.Print(output)
-		}
-		return nil
+	outputDir := introspectOutput
+	if outputDir == "" {
+		outputDir = filepath.Join("generated", introspectPackage)
 	}
 
-	schema, err := stormClient.Introspect(ctx)
+	if err := os.MkdirAll(outputDir, 0755); err != nil {
+		return fmt.Errorf("failed to create output directory: %w", err)
+	}
+
+	fmt.Printf("Generating models from database schema...\n")
+	generator := introspect.NewStructGenerator(schema, introspectPackage)
+	modelsContent, err := generator.GenerateStructs()
 	if err != nil {
-		return fmt.Errorf("failed to introspect database: %w", err)
+		return fmt.Errorf("failed to generate structs: %w", err)
 	}
 
-	if introspectFormat == "markdown" || introspectFormat == "md" {
-		output := generateMarkdownOutput(schema)
+	modelsPath := filepath.Join(outputDir, "models.go")
+	if err := os.WriteFile(modelsPath, []byte(modelsContent), 0644); err != nil {
+		return fmt.Errorf("failed to write models file: %w", err)
+	}
+	fmt.Printf("  ✓ Generated models.go\n")
 
-		if introspectOutput != "" {
-			if err := os.WriteFile(introspectOutput, []byte(output), 0644); err != nil {
-				return fmt.Errorf("failed to write output file: %w", err)
-			}
-			fmt.Printf("Schema exported to %s\n", introspectOutput)
+	fmt.Printf("Generating ORM code...\n")
+	ormConfig := orm_generator.GenerationConfig{
+		PackageName: introspectPackage,
+		OutputDir:   outputDir,
+	}
+	ormGen := orm_generator.NewCodeGenerator(ormConfig)
+
+	if err := ormGen.DiscoverModels(outputDir); err != nil {
+		return fmt.Errorf("failed to discover models: %w", err)
+	}
+
+	if err := ormGen.GenerateAll(); err != nil {
+		return fmt.Errorf("failed to generate ORM code: %w", err)
+	}
+
+	fmt.Printf("\n✅ Successfully generated Storm ORM code in %s\n", outputDir)
+	fmt.Printf("\nGenerated files:\n")
+	fmt.Printf("  - models.go          (struct definitions)\n")
+	fmt.Printf("  - columns.go         (type-safe column constants)\n")
+	fmt.Printf("  - storm.go           (main ORM entry point)\n")
+	fmt.Printf("  - *_metadata.go      (model metadata)\n")
+	fmt.Printf("  - *_repository.go    (repository implementations with query methods)\n")
+
+	fmt.Printf("\nUsage example:\n")
+	fmt.Printf("  import \"%s\"\n", introspectPackage)
+	fmt.Printf("  \n")
+	fmt.Printf("  storm := %s.NewStorm(db)\n", introspectPackage)
+	fmt.Printf("  users, err := storm.Users.Query().Find()\n")
+
+	if introspectFormat != "orm" && introspectFormat != "" {
+		fmt.Printf("\nGenerating additional %s export...\n", introspectFormat)
+
+		var format introspect.ExportFormat
+		switch introspectFormat {
+		case "json":
+			format = introspect.ExportFormatJSON
+		case "yaml":
+			format = introspect.ExportFormatYAML
+		case "markdown", "md":
+			format = introspect.ExportFormatMarkdown
+		case "sql":
+			format = introspect.ExportFormatSQL
+		case "dot", "graphviz":
+			format = introspect.ExportFormatDOT
+		default:
+			fmt.Printf("Warning: unsupported format %s, skipping additional export\n", introspectFormat)
+			return nil
+		}
+
+		output, err := inspector.ExportSchema(schema, format)
+		if err != nil {
+			fmt.Printf("Warning: failed to export %s format: %v\n", introspectFormat, err)
 		} else {
-			fmt.Print(output)
-		}
-		return nil
-	}
-
-	return fmt.Errorf("unsupported format: %s", introspectFormat)
-}
-
-func generateMarkdownOutput(schema *storm.Schema) string {
-	output := "# Database Schema\n\n"
-	output += fmt.Sprintf("Generated at: %s\n\n", time.Now().Format("2006-01-02 15:04:05"))
-
-	output += fmt.Sprintf("## Tables (%d)\n\n", len(schema.Tables))
-
-	for tableName, table := range schema.Tables {
-		output += fmt.Sprintf("### %s\n\n", tableName)
-		output += "| Column | Type | Nullable | Default |\n"
-		output += "|--------|------|----------|----------|\n"
-
-		for columnName, column := range table.Columns {
-			nullable := "NO"
-			if column.Nullable {
-				nullable = "YES"
+			additionalPath := filepath.Join(outputDir, fmt.Sprintf("schema.%s", introspectFormat))
+			if err := os.WriteFile(additionalPath, output, 0644); err != nil {
+				fmt.Printf("Warning: failed to write %s file: %v\n", introspectFormat, err)
+			} else {
+				fmt.Printf("  ✓ Generated schema.%s\n", introspectFormat)
 			}
-			output += fmt.Sprintf("| %s | %s | %s | %s |\n",
-				columnName, column.Type, nullable, column.Default)
-		}
-
-		output += "\n"
-
-		if table.PrimaryKey != nil {
-			output += fmt.Sprintf("**Primary Key**: %s\n\n", table.PrimaryKey.Name)
-		}
-
-		if len(table.ForeignKeys) > 0 {
-			output += "**Foreign Keys**:\n\n"
-			for _, fk := range table.ForeignKeys {
-				output += fmt.Sprintf("- %s → %s\n", fk.Name, fk.ForeignTable)
-			}
-			output += "\n"
-		}
-
-		if len(table.Indexes) > 0 {
-			output += "**Indexes**:\n\n"
-			for _, idx := range table.Indexes {
-				unique := ""
-				if idx.Unique {
-					unique = " (UNIQUE)"
-				}
-				output += fmt.Sprintf("- %s%s\n", idx.Name, unique)
-			}
-			output += "\n"
 		}
 	}
 
-	return output
+	return nil
 }

@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"fmt"
 	"reflect"
-	"strings"
 
 	"github.com/Masterminds/squirrel"
 	"github.com/jmoiron/sqlx"
@@ -32,12 +31,11 @@ type Query[T any] struct {
 	includes []include
 }
 
-// Query creates a new query builder
 func (r *Repository[T]) Query() *Query[T] {
 	return &Query[T]{
 		repo: r,
-		builder: squirrel.Select(r.selectColumns...).
-			From(r.tableName).
+		builder: squirrel.Select(r.Columns()...).
+			From(r.metadata.TableName).
 			PlaceholderFormat(squirrel.Dollar),
 		ctx:         context.Background(),
 		whereClause: squirrel.And{},
@@ -46,20 +44,17 @@ func (r *Repository[T]) Query() *Query[T] {
 	}
 }
 
-// QueryContext creates a new query builder with context
 func (r *Repository[T]) QueryContext(ctx context.Context) *Query[T] {
 	q := r.Query()
 	q.ctx = ctx
 	return q
 }
 
-// WithTx sets the transaction for this query
 func (q *Query[T]) WithTx(tx *sqlx.Tx) *Query[T] {
 	q.tx = tx
 	return q
 }
 
-// Where adds a type-safe condition
 func (q *Query[T]) Where(condition Condition) *Query[T] {
 	if q.err != nil {
 		return q
@@ -68,7 +63,6 @@ func (q *Query[T]) Where(condition Condition) *Query[T] {
 	return q
 }
 
-// OrderBy adds an ORDER BY clause
 func (q *Query[T]) OrderBy(expressions ...string) *Query[T] {
 	if q.err != nil {
 		return q
@@ -77,7 +71,6 @@ func (q *Query[T]) OrderBy(expressions ...string) *Query[T] {
 	return q
 }
 
-// Limit sets the LIMIT clause
 func (q *Query[T]) Limit(limit uint64) *Query[T] {
 	if q.err != nil {
 		return q
@@ -86,7 +79,6 @@ func (q *Query[T]) Limit(limit uint64) *Query[T] {
 	return q
 }
 
-// Offset sets the OFFSET clause
 func (q *Query[T]) Offset(offset uint64) *Query[T] {
 	if q.err != nil {
 		return q
@@ -97,7 +89,6 @@ func (q *Query[T]) Offset(offset uint64) *Query[T] {
 
 // Join methods
 
-// Join adds a join clause
 func (q *Query[T]) Join(joinType JoinType, table, condition string) *Query[T] {
 	if q.err != nil {
 		return q
@@ -110,27 +101,22 @@ func (q *Query[T]) Join(joinType JoinType, table, condition string) *Query[T] {
 	return q
 }
 
-// InnerJoin adds an INNER JOIN
 func (q *Query[T]) InnerJoin(table, condition string) *Query[T] {
 	return q.Join(InnerJoin, table, condition)
 }
 
-// LeftJoin adds a LEFT JOIN
 func (q *Query[T]) LeftJoin(table, condition string) *Query[T] {
 	return q.Join(LeftJoin, table, condition)
 }
 
-// RightJoin adds a RIGHT JOIN
 func (q *Query[T]) RightJoin(table, condition string) *Query[T] {
 	return q.Join(RightJoin, table, condition)
 }
 
-// FullJoin adds a FULL OUTER JOIN
 func (q *Query[T]) FullJoin(table, condition string) *Query[T] {
 	return q.Join(FullJoin, table, condition)
 }
 
-// Include adds relationships to eager load
 func (q *Query[T]) Include(relationships ...string) *Query[T] {
 	if q.err != nil {
 		return q
@@ -144,7 +130,6 @@ func (q *Query[T]) Include(relationships ...string) *Query[T] {
 	return q
 }
 
-// IncludeWhere adds a relationship with conditions
 func (q *Query[T]) IncludeWhere(relationship string, conditions ...Condition) *Query[T] {
 	if q.err != nil {
 		return q
@@ -160,7 +145,6 @@ func (q *Query[T]) IncludeWhere(relationship string, conditions ...Condition) *Q
 
 // Build methods
 
-// buildQuery constructs the final SQL query
 func (q *Query[T]) buildQuery() (string, []interface{}, error) {
 	if q.err != nil {
 		return "", nil, q.err
@@ -207,43 +191,76 @@ func (q *Query[T]) buildQuery() (string, []interface{}, error) {
 
 // Execution methods
 
-// Find executes the query and returns all matching records
 func (q *Query[T]) Find() ([]T, error) {
-
 	if len(q.includes) > 0 {
 		return q.findWithRelationships()
 	}
 
-	sqlQuery, args, err := q.buildQuery()
-	if err != nil {
-		return nil, &Error{
-			Op:    "find",
-			Table: q.repo.tableName,
-			Err:   fmt.Errorf("failed to build query: %w", err),
+	finalBuilder := q.builder
+
+	for _, join := range q.joins {
+		switch join.Type {
+		case InnerJoin:
+			finalBuilder = finalBuilder.InnerJoin(fmt.Sprintf("%s ON %s", join.Table, join.Condition))
+		case LeftJoin:
+			finalBuilder = finalBuilder.LeftJoin(fmt.Sprintf("%s ON %s", join.Table, join.Condition))
+		case RightJoin:
+			finalBuilder = finalBuilder.RightJoin(fmt.Sprintf("%s ON %s", join.Table, join.Condition))
+		case FullJoin:
+			finalBuilder = finalBuilder.Join(fmt.Sprintf("FULL OUTER JOIN %s ON %s", join.Table, join.Condition))
 		}
+	}
+
+	if len(q.whereClause) > 0 {
+		finalBuilder = finalBuilder.Where(q.whereClause)
+	}
+
+	for _, orderBy := range q.orderBy {
+		finalBuilder = finalBuilder.OrderBy(orderBy)
+	}
+
+	if q.limit != nil {
+		finalBuilder = finalBuilder.Limit(*q.limit)
+	}
+
+	if q.offset != nil {
+		finalBuilder = finalBuilder.Offset(*q.offset)
 	}
 
 	var records []T
-	var execErr error
+	err := q.repo.executeQueryMiddleware(OpQuery, q.ctx, nil, finalBuilder, func(middlewareCtx *MiddlewareContext) error {
+		finalQuery := middlewareCtx.QueryBuilder.(squirrel.SelectBuilder)
 
-	if q.tx != nil {
-		execErr = q.tx.SelectContext(q.ctx, &records, sqlQuery, args...)
-	} else {
-		execErr = q.repo.db.SelectContext(q.ctx, &records, sqlQuery, args...)
-	}
-
-	if execErr != nil {
-		return nil, &Error{
-			Op:    "find",
-			Table: q.repo.tableName,
-			Err:   fmt.Errorf("failed to execute query: %w", execErr),
+		sqlQuery, args, err := finalQuery.ToSql()
+		if err != nil {
+			return &Error{
+				Op:    "find",
+				Table: q.repo.metadata.TableName,
+				Err:   fmt.Errorf("failed to build query: %w", err),
+			}
 		}
-	}
 
-	return records, nil
+		var execErr error
+		if q.tx != nil {
+			execErr = q.tx.SelectContext(q.ctx, &records, sqlQuery, args...)
+		} else {
+			execErr = q.repo.db.SelectContext(q.ctx, &records, sqlQuery, args...)
+		}
+
+		if execErr != nil {
+			return &Error{
+				Op:    "find",
+				Table: q.repo.metadata.TableName,
+				Err:   fmt.Errorf("failed to execute query: %w", execErr),
+			}
+		}
+
+		return nil
+	})
+
+	return records, err
 }
 
-// First executes the query and returns the first matching record
 func (q *Query[T]) First() (*T, error) {
 	q.Limit(1)
 	records, err := q.Find()
@@ -254,7 +271,7 @@ func (q *Query[T]) First() (*T, error) {
 	if len(records) == 0 {
 		return nil, &Error{
 			Op:    "first",
-			Table: q.repo.tableName,
+			Table: q.repo.metadata.TableName,
 			Err:   ErrNotFound,
 		}
 	}
@@ -262,10 +279,9 @@ func (q *Query[T]) First() (*T, error) {
 	return &records[0], nil
 }
 
-// Count returns the number of records matching the query
 func (q *Query[T]) Count() (int64, error) {
 	countBuilder := squirrel.Select("COUNT(*)").
-		From(q.repo.tableName).
+		From(q.repo.metadata.TableName).
 		PlaceholderFormat(squirrel.Dollar)
 
 	for _, join := range q.joins {
@@ -285,34 +301,40 @@ func (q *Query[T]) Count() (int64, error) {
 		countBuilder = countBuilder.Where(q.whereClause)
 	}
 
-	sqlQuery, args, err := countBuilder.ToSql()
-	if err != nil {
-		return 0, &Error{
-			Op:    "count",
-			Table: q.repo.tableName,
-			Err:   fmt.Errorf("failed to build count query: %w", err),
-		}
-	}
-
 	var count int64
-	if q.tx != nil {
-		err = q.tx.GetContext(q.ctx, &count, sqlQuery, args...)
-	} else {
-		err = q.repo.db.GetContext(q.ctx, &count, sqlQuery, args...)
-	}
+	err := q.repo.executeQueryMiddleware(OpQuery, q.ctx, nil, countBuilder, func(middlewareCtx *MiddlewareContext) error {
+		finalQuery := middlewareCtx.QueryBuilder.(squirrel.SelectBuilder)
 
-	if err != nil {
-		return 0, &Error{
-			Op:    "count",
-			Table: q.repo.tableName,
-			Err:   fmt.Errorf("failed to execute count query: %w", err),
+		sqlQuery, args, err := finalQuery.ToSql()
+		if err != nil {
+			return &Error{
+				Op:    "count",
+				Table: q.repo.metadata.TableName,
+				Err:   fmt.Errorf("failed to build count query: %w", err),
+			}
 		}
-	}
 
-	return count, nil
+		var execErr error
+		if q.tx != nil {
+			execErr = q.tx.GetContext(q.ctx, &count, sqlQuery, args...)
+		} else {
+			execErr = q.repo.db.GetContext(q.ctx, &count, sqlQuery, args...)
+		}
+
+		if execErr != nil {
+			return &Error{
+				Op:    "count",
+				Table: q.repo.metadata.TableName,
+				Err:   fmt.Errorf("failed to execute count query: %w", execErr),
+			}
+		}
+
+		return nil
+	})
+
+	return count, err
 }
 
-// Exists checks if any records match the query
 func (q *Query[T]) Exists() (bool, error) {
 	count, err := q.Count()
 	if err != nil {
@@ -321,54 +343,55 @@ func (q *Query[T]) Exists() (bool, error) {
 	return count > 0, nil
 }
 
-// Delete deletes all records matching the query
 func (q *Query[T]) Delete() (int64, error) {
-	deleteBuilder := squirrel.Delete(q.repo.tableName).
+	deleteBuilder := squirrel.Delete(q.repo.metadata.TableName).
 		PlaceholderFormat(squirrel.Dollar)
 
 	if len(q.whereClause) > 0 {
 		deleteBuilder = deleteBuilder.Where(q.whereClause)
 	}
 
-	sqlQuery, args, err := deleteBuilder.ToSql()
-	if err != nil {
-		return 0, &Error{
-			Op:    "delete",
-			Table: q.repo.tableName,
-			Err:   fmt.Errorf("failed to build delete query: %w", err),
+	var rowsAffected int64
+	err := q.repo.executeQueryMiddleware(OpDelete, q.ctx, nil, deleteBuilder, func(middlewareCtx *MiddlewareContext) error {
+		finalQuery := middlewareCtx.QueryBuilder.(squirrel.DeleteBuilder)
+
+		sqlQuery, args, err := finalQuery.ToSql()
+		if err != nil {
+			return &Error{
+				Op:    "delete",
+				Table: q.repo.metadata.TableName,
+				Err:   fmt.Errorf("failed to build delete query: %w", err),
+			}
 		}
-	}
 
-	var result sql.Result
-	if q.tx != nil {
-		result, err = q.tx.ExecContext(q.ctx, sqlQuery, args...)
-	} else {
-		result, err = q.repo.db.ExecContext(q.ctx, sqlQuery, args...)
-	}
-
-	if err != nil {
-		return 0, &Error{
-			Op:    "delete",
-			Table: q.repo.tableName,
-			Err:   fmt.Errorf("failed to execute delete query: %w", err),
+		var result sql.Result
+		if q.tx != nil {
+			result, err = q.tx.ExecContext(q.ctx, sqlQuery, args...)
+		} else {
+			result, err = q.repo.db.ExecContext(q.ctx, sqlQuery, args...)
 		}
-	}
 
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return 0, &Error{
-			Op:    "delete",
-			Table: q.repo.tableName,
-			Err:   fmt.Errorf("failed to get rows affected: %w", err),
+		if err != nil {
+			return parsePostgreSQLError(err, "delete", q.repo.metadata.TableName)
 		}
-	}
 
-	return rowsAffected, nil
+		rowsAffected, err = result.RowsAffected()
+		if err != nil {
+			return &Error{
+				Op:    "delete",
+				Table: q.repo.metadata.TableName,
+				Err:   fmt.Errorf("failed to get rows affected: %w", err),
+			}
+		}
+
+		return nil
+	})
+
+	return rowsAffected, err
 }
 
 // Utility methods
 
-// findWithRelationships handles eager loading of relationships
 func (q *Query[T]) findWithRelationships() ([]T, error) {
 
 	originalIncludes := q.includes
@@ -392,51 +415,35 @@ func (q *Query[T]) findWithRelationships() ([]T, error) {
 	return records, nil
 }
 
-// loadRelationship loads a specific relationship for the records
 func (q *Query[T]) loadRelationship(records []T, include include) error {
 	if len(records) == 0 {
 		return nil
 	}
 
-	relationship := q.repo.relationshipManager.GetRelationship(include.name)
+	relationship := q.repo.relationshipManager.getRelationship(include.name)
 	if relationship == nil {
 		return fmt.Errorf("relationship %s not found", include.name)
 	}
 
-	recordValue := reflect.ValueOf(&records[0]).Elem()
-	recordType := recordValue.Type()
-
-	var relationshipField reflect.StructField
-	var fieldFound bool
-	for i := 0; i < recordType.NumField(); i++ {
-		field := recordType.Field(i)
-		if strings.EqualFold(field.Name, include.name) {
-			relationshipField = field
-			fieldFound = true
-			break
-		}
-	}
-
-	if !fieldFound {
-		return fmt.Errorf("relationship field %s not found in struct %s", include.name, recordType.Name())
+	if relationship.SetValue == nil {
+		return fmt.Errorf("relationship %s does not have SetValue function", include.name)
 	}
 
 	switch relationship.Type {
 	case "belongs_to":
-		return q.loadBelongsToRelationship(records, relationship, relationshipField)
+		return q.loadBelongsToRelationship(records, relationship)
 	case "has_one":
-		return q.loadHasOneRelationship(records, relationship, relationshipField)
+		return q.loadHasOneRelationship(records, relationship)
 	case "has_many":
-		return q.loadHasManyRelationship(records, relationship, relationshipField)
+		return q.loadHasManyRelationship(records, relationship)
 	case "has_many_through":
-		return q.loadHasManyThroughRelationship(records, relationship, relationshipField)
+		return q.loadHasManyThroughRelationship(records, relationship)
 	default:
 		return fmt.Errorf("unsupported relationship type: %s", relationship.Type)
 	}
 }
 
-// loadBelongsToRelationship loads belongs_to relationships
-func (q *Query[T]) loadBelongsToRelationship(records []T, relationship *relationshipDef, field reflect.StructField) error {
+func (q *Query[T]) loadBelongsToRelationship(records []T, relationship *relationshipDef) error {
 
 	foreignKeys := make([]interface{}, 0, len(records))
 	keyToRecordIndices := make(map[interface{}][]int)
@@ -461,7 +468,14 @@ func (q *Query[T]) loadBelongsToRelationship(records []T, relationship *relation
 
 	relatedQuery := fmt.Sprintf("SELECT * FROM %s WHERE %s = ANY($1)", relationship.Target, relationship.TargetKey)
 
-	fieldType := field.Type
+	var zero T
+	zeroValue := reflect.ValueOf(zero)
+	relField := zeroValue.FieldByName(relationship.FieldName)
+	if !relField.IsValid() {
+		return fmt.Errorf("relationship field %s not found", relationship.FieldName)
+	}
+
+	fieldType := relField.Type()
 	if fieldType.Kind() == reflect.Ptr {
 		fieldType = fieldType.Elem()
 	}
@@ -492,20 +506,7 @@ func (q *Query[T]) loadBelongsToRelationship(records []T, relationship *relation
 	for fkValue, recordIndices := range keyToRecordIndices {
 		if relatedRecord, exists := relatedMap[fkValue]; exists {
 			for _, idx := range recordIndices {
-				recordValue := reflect.ValueOf(&records[idx]).Elem()
-				relationshipFieldValue := recordValue.FieldByName(field.Name)
-
-				if relationshipFieldValue.CanSet() {
-					if field.Type.Kind() == reflect.Ptr {
-
-						ptr := reflect.New(field.Type.Elem())
-						ptr.Elem().Set(relatedRecord)
-						relationshipFieldValue.Set(ptr)
-					} else {
-
-						relationshipFieldValue.Set(relatedRecord)
-					}
-				}
+				relationship.SetValue(&records[idx], relatedRecord.Interface())
 			}
 		}
 	}
@@ -513,8 +514,7 @@ func (q *Query[T]) loadBelongsToRelationship(records []T, relationship *relation
 	return nil
 }
 
-// loadHasOneRelationship loads has_one relationships
-func (q *Query[T]) loadHasOneRelationship(records []T, relationship *relationshipDef, field reflect.StructField) error {
+func (q *Query[T]) loadHasOneRelationship(records []T, relationship *relationshipDef) error {
 
 	sourceKeys := make([]interface{}, 0, len(records))
 	keyToRecordIndex := make(map[interface{}]int)
@@ -537,7 +537,14 @@ func (q *Query[T]) loadHasOneRelationship(records []T, relationship *relationshi
 
 	relatedQuery := fmt.Sprintf("SELECT * FROM %s WHERE %s = ANY($1)", relationship.Target, relationship.ForeignKey)
 
-	fieldType := field.Type
+	var zero T
+	zeroValue := reflect.ValueOf(zero)
+	relField := zeroValue.FieldByName(relationship.FieldName)
+	if !relField.IsValid() {
+		return fmt.Errorf("relationship field %s not found", relationship.FieldName)
+	}
+
+	fieldType := relField.Type()
 	if fieldType.Kind() == reflect.Ptr {
 		fieldType = fieldType.Elem()
 	}
@@ -562,18 +569,7 @@ func (q *Query[T]) loadHasOneRelationship(records []T, relationship *relationshi
 		if fkField.IsValid() {
 			fkValue := fkField.Interface()
 			if recordIdx, exists := keyToRecordIndex[fkValue]; exists {
-				recordValue := reflect.ValueOf(&records[recordIdx]).Elem()
-				relationshipFieldValue := recordValue.FieldByName(field.Name)
-
-				if relationshipFieldValue.CanSet() {
-					if field.Type.Kind() == reflect.Ptr {
-						ptr := reflect.New(field.Type.Elem())
-						ptr.Elem().Set(relatedRecord)
-						relationshipFieldValue.Set(ptr)
-					} else {
-						relationshipFieldValue.Set(relatedRecord)
-					}
-				}
+				relationship.SetValue(&records[recordIdx], relatedRecord.Interface())
 			}
 		}
 	}
@@ -581,8 +577,7 @@ func (q *Query[T]) loadHasOneRelationship(records []T, relationship *relationshi
 	return nil
 }
 
-// loadHasManyRelationship loads has_many relationships
-func (q *Query[T]) loadHasManyRelationship(records []T, relationship *relationshipDef, field reflect.StructField) error {
+func (q *Query[T]) loadHasManyRelationship(records []T, relationship *relationshipDef) error {
 
 	sourceKeys := make([]interface{}, 0, len(records))
 	keyToRecordIndices := make(map[interface{}][]int)
@@ -607,7 +602,14 @@ func (q *Query[T]) loadHasManyRelationship(records []T, relationship *relationsh
 
 	relatedQuery := fmt.Sprintf("SELECT * FROM %s WHERE %s = ANY($1)", relationship.Target, relationship.ForeignKey)
 
-	fieldType := field.Type
+	var zero T
+	zeroValue := reflect.ValueOf(zero)
+	relField := zeroValue.FieldByName(relationship.FieldName)
+	if !relField.IsValid() {
+		return fmt.Errorf("relationship field %s not found", relationship.FieldName)
+	}
+
+	fieldType := relField.Type()
 	if fieldType.Kind() == reflect.Slice {
 		fieldType = fieldType.Elem()
 	}
@@ -639,18 +641,13 @@ func (q *Query[T]) loadHasManyRelationship(records []T, relationship *relationsh
 	for sourceValue, recordIndices := range keyToRecordIndices {
 		if relatedGroup, exists := relatedGroups[sourceValue]; exists {
 
-			sliceValue := reflect.MakeSlice(field.Type, len(relatedGroup), len(relatedGroup))
+			sliceValue := reflect.MakeSlice(relField.Type(), len(relatedGroup), len(relatedGroup))
 			for i, relatedRecord := range relatedGroup {
 				sliceValue.Index(i).Set(relatedRecord)
 			}
 
 			for _, idx := range recordIndices {
-				recordValue := reflect.ValueOf(&records[idx]).Elem()
-				relationshipFieldValue := recordValue.FieldByName(field.Name)
-
-				if relationshipFieldValue.CanSet() {
-					relationshipFieldValue.Set(sliceValue)
-				}
+				relationship.SetValue(&records[idx], sliceValue.Interface())
 			}
 		}
 	}
@@ -658,8 +655,7 @@ func (q *Query[T]) loadHasManyRelationship(records []T, relationship *relationsh
 	return nil
 }
 
-// loadHasManyThroughRelationship loads has_many_through relationships
-func (q *Query[T]) loadHasManyThroughRelationship(records []T, relationship *relationshipDef, field reflect.StructField) error {
+func (q *Query[T]) loadHasManyThroughRelationship(records []T, relationship *relationshipDef) error {
 
 	sourceKeys := make([]interface{}, 0, len(records))
 	keyToRecordIndices := make(map[interface{}][]int)
@@ -690,7 +686,14 @@ func (q *Query[T]) loadHasManyThroughRelationship(records []T, relationship *rel
 		relationship.TargetKey, relationship.TargetFK,
 		relationship.SourceFK)
 
-	fieldType := field.Type
+	var zero T
+	zeroValue := reflect.ValueOf(zero)
+	relField := zeroValue.FieldByName(relationship.FieldName)
+	if !relField.IsValid() {
+		return fmt.Errorf("relationship field %s not found", relationship.FieldName)
+	}
+
+	fieldType := relField.Type()
 	if fieldType.Kind() == reflect.Slice {
 		fieldType = fieldType.Elem()
 	}
@@ -755,18 +758,13 @@ func (q *Query[T]) loadHasManyThroughRelationship(records []T, relationship *rel
 
 			if len(relatedGroup) > 0 {
 
-				sliceValue := reflect.MakeSlice(field.Type, len(relatedGroup), len(relatedGroup))
+				sliceValue := reflect.MakeSlice(relField.Type(), len(relatedGroup), len(relatedGroup))
 				for i, relatedRecord := range relatedGroup {
 					sliceValue.Index(i).Set(relatedRecord)
 				}
 
 				for _, idx := range recordIndices {
-					recordValue := reflect.ValueOf(&records[idx]).Elem()
-					relationshipFieldValue := recordValue.FieldByName(field.Name)
-
-					if relationshipFieldValue.CanSet() {
-						relationshipFieldValue.Set(sliceValue)
-					}
+					relationship.SetValue(&records[idx], sliceValue.Interface())
 				}
 			}
 		}
@@ -775,9 +773,6 @@ func (q *Query[T]) loadHasManyThroughRelationship(records []T, relationship *rel
 	return nil
 }
 
-// Advanced PostgreSQL operations
-
-// ExecuteRaw executes a raw SQL query with CTEs and window functions
 func (q *Query[T]) ExecuteRaw(query string, args ...interface{}) ([]T, error) {
 	finalQuery, finalArgs := q.buildFinalQuery(query, args)
 
@@ -792,7 +787,7 @@ func (q *Query[T]) ExecuteRaw(query string, args ...interface{}) ([]T, error) {
 	if err != nil {
 		return nil, &Error{
 			Op:    "executeRaw",
-			Table: q.repo.tableName,
+			Table: q.repo.metadata.TableName,
 			Err:   fmt.Errorf("failed to execute raw query: %w", err),
 		}
 	}
@@ -800,7 +795,6 @@ func (q *Query[T]) ExecuteRaw(query string, args ...interface{}) ([]T, error) {
 	return records, nil
 }
 
-// buildFinalQuery constructs the final query
 func (q *Query[T]) buildFinalQuery(query string, args []interface{}) (string, []interface{}) {
 	return query, args
 }

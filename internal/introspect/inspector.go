@@ -13,7 +13,6 @@ type Inspector struct {
 	driver string
 }
 
-// NewInspector creates a new database inspector
 func NewInspector(db *sql.DB, driver string) *Inspector {
 	return &Inspector{
 		db:     db,
@@ -21,7 +20,6 @@ func NewInspector(db *sql.DB, driver string) *Inspector {
 	}
 }
 
-// GetSchema returns the complete database schema
 func (i *Inspector) GetSchema(ctx context.Context) (*DatabaseSchema, error) {
 	switch i.driver {
 	case "postgres":
@@ -31,7 +29,6 @@ func (i *Inspector) GetSchema(ctx context.Context) (*DatabaseSchema, error) {
 	}
 }
 
-// GetTable returns schema for a specific table
 func (i *Inspector) GetTable(ctx context.Context, schemaName, tableName string) (*TableSchema, error) {
 	switch i.driver {
 	case "postgres":
@@ -41,7 +38,6 @@ func (i *Inspector) GetTable(ctx context.Context, schemaName, tableName string) 
 	}
 }
 
-// GetTables returns all tables in the database
 func (i *Inspector) GetTables(ctx context.Context) ([]*TableSchema, error) {
 	switch i.driver {
 	case "postgres":
@@ -51,7 +47,6 @@ func (i *Inspector) GetTables(ctx context.Context) ([]*TableSchema, error) {
 	}
 }
 
-// GetDatabaseMetadata returns metadata about the database
 func (i *Inspector) GetDatabaseMetadata(ctx context.Context) (*DatabaseMetadata, error) {
 	switch i.driver {
 	case "postgres":
@@ -61,7 +56,6 @@ func (i *Inspector) GetDatabaseMetadata(ctx context.Context) (*DatabaseMetadata,
 	}
 }
 
-// GetEnums returns all enum types in the database
 func (i *Inspector) GetEnums(ctx context.Context) (map[string]*EnumSchema, error) {
 	switch i.driver {
 	case "postgres":
@@ -71,7 +65,6 @@ func (i *Inspector) GetEnums(ctx context.Context) (map[string]*EnumSchema, error
 	}
 }
 
-// GetFunctions returns all functions in the database
 func (i *Inspector) GetFunctions(ctx context.Context) (map[string]*FunctionSchema, error) {
 	switch i.driver {
 	case "postgres":
@@ -81,7 +74,6 @@ func (i *Inspector) GetFunctions(ctx context.Context) (map[string]*FunctionSchem
 	}
 }
 
-// GetSequences returns all sequences in the database
 func (i *Inspector) GetSequences(ctx context.Context) (map[string]*SequenceSchema, error) {
 	switch i.driver {
 	case "postgres":
@@ -91,7 +83,6 @@ func (i *Inspector) GetSequences(ctx context.Context) (map[string]*SequenceSchem
 	}
 }
 
-// GetViews returns all views in the database
 func (i *Inspector) GetViews(ctx context.Context) (map[string]*ViewSchema, error) {
 	switch i.driver {
 	case "postgres":
@@ -101,7 +92,6 @@ func (i *Inspector) GetViews(ctx context.Context) (map[string]*ViewSchema, error
 	}
 }
 
-// GetTableStatistics returns statistics for a specific table
 func (i *Inspector) GetTableStatistics(ctx context.Context, schemaName, tableName string) (*TableStatistics, error) {
 	switch i.driver {
 	case "postgres":

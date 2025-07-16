@@ -61,7 +61,6 @@ func (e *Error) Unwrap() error {
 	return e.Err
 }
 
-// Is implements errors.Is for Error type
 func (e *Error) Is(target error) bool {
 	t, ok := target.(*Error)
 	if !ok {
@@ -75,8 +74,7 @@ func (e *Error) Is(target error) bool {
 	return errors.Is(e.Err, t.Err)
 }
 
-// ParsePostgreSQLError converts PostgreSQL errors to ORM errors
-func ParsePostgreSQLError(err error, op, table string) error {
+func parsePostgreSQLError(err error, op, table string) error {
 	if err == nil {
 		return nil
 	}
@@ -172,8 +170,6 @@ func ParsePostgreSQLError(err error, op, table string) error {
 	}
 }
 
-// Helper functions to extract information from error messages
-
 func extractConstraintName(errStr string) string {
 
 	start := strings.Index(errStr, "\"")
@@ -226,7 +222,6 @@ func (e ValidationErrors) Error() string {
 	return fmt.Sprintf("validation failed: %s", strings.Join(messages, "; "))
 }
 
-// IsRetryable checks if an error is retryable
 func IsRetryable(err error) bool {
 	var ormErr *Error
 	if errors.As(err, &ormErr) {
@@ -235,7 +230,6 @@ func IsRetryable(err error) bool {
 	return false
 }
 
-// IsConstraintError checks if an error is a constraint violation
 func IsConstraintError(err error) bool {
 	return errors.Is(err, ErrDuplicateKey) ||
 		errors.Is(err, ErrForeignKey) ||
@@ -243,7 +237,6 @@ func IsConstraintError(err error) bool {
 		errors.Is(err, ErrNotNull)
 }
 
-// GetConstraintName extracts the constraint name from an error
 func GetConstraintName(err error) string {
 	var ormErr *Error
 	if errors.As(err, &ormErr) {
@@ -252,7 +245,6 @@ func GetConstraintName(err error) string {
 	return ""
 }
 
-// GetColumnName extracts the column name from an error
 func GetColumnName(err error) string {
 	var ormErr *Error
 	if errors.As(err, &ormErr) {

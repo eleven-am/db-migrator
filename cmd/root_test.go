@@ -37,7 +37,7 @@ func TestRootCmd_Help(t *testing.T) {
 		"generate",
 		"verify",
 		"create",
-		"introspect",
+		"orm",
 	}
 
 	for _, cmd := range expectedCommands {
@@ -66,12 +66,12 @@ func TestSubcommands(t *testing.T) {
 	commands := rootCmd.Commands()
 
 	expectedCmds := map[string]bool{
-		"migrate":    false,
-		"generate":   false,
-		"verify":     false,
-		"create":     false,
-		"version":    false,
-		"introspect": false,
+		"migrate":  false,
+		"generate": false,
+		"verify":   false,
+		"create":   false,
+		"version":  false,
+		"orm":      false,
 	}
 
 	for _, cmd := range commands {

@@ -46,6 +46,10 @@ type relationshipDef struct {
 	JoinTable  string       // For has_many_through
 	SourceFK   string       // For has_many_through
 	TargetFK   string       // For has_many_through
+
+	// Generated accessor functions for zero-reflection access
+	SetValue func(model interface{}, value interface{}) // Set relationship value
+	IsSlice  bool                                       // Whether this is a slice relationship
 }
 
 // include represents a relationship to eager load (internal use only)
@@ -67,7 +71,6 @@ type relationshipManager struct {
 	sourceTable   string // The table this manager belongs to
 }
 
-// newRelationshipManager creates a new relationship manager
 func newRelationshipManager(sourceTable string) *relationshipManager {
 	return &relationshipManager{
 		relationships: make(map[string]relationshipDef),
@@ -75,7 +78,6 @@ func newRelationshipManager(sourceTable string) *relationshipManager {
 	}
 }
 
-// parseRelationships extracts relationship definitions from struct tags
 func (rm *relationshipManager) parseRelationships(structType reflect.Type) error {
 	for i := 0; i < structType.NumField(); i++ {
 		field := structType.Field(i)
@@ -100,7 +102,6 @@ func (rm *relationshipManager) parseRelationships(structType reflect.Type) error
 	return nil
 }
 
-// parseRelationshipTag parses a single relationship tag
 func (rm *relationshipManager) parseRelationshipTag(field reflect.StructField, tag string) (relationshipDef, error) {
 	parts := strings.Split(tag, ",")
 	if len(parts) == 0 {
@@ -156,7 +157,6 @@ func (rm *relationshipManager) parseRelationshipTag(field reflect.StructField, t
 	return rel, nil
 }
 
-// setRelationshipDefaults sets default values for relationship fields
 func (rm *relationshipManager) setRelationshipDefaults(rel *relationshipDef) error {
 	switch rel.Type {
 	case "belongs_to":
@@ -204,7 +204,6 @@ func (rm *relationshipManager) setRelationshipDefaults(rel *relationshipDef) err
 	return nil
 }
 
-// Helper methods
 func (rm *relationshipManager) toSnakeCase(s string) string {
 	var result strings.Builder
 
@@ -236,13 +235,11 @@ func (rm *relationshipManager) tableNameToSingular(tableName string) string {
 	return tableName
 }
 
-// GetRelationships returns all defined relationships
-func (rm *relationshipManager) GetRelationships() map[string]relationshipDef {
+func (rm *relationshipManager) getRelationships() map[string]relationshipDef {
 	return rm.relationships
 }
 
-// GetRelationship returns a specific relationship definition
-func (rm *relationshipManager) GetRelationship(fieldName string) *relationshipDef {
+func (rm *relationshipManager) getRelationship(fieldName string) *relationshipDef {
 	rel, exists := rm.relationships[fieldName]
 	if !exists {
 		return nil
@@ -250,8 +247,7 @@ func (rm *relationshipManager) GetRelationship(fieldName string) *relationshipDe
 	return &rel
 }
 
-// HasRelationships returns true if any relationships are defined
-func (rm *relationshipManager) HasRelationships() bool {
+func (rm *relationshipManager) hasRelationships() bool {
 	return len(rm.relationships) > 0
 }
 

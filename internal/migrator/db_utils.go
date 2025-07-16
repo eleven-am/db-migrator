@@ -7,7 +7,6 @@ import (
 	"strings"
 )
 
-// EnsureDatabaseExists creates the database if it doesn't exist
 func EnsureDatabaseExists(dsn string) error {
 
 	dbName, adminDSN, err := parseDSNForDB(dsn)
@@ -42,7 +41,6 @@ func EnsureDatabaseExists(dsn string) error {
 	return nil
 }
 
-// parseDSNForDB extracts database name and returns admin DSN
 func parseDSNForDB(dsn string) (dbName string, adminDSN string, err error) {
 	if strings.HasPrefix(dsn, "postgres://") || strings.HasPrefix(dsn, "postgresql://") {
 
@@ -89,13 +87,11 @@ func parseDSNForDB(dsn string) (dbName string, adminDSN string, err error) {
 	return dbName, adminDSN, nil
 }
 
-// quoteIdentifier quotes a PostgreSQL identifier to prevent SQL injection
 func quoteIdentifier(name string) string {
 
 	return fmt.Sprintf(`"%s"`, strings.ReplaceAll(name, `"`, `""`))
 }
 
-// GetDatabaseURL builds a database URL from components
 func GetDatabaseURL(host, port, user, password, dbname, sslmode string) string {
 	if sslmode == "" {
 		sslmode = "disable"
@@ -104,7 +100,6 @@ func GetDatabaseURL(host, port, user, password, dbname, sslmode string) string {
 		user, url.QueryEscape(password), host, port, dbname, sslmode)
 }
 
-// GetDatabaseDSN builds a DSN string from components
 func GetDatabaseDSN(host, port, user, password, dbname, sslmode string) string {
 	if sslmode == "" {
 		sslmode = "disable"

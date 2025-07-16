@@ -14,7 +14,6 @@ var (
 	verbose     bool
 )
 
-// NewRootCommand creates the root command for Storm CLI
 func NewRootCommand() *cobra.Command {
 	rootCmd := &cobra.Command{
 		Use:   "storm",

@@ -8,7 +8,6 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// ExportSchema exports the database schema in the specified format
 func (i *Inspector) ExportSchema(schema *DatabaseSchema, format ExportFormat) ([]byte, error) {
 	switch format {
 	case ExportFormatJSON:
@@ -26,17 +25,14 @@ func (i *Inspector) ExportSchema(schema *DatabaseSchema, format ExportFormat) ([
 	}
 }
 
-// exportJSON exports schema as JSON
 func exportJSON(schema *DatabaseSchema) ([]byte, error) {
 	return json.MarshalIndent(schema, "", "  ")
 }
 
-// exportYAML exports schema as YAML
 func exportYAML(schema *DatabaseSchema) ([]byte, error) {
 	return yaml.Marshal(schema)
 }
 
-// exportMarkdown exports schema as Markdown documentation
 func exportMarkdown(schema *DatabaseSchema) ([]byte, error) {
 	var b strings.Builder
 
@@ -53,79 +49,83 @@ func exportMarkdown(schema *DatabaseSchema) ([]byte, error) {
 	b.WriteString(fmt.Sprintf("- **Constraints**: %d\n\n", schema.Metadata.ConstraintCount))
 
 	b.WriteString("## Tables\n\n")
-	for _, table := range sortedTables(schema.Tables) {
-		b.WriteString(fmt.Sprintf("### %s\n\n", table.Name))
-		if table.Comment != "" {
-			b.WriteString(fmt.Sprintf("_%s_\n\n", table.Comment))
-		}
-
-		b.WriteString("#### Columns\n\n")
-		b.WriteString("| Name | Type | Nullable | Default | Description |\n")
-		b.WriteString("|------|------|----------|---------|-------------|\n")
-
-		for _, col := range table.Columns {
-			nullable := "NO"
-			if col.IsNullable {
-				nullable = "YES"
+	if len(schema.Tables) == 0 {
+		b.WriteString("No tables found\n\n")
+	} else {
+		for _, table := range sortedTables(schema.Tables) {
+			b.WriteString(fmt.Sprintf("### %s\n\n", table.Name))
+			if table.Comment != "" {
+				b.WriteString(fmt.Sprintf("_%s_\n\n", table.Comment))
 			}
 
-			defaultVal := ""
-			if col.DefaultValue != nil {
-				defaultVal = *col.DefaultValue
-			}
+			b.WriteString("#### Columns\n\n")
+			b.WriteString("| Name | Type | Nullable | Default | Description |\n")
+			b.WriteString("|------|------|----------|---------|-------------|\n")
 
-			b.WriteString(fmt.Sprintf("| %s | %s | %s | %s | %s |\n",
-				col.Name, col.DataType, nullable, defaultVal, col.Comment))
-		}
-		b.WriteString("\n")
-
-		if table.PrimaryKey != nil {
-			b.WriteString("#### Primary Key\n\n")
-			b.WriteString(fmt.Sprintf("- **Name**: %s\n", table.PrimaryKey.Name))
-			b.WriteString(fmt.Sprintf("- **Columns**: %s\n\n", strings.Join(table.PrimaryKey.Columns, ", ")))
-		}
-
-		b.WriteString("#### Foreign Keys\n\n")
-		if len(table.ForeignKeys) > 0 {
-			for _, fk := range table.ForeignKeys {
-				b.WriteString(fmt.Sprintf("- **%s**: %s → %s.%s (%s)\n",
-					fk.Name,
-					strings.Join(fk.Columns, ", "),
-					fk.ReferencedTable,
-					strings.Join(fk.ReferencedColumns, ", "),
-					fmt.Sprintf("ON DELETE %s, ON UPDATE %s", fk.OnDelete, fk.OnUpdate)))
-			}
-		} else {
-			b.WriteString("None\n")
-		}
-		b.WriteString("\n")
-
-		if len(table.Indexes) > 0 {
-			b.WriteString("#### Indexes\n\n")
-			for _, idx := range table.Indexes {
-				unique := ""
-				if idx.IsUnique {
-					unique = " (UNIQUE)"
+			for _, col := range table.Columns {
+				nullable := "NO"
+				if col.IsNullable {
+					nullable = "YES"
 				}
-				cols := make([]string, 0)
-				for _, c := range idx.Columns {
-					if c.Name != "" {
-						cols = append(cols, c.Name)
-					} else {
-						cols = append(cols, c.Expression)
+
+				defaultVal := ""
+				if col.DefaultValue != nil {
+					defaultVal = *col.DefaultValue
+				}
+
+				b.WriteString(fmt.Sprintf("| %s | %s | %s | %s | %s |\n",
+					col.Name, col.DataType, nullable, defaultVal, col.Comment))
+			}
+			b.WriteString("\n")
+
+			if table.PrimaryKey != nil {
+				b.WriteString("#### Primary Key\n\n")
+				b.WriteString(fmt.Sprintf("- **Name**: %s\n", table.PrimaryKey.Name))
+				b.WriteString(fmt.Sprintf("- **Columns**: %s\n\n", strings.Join(table.PrimaryKey.Columns, ", ")))
+			}
+
+			b.WriteString("#### Foreign Keys\n\n")
+			if len(table.ForeignKeys) > 0 {
+				for _, fk := range table.ForeignKeys {
+					b.WriteString(fmt.Sprintf("- **%s**: %s → %s.%s (%s)\n",
+						fk.Name,
+						strings.Join(fk.Columns, ", "),
+						fk.ReferencedTable,
+						strings.Join(fk.ReferencedColumns, ", "),
+						fmt.Sprintf("ON DELETE %s, ON UPDATE %s", fk.OnDelete, fk.OnUpdate)))
+				}
+			} else {
+				b.WriteString("None\n")
+			}
+			b.WriteString("\n")
+
+			if len(table.Indexes) > 0 {
+				b.WriteString("#### Indexes\n\n")
+				for _, idx := range table.Indexes {
+					unique := ""
+					if idx.IsUnique {
+						unique = " (UNIQUE)"
 					}
+					cols := make([]string, 0)
+					for _, c := range idx.Columns {
+						if c.Name != "" {
+							cols = append(cols, c.Name)
+						} else {
+							cols = append(cols, c.Expression)
+						}
+					}
+					b.WriteString(fmt.Sprintf("- **%s**%s: %s\n", idx.Name, unique, strings.Join(cols, ", ")))
 				}
-				b.WriteString(fmt.Sprintf("- **%s**%s: %s\n", idx.Name, unique, strings.Join(cols, ", ")))
+				b.WriteString("\n")
 			}
-			b.WriteString("\n")
-		}
 
-		if len(table.Constraints) > 0 {
-			b.WriteString("#### Constraints\n\n")
-			for _, c := range table.Constraints {
-				b.WriteString(fmt.Sprintf("- **%s** (%s): %s\n", c.Name, c.Type, c.Definition))
+			if len(table.Constraints) > 0 {
+				b.WriteString("#### Constraints\n\n")
+				for _, c := range table.Constraints {
+					b.WriteString(fmt.Sprintf("- **%s** (%s): %s\n", c.Name, c.Type, c.Definition))
+				}
+				b.WriteString("\n")
 			}
-			b.WriteString("\n")
 		}
 	}
 
@@ -161,7 +161,6 @@ func exportMarkdown(schema *DatabaseSchema) ([]byte, error) {
 	return []byte(b.String()), nil
 }
 
-// exportSQL exports schema as SQL DDL
 func exportSQL(schema *DatabaseSchema) ([]byte, error) {
 	var b strings.Builder
 
@@ -270,10 +269,50 @@ func exportSQL(schema *DatabaseSchema) ([]byte, error) {
 		b.WriteString("\n")
 	}
 
+	if len(schema.Sequences) > 0 {
+		b.WriteString("-- Sequences\n")
+		for _, seq := range schema.Sequences {
+			b.WriteString(fmt.Sprintf("CREATE SEQUENCE %s\n", seq.Name))
+			b.WriteString(fmt.Sprintf("    INCREMENT BY %d\n", seq.Increment))
+			b.WriteString(fmt.Sprintf("    MINVALUE %d\n", seq.MinValue))
+			b.WriteString(fmt.Sprintf("    MAXVALUE %d\n", seq.MaxValue))
+			b.WriteString(fmt.Sprintf("    START WITH %d\n", seq.StartValue))
+			if seq.CycleOption {
+				b.WriteString("    CYCLE\n")
+			} else {
+				b.WriteString("    NO CYCLE\n")
+			}
+			b.WriteString(";\n\n")
+		}
+	}
+
+	if len(schema.Views) > 0 {
+		b.WriteString("-- Views\n")
+		for _, view := range schema.Views {
+			b.WriteString(fmt.Sprintf("CREATE VIEW %s AS\n", view.Name))
+			b.WriteString(fmt.Sprintf("%s;\n\n", view.Definition))
+		}
+	}
+
+	if len(schema.Functions) > 0 {
+		b.WriteString("-- Functions\n")
+		for _, fn := range schema.Functions {
+			args := make([]string, 0)
+			for _, arg := range fn.Arguments {
+				args = append(args, fmt.Sprintf("%s %s", arg.Name, arg.DataType))
+			}
+			b.WriteString(fmt.Sprintf("CREATE FUNCTION %s(%s) RETURNS %s\n",
+				fn.Name, strings.Join(args, ", "), fn.ReturnType))
+			b.WriteString(fmt.Sprintf("LANGUAGE %s\n", fn.Language))
+			b.WriteString("AS $$\n")
+			b.WriteString(fn.Definition)
+			b.WriteString("\n$$;\n\n")
+		}
+	}
+
 	return []byte(b.String()), nil
 }
 
-// exportDOT exports schema as GraphViz DOT format for visualization
 func exportDOT(schema *DatabaseSchema) ([]byte, error) {
 	var b strings.Builder
 
@@ -313,7 +352,6 @@ func exportDOT(schema *DatabaseSchema) ([]byte, error) {
 	return []byte(b.String()), nil
 }
 
-// Helper function to sort tables by name
 func sortedTables(tables map[string]*TableSchema) []*TableSchema {
 	var result []*TableSchema
 	var names []string

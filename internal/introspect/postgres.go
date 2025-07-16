@@ -10,7 +10,6 @@ import (
 	"github.com/lib/pq"
 )
 
-// getPostgreSQLSchema returns the complete PostgreSQL database schema
 func (i *Inspector) getPostgreSQLSchema(ctx context.Context) (*DatabaseSchema, error) {
 	schema := &DatabaseSchema{
 		Tables:    make(map[string]*TableSchema),
@@ -64,7 +63,6 @@ func (i *Inspector) getPostgreSQLSchema(ctx context.Context) (*DatabaseSchema, e
 	return schema, nil
 }
 
-// getPostgreSQLMetadata returns database metadata
 func (i *Inspector) getPostgreSQLMetadata(ctx context.Context) (*DatabaseMetadata, error) {
 	metadata := &DatabaseMetadata{
 		InspectedAt: time.Now(),
@@ -118,7 +116,6 @@ func (i *Inspector) getPostgreSQLMetadata(ctx context.Context) (*DatabaseMetadat
 	return metadata, nil
 }
 
-// getPostgreSQLTables returns all tables in the database
 func (i *Inspector) getPostgreSQLTables(ctx context.Context) ([]*TableSchema, error) {
 	query := `
 		SELECT 
@@ -163,7 +160,6 @@ func (i *Inspector) getPostgreSQLTables(ctx context.Context) ([]*TableSchema, er
 	return tables, rows.Err()
 }
 
-// getPostgreSQLTable returns schema for a specific table
 func (i *Inspector) getPostgreSQLTable(ctx context.Context, schemaName, tableName string) (*TableSchema, error) {
 	table := &TableSchema{
 		Name:        tableName,
@@ -220,7 +216,6 @@ func (i *Inspector) getPostgreSQLTable(ctx context.Context, schemaName, tableNam
 	return table, nil
 }
 
-// getPostgreSQLColumns returns columns for a table
 func (i *Inspector) getPostgreSQLColumns(ctx context.Context, schemaName, tableName string) ([]*ColumnSchema, error) {
 	query := `
 		SELECT 
@@ -303,7 +298,6 @@ func (i *Inspector) getPostgreSQLColumns(ctx context.Context, schemaName, tableN
 	return columns, rows.Err()
 }
 
-// getPostgreSQLPrimaryKey returns the primary key for a table
 func (i *Inspector) getPostgreSQLPrimaryKey(ctx context.Context, schemaName, tableName string) (*PrimaryKeySchema, error) {
 	query := `
 		SELECT 
@@ -335,7 +329,6 @@ func (i *Inspector) getPostgreSQLPrimaryKey(ctx context.Context, schemaName, tab
 	return &pk, nil
 }
 
-// getPostgreSQLForeignKeys returns foreign keys for a table
 func (i *Inspector) getPostgreSQLForeignKeys(ctx context.Context, schemaName, tableName string) ([]*ForeignKeySchema, error) {
 	query := `
 		SELECT 
@@ -395,7 +388,6 @@ func (i *Inspector) getPostgreSQLForeignKeys(ctx context.Context, schemaName, ta
 	return foreignKeys, rows.Err()
 }
 
-// getPostgreSQLIndexes returns indexes for a table
 func (i *Inspector) getPostgreSQLIndexes(ctx context.Context, schemaName, tableName string) ([]*IndexSchema, error) {
 	query := `
 		SELECT 
@@ -482,7 +474,6 @@ func (i *Inspector) getPostgreSQLIndexes(ctx context.Context, schemaName, tableN
 	return indexes, rows.Err()
 }
 
-// getPostgreSQLConstraints returns constraints for a table
 func (i *Inspector) getPostgreSQLConstraints(ctx context.Context, schemaName, tableName string) ([]*ConstraintSchema, error) {
 	query := `
 		SELECT 
@@ -527,7 +518,6 @@ func (i *Inspector) getPostgreSQLConstraints(ctx context.Context, schemaName, ta
 	return constraints, rows.Err()
 }
 
-// getPostgreSQLTriggers returns triggers for a table
 func (i *Inspector) getPostgreSQLTriggers(ctx context.Context, schemaName, tableName string) ([]*TriggerSchema, error) {
 	query := `
 		SELECT 
@@ -583,7 +573,6 @@ func (i *Inspector) getPostgreSQLTriggers(ctx context.Context, schemaName, table
 	return triggers, rows.Err()
 }
 
-// getPostgreSQLTableStatistics returns statistics for a table
 func (i *Inspector) getPostgreSQLTableStatistics(ctx context.Context, schemaName, tableName string) (*TableStatistics, error) {
 	query := `
 		SELECT 
@@ -639,7 +628,6 @@ func (i *Inspector) getPostgreSQLTableStatistics(ctx context.Context, schemaName
 	return stats, nil
 }
 
-// getPostgreSQLViews returns all views in the database
 func (i *Inspector) getPostgreSQLViews(ctx context.Context) (map[string]*ViewSchema, error) {
 	query := `
 		SELECT 
@@ -685,7 +673,6 @@ func (i *Inspector) getPostgreSQLViews(ctx context.Context) (map[string]*ViewSch
 	return views, rows.Err()
 }
 
-// getPostgreSQLEnums returns all enum types in the database
 func (i *Inspector) getPostgreSQLEnums(ctx context.Context) (map[string]*EnumSchema, error) {
 	query := `
 		SELECT 
@@ -723,7 +710,6 @@ func (i *Inspector) getPostgreSQLEnums(ctx context.Context) (map[string]*EnumSch
 	return enums, rows.Err()
 }
 
-// getPostgreSQLFunctions returns all functions in the database
 func (i *Inspector) getPostgreSQLFunctions(ctx context.Context) (map[string]*FunctionSchema, error) {
 	query := `
 		SELECT 
@@ -774,7 +760,6 @@ func (i *Inspector) getPostgreSQLFunctions(ctx context.Context) (map[string]*Fun
 	return functions, rows.Err()
 }
 
-// getPostgreSQLSequences returns all sequences in the database
 func (i *Inspector) getPostgreSQLSequences(ctx context.Context) (map[string]*SequenceSchema, error) {
 	query := `
 		SELECT 
