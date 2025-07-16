@@ -221,20 +221,36 @@ func main() {
         Limit(10).
         Find()
     
-    // Complex conditions with And/Or
+    // Complex conditions with And/Or/Not helpers
     activePosts, err := storm.Posts.Query().
-        Where(models.Posts.Published.Eq(true).And(
+        Where(storm.And(
+            models.Posts.Published.Eq(true),
             models.Posts.CreatedAt.After(time.Now().AddDate(0, -1, 0)),
         )).
         OrderBy(models.Posts.CreatedAt.Desc()).
         Find()
     
-    // Advanced filtering with multiple conditions
+    // Advanced filtering with multiple logical operators
     searchResults, err := storm.Posts.Query().
-        Where(models.Posts.Title.Like("%Go%").Or(
-            models.Posts.Content.Like("%golang%"),
-        ).And(
+        Where(storm.And(
+            storm.Or(
+                models.Posts.Title.Like("%Go%"),
+                models.Posts.Content.Like("%golang%"),
+            ),
             models.Posts.Published.Eq(true),
+            storm.Not(models.Posts.UserID.IsNull()),
+        )).
+        Find()
+    
+    // Complex user filtering example
+    targetUsers, err := storm.Users.Query().
+        Where(storm.And(
+            models.Users.IsActive.Eq(true),
+            storm.Or(
+                models.Users.Email.Contains("gmail"),
+                models.Users.Email.Contains("yahoo"),
+            ),
+            storm.Not(models.Users.TeamID.IsNull()),
         )).
         Find()
     
@@ -434,19 +450,25 @@ type Product struct {
 func ProductExamples(storm *models.Storm, ctx context.Context) {
     // Find products in stock within price range
     inStockProducts, err := storm.Products.Query().
-        Where(models.Products.Stock.Gt(0).And(
+        Where(storm.And(
+            models.Products.Stock.Gt(0),
             models.Products.Price.Between(decimal.NewFromFloat(10.0), decimal.NewFromFloat(100.0)),
+            models.Products.IsActive.Eq(true),
         )).
         Include("Category", "Tags").
         OrderBy(models.Products.Price.Asc()).
         Find()
     
-    // Search products by name or description
+    // Search products by name or description with complex logic
     searchResults, err := storm.Products.Query().
-        Where(models.Products.Name.Like("%laptop%").Or(
-            models.Products.Description.Like("%computer%"),
+        Where(storm.And(
+            storm.Or(
+                models.Products.Name.Like("%laptop%"),
+                models.Products.Description.Like("%computer%"),
+            ),
+            models.Products.IsActive.Eq(true),
+            storm.Not(models.Products.CategoryID.IsNull()),
         )).
-        Where(models.Products.IsActive.Eq(true)).
         Find()
     
     // Bulk update prices with 10% discount
@@ -504,8 +526,10 @@ type Event struct {
 func EventExamples(storm *models.Storm, ctx context.Context) {
     // Find upcoming events with available seats
     upcomingEvents, err := storm.Events.Query().
-        Where(models.Events.StartTime.After(time.Now()).And(
+        Where(storm.And(
+            models.Events.StartTime.After(time.Now()),
             models.Events.Status.Eq("scheduled"),
+            storm.Not(models.Events.VenueID.IsNull()),
         )).
         ExecuteRaw(`
             SELECT e.*, v.name as venue_name,
@@ -526,10 +550,12 @@ func EventExamples(storm *models.Storm, ctx context.Context) {
             return err
         }
         
-        // Check capacity
+        // Check capacity with complex conditions
         currentRegistrations, err := tx.Registrations.Query().
-            Where(models.Registrations.EventID.Eq(event.ID).And(
+            Where(storm.And(
+                models.Registrations.EventID.Eq(event.ID),
                 models.Registrations.Status.Eq("confirmed"),
+                storm.Not(models.Registrations.CancelledAt.IsNotNull()),
             )).
             Count()
         if err != nil {
@@ -642,8 +668,24 @@ type User struct {
 func MultiTenantExamples(storm *models.Storm, ctx context.Context, orgID string) {
     // All queries are automatically scoped to organization
     orgUsers, err := storm.Users.Query().
-        Where(models.Users.OrgID.Eq(orgID)).
+        Where(storm.And(
+            models.Users.OrgID.Eq(orgID),
+            models.Users.IsActive.Eq(true),
+            storm.Not(models.Users.DeletedAt.IsNotNull()),
+        )).
         Include("Organization").
+        Find()
+    
+    // Find active admin users for organization
+    adminUsers, err := storm.Users.Query().
+        Where(storm.And(
+            models.Users.OrgID.Eq(orgID),
+            storm.Or(
+                models.Users.Role.Eq("admin"),
+                models.Users.Role.Eq("owner"),
+            ),
+            models.Users.IsActive.Eq(true),
+        )).
         Find()
     
     // Tenant-specific analytics
