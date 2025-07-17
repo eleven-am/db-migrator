@@ -26,7 +26,7 @@ import (
 )
 
 // {{ .Model.Name }}Metadata provides compile-time metadata for {{ .Model.Name }}
-var {{ .Model.Name }}Metadata = &orm.ModelMetadata{
+var {{ .Model.Name }}Metadata = &storm.ModelMetadata{
 	TableName:  "{{ .Model.TableName }}",
 	StructName: "{{ .Model.Name }}",
 	
@@ -79,7 +79,7 @@ var {{ .Model.Name }}Metadata = &orm.ModelMetadata{
 		{{- end }}
 	},
 	
-	Relationships: map[string]*orm.RelationshipMetadata{
+	Relationships: map[string]*storm.RelationshipMetadata{
 		{{- range .Model.Relationships }}
 		"{{ .Name }}": {
 			Name:   "{{ .Name }}",
@@ -149,11 +149,11 @@ import (
 // {{ $model.Name }}s provides type-safe column references for {{ $model.Name }}
 var {{ $model.Name }}s = struct {
 	{{range $model.Columns}}
-	{{ sanitizeGoName .Name }} {{ if eq .Type "string" }}storm.StringColumn{{ else if eq .Type "int" }}storm.NumericColumn[int]{{ else if eq .Type "int32" }}storm.NumericColumn[int32]{{ else if eq .Type "int64" }}storm.NumericColumn[int64]{{ else if eq .Type "float32" }}storm.NumericColumn[float32]{{ else if eq .Type "float64" }}storm.NumericColumn[float64]{{ else if eq .Type "bool" }}storm.BoolColumn{{ else if eq .Type "time.Time" }}storm.TimeColumn{{ else if hasPrefix .Type "[]" }}storm.ArrayColumn[{{ .Type }}]{{ else if eq .Type "json.RawMessage" }}storm.JSONBColumn{{ else if eq .Type "orm.JSONData" }}storm.JSONBColumn{{ else if hasPrefix .Type "JSONField[" }}storm.JSONBColumn{{ else if eq .Type "" }}storm.StringColumn{{ else }}storm.Column[interface{}]{{ end }} ` + "`json:\"{{ .DBName }}\"`" + `
+	{{ sanitizeGoName .Name }} {{ if eq .Type "string" }}storm.StringColumn{{ else if eq .Type "int" }}storm.NumericColumn[int]{{ else if eq .Type "int32" }}storm.NumericColumn[int32]{{ else if eq .Type "int64" }}storm.NumericColumn[int64]{{ else if eq .Type "float32" }}storm.NumericColumn[float32]{{ else if eq .Type "float64" }}storm.NumericColumn[float64]{{ else if eq .Type "bool" }}storm.BoolColumn{{ else if eq .Type "time.Time" }}storm.TimeColumn{{ else if hasPrefix .Type "[]" }}storm.ArrayColumn[{{ .Type }}]{{ else if eq .Type "json.RawMessage" }}storm.JSONBColumn{{ else if eq .Type "storm.JSONData" }}storm.JSONBColumn{{ else if hasPrefix .Type "JSONField[" }}storm.JSONBColumn{{ else if eq .Type "" }}storm.StringColumn{{ else }}storm.Column[interface{}]{{ end }} ` + "`json:\"{{ .DBName }}\"`" + `
 	{{end}}
 }{
 	{{range $model.Columns}}
-	{{ sanitizeGoName .Name }}: {{ if eq .Type "string" }}storm.StringColumn{Column: storm.Column[string]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}{{ else if eq .Type "int" }}storm.NumericColumn[int]{ComparableColumn: storm.ComparableColumn[int]{Column: storm.Column[int]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}}{{ else if eq .Type "int32" }}storm.NumericColumn[int32]{ComparableColumn: storm.ComparableColumn[int32]{Column: storm.Column[int32]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}}{{ else if eq .Type "int64" }}storm.NumericColumn[int64]{ComparableColumn: storm.ComparableColumn[int64]{Column: storm.Column[int64]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}}{{ else if eq .Type "float32" }}storm.NumericColumn[float32]{ComparableColumn: storm.ComparableColumn[float32]{Column: storm.Column[float32]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}}{{ else if eq .Type "float64" }}storm.NumericColumn[float64]{ComparableColumn: storm.ComparableColumn[float64]{Column: storm.Column[float64]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}}{{ else if eq .Type "bool" }}storm.BoolColumn{Column: storm.Column[bool]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}{{ else if eq .Type "time.Time" }}storm.TimeColumn{ComparableColumn: storm.ComparableColumn[time.Time]{Column: storm.Column[time.Time]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}}{{ else if hasPrefix .Type "[]" }}storm.ArrayColumn[{{ .Type }}]{Column: storm.Column[{{ .Type }}]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}{{ else if eq .Type "json.RawMessage" }}storm.JSONBColumn{Column: storm.Column[interface{}]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}{{ else if eq .Type "orm.JSONData" }}storm.JSONBColumn{Column: storm.Column[interface{}]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}{{ else if hasPrefix .Type "JSONField[" }}storm.JSONBColumn{Column: storm.Column[interface{}]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}{{ else if eq .Type "" }}storm.StringColumn{Column: storm.Column[string]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}{{ else }}storm.Column[interface{}]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}{{ end }},
+	{{ sanitizeGoName .Name }}: {{ if eq .Type "string" }}storm.StringColumn{Column: storm.Column[string]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}{{ else if eq .Type "int" }}storm.NumericColumn[int]{ComparableColumn: storm.ComparableColumn[int]{Column: storm.Column[int]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}}{{ else if eq .Type "int32" }}storm.NumericColumn[int32]{ComparableColumn: storm.ComparableColumn[int32]{Column: storm.Column[int32]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}}{{ else if eq .Type "int64" }}storm.NumericColumn[int64]{ComparableColumn: storm.ComparableColumn[int64]{Column: storm.Column[int64]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}}{{ else if eq .Type "float32" }}storm.NumericColumn[float32]{ComparableColumn: storm.ComparableColumn[float32]{Column: storm.Column[float32]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}}{{ else if eq .Type "float64" }}storm.NumericColumn[float64]{ComparableColumn: storm.ComparableColumn[float64]{Column: storm.Column[float64]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}}{{ else if eq .Type "bool" }}storm.BoolColumn{Column: storm.Column[bool]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}{{ else if eq .Type "time.Time" }}storm.TimeColumn{ComparableColumn: storm.ComparableColumn[time.Time]{Column: storm.Column[time.Time]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}}{{ else if hasPrefix .Type "[]" }}storm.ArrayColumn[{{ .Type }}]{Column: storm.Column[{{ .Type }}]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}{{ else if eq .Type "json.RawMessage" }}storm.JSONBColumn{Column: storm.Column[interface{}]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}{{ else if eq .Type "storm.JSONData" }}storm.JSONBColumn{Column: storm.Column[interface{}]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}{{ else if hasPrefix .Type "JSONField[" }}storm.JSONBColumn{Column: storm.Column[interface{}]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}{{ else if eq .Type "" }}storm.StringColumn{Column: storm.Column[string]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}{{ else }}storm.Column[interface{}]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}{{ end }},
 	{{end}}
 }
 
@@ -706,7 +706,7 @@ func (s *Storm) WithTransaction(ctx context.Context, fn func(*Storm) error) erro
 	})
 }
 
-func (s *Storm) WithTransactionOptions(ctx context.Context, opts *orm.TransactionOptions, fn func(*Storm) error) error {
+func (s *Storm) WithTransactionOptions(ctx context.Context, opts *storm.TransactionOptions, fn func(*Storm) error) error {
 	return s.Storm.WithTransactionOptions(ctx, opts, func(baseStorm *storm.Storm) error {
 		txStorm := &Storm{
 			Storm: baseStorm,
