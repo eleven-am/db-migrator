@@ -381,11 +381,17 @@ func postgresTypeToGoType(dataType, udtName string, isNullable bool) (string, er
 			baseType = baseType[1:]
 		}
 
-		elementType, err := postgresTypeToGoType(baseType, "", false)
-		if err != nil {
-			return "", err
+		// Use storm.StringArray for string-based PostgreSQL arrays
+		switch baseType {
+		case "text", "character varying", "character", "varchar":
+			goType = "storm.StringArray"
+		default:
+			elementType, err := postgresTypeToGoType(baseType, "", false)
+			if err != nil {
+				return "", err
+			}
+			goType = "[]" + elementType
 		}
-		goType = "[]" + elementType
 	} else {
 
 		switch dataType {
@@ -428,7 +434,7 @@ func postgresTypeToGoType(dataType, udtName string, isNullable bool) (string, er
 		}
 	}
 
-	if isNullable && !strings.HasPrefix(goType, "[]") {
+	if isNullable && !strings.HasPrefix(goType, "[]") && goType != "storm.StringArray" {
 		goType = "*" + goType
 	}
 
@@ -515,6 +521,17 @@ func (g *StructGenerator) collectImports() []string {
 			}
 			if col.DataType == "json" || col.DataType == "jsonb" {
 				imports["github.com/eleven-am/storm/pkg/storm-orm"] = true
+			}
+			// Check for PostgreSQL array types that use storm.StringArray
+			if strings.HasPrefix(col.DataType, "ARRAY") || strings.HasSuffix(col.DataType, "[]") {
+				baseType := col.UDTName
+				if strings.HasPrefix(baseType, "_") {
+					baseType = baseType[1:]
+				}
+				switch baseType {
+				case "text", "character varying", "character", "varchar":
+					imports["github.com/eleven-am/storm/pkg/storm-orm"] = true
+				}
 			}
 		}
 	}

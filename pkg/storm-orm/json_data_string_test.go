@@ -1,7 +1,6 @@
 package orm
 
 import (
-	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -10,7 +9,7 @@ import (
 func TestJSONDataString(t *testing.T) {
 	t.Run("empty JSONData", func(t *testing.T) {
 		j := &JSONData{}
-		assert.Equal(t, "null", j.String())
+		assert.Equal(t, "NULL", j.String())
 	})
 
 	t.Run("JSONData with content", func(t *testing.T) {
@@ -18,13 +17,19 @@ func TestJSONDataString(t *testing.T) {
 			"name": "John",
 			"age":  30,
 		}
-		raw, _ := json.Marshal(data)
-		j := &JSONData{RawMessage: json.RawMessage(raw)}
-		assert.Equal(t, string(raw), j.String())
+		j := NewJSONData(data)
+		expected := `{"age":30,"name":"John"}`
+		assert.Equal(t, expected, j.String())
 	})
 
 	t.Run("JSONData with null", func(t *testing.T) {
-		j := &JSONData{RawMessage: json.RawMessage("null")}
-		assert.Equal(t, "null", j.String())
+		j := NewNullJSONData()
+		assert.Equal(t, "NULL", j.String())
+	})
+
+	t.Run("JSONData set to nil", func(t *testing.T) {
+		j := &JSONData{}
+		j.Set(nil)
+		assert.Equal(t, "NULL", j.String())
 	})
 }

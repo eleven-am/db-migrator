@@ -7,67 +7,109 @@ import (
 )
 
 type JSONData struct {
-	json.RawMessage
+	Data  *any
+	Valid bool
 }
 
-func (j *JSONData) Unmarshal(v interface{}) error {
-	if len(j.RawMessage) == 0 {
-		return nil
+func NewJSONData(data any) JSONData {
+	return JSONData{
+		Data:  &data,
+		Valid: true,
 	}
-	return json.Unmarshal(j.RawMessage, v)
 }
 
-func (j *JSONData) Marshal(v interface{}) error {
-	if v == nil {
-		j.RawMessage = nil
-		return nil
+func NewNullJSONData() JSONData {
+	return JSONData{
+		Data:  nil,
+		Valid: false,
+	}
+}
+
+func (j JSONData) Value() (driver.Value, error) {
+	if !j.Valid || j.Data == nil {
+		return nil, nil
 	}
 
-	data, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-
-	j.RawMessage = data
-	return nil
+	return json.Marshal(j.Data)
 }
 
 func (j *JSONData) Scan(value interface{}) error {
 	if value == nil {
-		j.RawMessage = nil
+		j.Data = nil
+		j.Valid = false
 		return nil
 	}
 
-	switch v := value.(type) {
-	case []byte:
-		if len(v) == 0 {
-			j.RawMessage = nil
-			return nil
-		}
-		j.RawMessage = json.RawMessage(v)
-	case string:
-		if v == "" {
-			j.RawMessage = nil
-			return nil
-		}
-		j.RawMessage = json.RawMessage(v)
-	default:
+	bytes, ok := value.([]byte)
+	if !ok {
 		return fmt.Errorf("cannot scan %T into JSONData", value)
+	}
+
+	if len(bytes) == 0 {
+		j.Data = nil
+		j.Valid = false
+		return nil
+	}
+
+	var data any
+	if err := json.Unmarshal(bytes, &data); err != nil {
+		return fmt.Errorf("failed to unmarshal JSONData: %w", err)
+	}
+
+	j.Data = &data
+	j.Valid = true
+	return nil
+}
+
+func (j *JSONData) Get(v interface{}) error {
+	if !j.Valid || j.Data == nil {
+		return fmt.Errorf("JSONData is null or invalid")
+	}
+
+	// Marshal the data back to JSON bytes, then unmarshal into the target type
+	jsonBytes, err := json.Marshal(j.Data)
+	if err != nil {
+		return fmt.Errorf("failed to marshal JSONData: %w", err)
+	}
+
+	if err := json.Unmarshal(jsonBytes, v); err != nil {
+		return fmt.Errorf("failed to unmarshal JSONData into target type: %w", err)
 	}
 
 	return nil
 }
 
-func (j *JSONData) Value() (driver.Value, error) {
-	if len(j.RawMessage) == 0 {
-		return nil, nil
+func (j *JSONData) MustGet(v interface{}) error {
+	if !j.Valid || j.Data == nil {
+		panic("JSONData: MustGet called on null or invalid field")
 	}
-	return []byte(j.RawMessage), nil
+
+	// Use the Get method internally
+	if err := j.Get(v); err != nil {
+		return err
+	}
+
+	return nil
 }
 
-func (j *JSONData) String() string {
-	if len(j.RawMessage) == 0 {
-		return "null"
+func (j *JSONData) Set(data interface{}) {
+	if data == nil {
+		j.Data = nil
+		j.Valid = false
+	} else {
+		j.Data = &data
+		j.Valid = true
 	}
-	return string(j.RawMessage)
+}
+
+func (j *JSONData) IsNull() bool {
+	return !j.Valid || j.Data == nil
+}
+
+func (j JSONData) String() string {
+	if !j.Valid || j.Data == nil {
+		return "NULL"
+	}
+	bytes, _ := json.Marshal(j.Data)
+	return string(bytes)
 }
