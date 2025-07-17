@@ -221,8 +221,9 @@ func (g *CodeGenerator) GenerateAll() error {
 		return fmt.Errorf("failed to generate repositories: %w", err)
 	}
 
-	// Relationships are handled by WithXXX methods in repositories
-	// No need for a separate relationships file
+	if err := g.generateRelationships(); err != nil {
+		return fmt.Errorf("failed to generate relationships: %w", err)
+	}
 
 	if err := g.generateStorm(); err != nil {
 		return fmt.Errorf("failed to generate Storm: %w", err)

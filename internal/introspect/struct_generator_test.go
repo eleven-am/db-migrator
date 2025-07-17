@@ -143,7 +143,7 @@ func TestStructGenerator_ComplexTypes(t *testing.T) {
 	}
 
 	expectedContents := []string{
-		`"github.com/eleven-am/storm/pkg/storm"`,
+		`"github.com/eleven-am/storm/pkg/storm-orm"`,
 		"type ComplexType struct",
 		"Id int32",
 		"type:integer;primary_key",

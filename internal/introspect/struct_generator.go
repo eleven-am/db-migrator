@@ -53,7 +53,7 @@ func (g *StructGenerator) GenerateStructs() (string, error) {
 		b.WriteString("import (\n")
 		for _, imp := range imports {
 			if imp == "github.com/eleven-am/storm/pkg/storm-orm" {
-				b.WriteString(fmt.Sprintf("\torm \"%s\"\n", imp))
+				b.WriteString(fmt.Sprintf("\tstorm \"%s\"\n", imp))
 			} else {
 				b.WriteString(fmt.Sprintf("\t\"%s\"\n", imp))
 			}
@@ -416,7 +416,7 @@ func postgresTypeToGoType(dataType, udtName string, isNullable bool) (string, er
 		case "uuid":
 			goType = "string"
 		case "json", "jsonb":
-			goType = "orm.JSONData"
+			goType = "storm.JSONData"
 		case "bytea":
 			goType = "[]byte"
 		case "USER-DEFINED":

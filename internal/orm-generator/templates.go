@@ -22,7 +22,7 @@ const metadataTemplate = `//go:build !exclude_generated
 package {{ .Package }}
 
 import (
-	orm "github.com/eleven-am/storm/pkg/storm-orm"
+	storm "github.com/eleven-am/storm/pkg/storm-orm"
 )
 
 // {{ .Model.Name }}Metadata provides compile-time metadata for {{ .Model.Name }}
@@ -30,7 +30,7 @@ var {{ .Model.Name }}Metadata = &orm.ModelMetadata{
 	TableName:  "{{ .Model.TableName }}",
 	StructName: "{{ .Model.Name }}",
 	
-	Columns: map[string]*orm.ColumnMetadata{
+	Columns: map[string]*storm.ColumnMetadata{
 		{{- range .Model.Columns }}
 		"{{ .Name }}": {
 			FieldName:       "{{ .Name }}",
@@ -142,23 +142,23 @@ package {{ .Package }}
 
 import (
 	"time"
-	orm "github.com/eleven-am/storm/pkg/storm-orm"
+	storm "github.com/eleven-am/storm/pkg/storm-orm"
 )
 
 {{range $modelName, $model := .Models}}
 // {{ $model.Name }}s provides type-safe column references for {{ $model.Name }}
 var {{ $model.Name }}s = struct {
 	{{range $model.Columns}}
-	{{ sanitizeGoName .Name }} {{ if eq .Type "string" }}orm.StringColumn{{ else if eq .Type "int" }}orm.NumericColumn[int]{{ else if eq .Type "int32" }}orm.NumericColumn[int32]{{ else if eq .Type "int64" }}orm.NumericColumn[int64]{{ else if eq .Type "float32" }}orm.NumericColumn[float32]{{ else if eq .Type "float64" }}orm.NumericColumn[float64]{{ else if eq .Type "bool" }}orm.BoolColumn{{ else if eq .Type "time.Time" }}orm.TimeColumn{{ else if hasPrefix .Type "[]" }}orm.ArrayColumn[{{ .Type }}]{{ else if eq .Type "json.RawMessage" }}orm.JSONBColumn{{ else if eq .Type "orm.JSONData" }}orm.JSONBColumn{{ else if hasPrefix .Type "JSONField[" }}orm.JSONBColumn{{ else if eq .Type "" }}orm.StringColumn{{ else }}orm.Column[interface{}]{{ end }} ` + "`json:\"{{ .DBName }}\"`" + `
+	{{ sanitizeGoName .Name }} {{ if eq .Type "string" }}storm.StringColumn{{ else if eq .Type "int" }}storm.NumericColumn[int]{{ else if eq .Type "int32" }}storm.NumericColumn[int32]{{ else if eq .Type "int64" }}storm.NumericColumn[int64]{{ else if eq .Type "float32" }}storm.NumericColumn[float32]{{ else if eq .Type "float64" }}storm.NumericColumn[float64]{{ else if eq .Type "bool" }}storm.BoolColumn{{ else if eq .Type "time.Time" }}storm.TimeColumn{{ else if hasPrefix .Type "[]" }}storm.ArrayColumn[{{ .Type }}]{{ else if eq .Type "json.RawMessage" }}storm.JSONBColumn{{ else if eq .Type "orm.JSONData" }}storm.JSONBColumn{{ else if hasPrefix .Type "JSONField[" }}storm.JSONBColumn{{ else if eq .Type "" }}storm.StringColumn{{ else }}storm.Column[interface{}]{{ end }} ` + "`json:\"{{ .DBName }}\"`" + `
 	{{end}}
 }{
 	{{range $model.Columns}}
-	{{ sanitizeGoName .Name }}: {{ if eq .Type "string" }}orm.StringColumn{Column: orm.Column[string]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}{{ else if eq .Type "int" }}orm.NumericColumn[int]{ComparableColumn: orm.ComparableColumn[int]{Column: orm.Column[int]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}}{{ else if eq .Type "int32" }}orm.NumericColumn[int32]{ComparableColumn: orm.ComparableColumn[int32]{Column: orm.Column[int32]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}}{{ else if eq .Type "int64" }}orm.NumericColumn[int64]{ComparableColumn: orm.ComparableColumn[int64]{Column: orm.Column[int64]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}}{{ else if eq .Type "float32" }}orm.NumericColumn[float32]{ComparableColumn: orm.ComparableColumn[float32]{Column: orm.Column[float32]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}}{{ else if eq .Type "float64" }}orm.NumericColumn[float64]{ComparableColumn: orm.ComparableColumn[float64]{Column: orm.Column[float64]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}}{{ else if eq .Type "bool" }}orm.BoolColumn{Column: orm.Column[bool]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}{{ else if eq .Type "time.Time" }}orm.TimeColumn{ComparableColumn: orm.ComparableColumn[time.Time]{Column: orm.Column[time.Time]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}}{{ else if hasPrefix .Type "[]" }}orm.ArrayColumn[{{ .Type }}]{Column: orm.Column[{{ .Type }}]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}{{ else if eq .Type "json.RawMessage" }}orm.JSONBColumn{Column: orm.Column[interface{}]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}{{ else if eq .Type "orm.JSONData" }}orm.JSONBColumn{Column: orm.Column[interface{}]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}{{ else if hasPrefix .Type "JSONField[" }}orm.JSONBColumn{Column: orm.Column[interface{}]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}{{ else if eq .Type "" }}orm.StringColumn{Column: orm.Column[string]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}{{ else }}orm.Column[interface{}]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}{{ end }},
+	{{ sanitizeGoName .Name }}: {{ if eq .Type "string" }}storm.StringColumn{Column: storm.Column[string]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}{{ else if eq .Type "int" }}storm.NumericColumn[int]{ComparableColumn: storm.ComparableColumn[int]{Column: storm.Column[int]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}}{{ else if eq .Type "int32" }}storm.NumericColumn[int32]{ComparableColumn: storm.ComparableColumn[int32]{Column: storm.Column[int32]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}}{{ else if eq .Type "int64" }}storm.NumericColumn[int64]{ComparableColumn: storm.ComparableColumn[int64]{Column: storm.Column[int64]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}}{{ else if eq .Type "float32" }}storm.NumericColumn[float32]{ComparableColumn: storm.ComparableColumn[float32]{Column: storm.Column[float32]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}}{{ else if eq .Type "float64" }}storm.NumericColumn[float64]{ComparableColumn: storm.ComparableColumn[float64]{Column: storm.Column[float64]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}}{{ else if eq .Type "bool" }}storm.BoolColumn{Column: storm.Column[bool]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}{{ else if eq .Type "time.Time" }}storm.TimeColumn{ComparableColumn: storm.ComparableColumn[time.Time]{Column: storm.Column[time.Time]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}}{{ else if hasPrefix .Type "[]" }}storm.ArrayColumn[{{ .Type }}]{Column: storm.Column[{{ .Type }}]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}{{ else if eq .Type "json.RawMessage" }}storm.JSONBColumn{Column: storm.Column[interface{}]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}{{ else if eq .Type "orm.JSONData" }}storm.JSONBColumn{Column: storm.Column[interface{}]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}{{ else if hasPrefix .Type "JSONField[" }}storm.JSONBColumn{Column: storm.Column[interface{}]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}{{ else if eq .Type "" }}storm.StringColumn{Column: storm.Column[string]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}{{ else }}storm.Column[interface{}]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}{{ end }},
 	{{end}}
 }
 
 // {{ $model.Name }}Table provides table-level operations for {{ $model.Name }}
-var {{ $model.Name }}Table = orm.Table{
+var {{ $model.Name }}Table = storm.Table{
 	Name: "{{ $model.TableName }}",
 	PrimaryKeys: []string{ {{ range $model.PrimaryKeys }}"{{ . }}", {{ end }} },
 }
@@ -190,7 +190,7 @@ package {{ .Package }}
 import (
 	"context"
 	"fmt"
-	orm "github.com/eleven-am/storm/pkg/storm-orm"
+	storm "github.com/eleven-am/storm/pkg/storm-orm"
 	"github.com/jmoiron/sqlx"
 )
 
@@ -213,8 +213,7 @@ import (
 //   - UpsertMany(ctx, records, opts) - Batch upsert operations
 //
 // Query Building:
-//   - Query() - Create new query builder for complex queries
-//   - QueryContext(ctx) - Create query builder with context support
+//   - Query(ctx) - Create new query builder for complex queries
 //
 // Example usage:
 //   // Single operations
@@ -226,13 +225,13 @@ import (
 //   rowsAffected, err := repo.UpdateMany(ctx, updates, condition)
 //   
 //   // Complex queries
-//   results, err := repo.Query().Where(condition).OrderBy("created_at DESC").Find()
+//   results, err := repo.Query(ctx).Where(condition).OrderBy("created_at DESC").Find()
 type {{ .Model.Name }}Repository struct {
-	*orm.Repository[{{ .Model.Name }}]
+	*storm.Repository[{{ .Model.Name }}]
 }
 
 func new{{ .Model.Name }}Repository(db *sqlx.DB) (*{{ .Model.Name }}Repository, error) {
-	baseRepo, err := orm.NewRepository[{{ .Model.Name }}](db, {{ .Model.Name }}Metadata)
+	baseRepo, err := storm.NewRepository[{{ .Model.Name }}](db, {{ .Model.Name }}Metadata)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create base repository: %w", err)
 	}
@@ -243,7 +242,7 @@ func new{{ .Model.Name }}Repository(db *sqlx.DB) (*{{ .Model.Name }}Repository, 
 }
 
 func new{{ .Model.Name }}RepositoryWithTx(tx *sqlx.Tx) (*{{ .Model.Name }}Repository, error) {
-	baseRepo, err := orm.NewRepositoryWithTx[{{ .Model.Name }}](tx, {{ .Model.Name }}Metadata)
+	baseRepo, err := ststorm.NewRepositoryWithTx[{{ .Model.Name }}](tx, {{ .Model.Name }}Metadata)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create base repository with transaction: %w", err)
 	}
@@ -267,13 +266,13 @@ func new{{ .Model.Name }}RepositoryWithTx(tx *sqlx.Tx) (*{{ .Model.Name }}Reposi
 {{- if and .IsPrimaryKey (eq $primaryKeyField "") }}{{ $primaryKeyField = .Name }}{{ end }}
 {{- end }}
 {{- if $firstBoolField }}
-//   active{{ .Model.Name }}s, err := repo.Query().
+//   active{{ .Model.Name }}s, err := repo.Query(ctx).
 //       Where({{ .Model.Name }}s.{{ sanitizeGoName $firstBoolField }}.Eq(true)).
 {{- else if $firstStringField }}
-//   filtered{{ .Model.Name }}s, err := repo.Query().
+//   filtered{{ .Model.Name }}s, err := repo.Query(ctx).
 //       Where({{ .Model.Name }}s.{{ sanitizeGoName $firstStringField }}.Like("%search%")).
 {{- else }}
-//   all{{ .Model.Name }}s, err := repo.Query().
+//   all{{ .Model.Name }}s, err := repo.Query(ctx).
 {{- end }}
 {{- if $firstTimeField }}
 //       OrderBy({{ .Model.Name }}s.{{ sanitizeGoName $firstTimeField }}.Desc()).
@@ -282,52 +281,9 @@ func new{{ .Model.Name }}RepositoryWithTx(tx *sqlx.Tx) (*{{ .Model.Name }}Reposi
 {{- else }}
 //       OrderBy("id DESC").
 {{- end }}
-func (r *{{ .Model.Name }}Repository) Query() *{{ .Model.Name }}Query {
+func (r *{{ .Model.Name }}Repository) Query(ctx context.Context) *{{ .Model.Name }}Query {
 	return &{{ .Model.Name }}Query{
-		Query: r.Repository.Query(),
-		repo:  r,
-	}
-}
-
-// QueryContext returns a type-safe query builder for {{ .Model.Name }} with context support.
-// Use this when you need to control query timeouts, cancellation, or pass context values.
-//
-// Examples:
-{{- $firstStringField := "" }}
-{{- $firstBoolField := "" }}
-{{- $firstTimeField := "" }}
-{{- range .Model.Columns }}
-{{- if and (eq .Type "string") (eq $firstStringField "") (not .IsPrimaryKey) }}{{ $firstStringField = .Name }}{{ end }}
-{{- if and (eq .Type "bool") (eq $firstBoolField "") }}{{ $firstBoolField = .Name }}{{ end }}
-{{- if and (eq .Type "time.Time") (eq $firstTimeField "") }}{{ $firstTimeField = .Name }}{{ end }}
-{{- end }}
-//   // With timeout context
-//   ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-//   defer cancel()
-//   results, err := repo.QueryContext(ctx).Find()
-//
-//   // With cancellation
-//   ctx, cancel := context.WithCancel(context.Background())
-//   go func() { time.Sleep(time.Second); cancel() }()
-//   results, err := repo.QueryContext(ctx).Find()
-//
-{{- if $firstStringField }}
-//   // Complex query with context
-//   results, err := repo.QueryContext(ctx).
-//       Where({{ .Model.Name }}s.{{ sanitizeGoName $firstStringField }}.Like("%search%")).
-//       Limit(100).Find()
-{{- else if $firstBoolField }}
-//   // Filtered query with context
-//   results, err := repo.QueryContext(ctx).
-//       Where({{ .Model.Name }}s.{{ sanitizeGoName $firstBoolField }}.Eq(true)).
-//       Find()
-{{- else }}
-//   // Simple query with context
-//   results, err := repo.QueryContext(ctx).Find()
-{{- end }}
-func (r *{{ .Model.Name }}Repository) QueryContext(ctx context.Context) *{{ .Model.Name }}Query {
-	return &{{ .Model.Name }}Query{
-		Query: r.Repository.QueryContext(ctx),
+		Query: r.Repository.Query(ctx),
 		repo:  r,
 	}
 }
@@ -337,20 +293,20 @@ func (r *{{ .Model.Name }}Repository) QueryContext(ctx context.Context) *{{ .Mod
 //
 // Example:
 {{- if eq .Relationship.Type "belongs_to" }}
-//   {{ lower $.Model.Name }}WithOwner, err := repo.With{{ .Name }}().Find()
+//   {{ lower $.Model.Name }}WithOwner, err := repo.With{{ .Name }}(ctx).Find()
 //   // Each {{ $.Model.Name }} will have its {{ .Name }} loaded
 {{- else if eq .Relationship.Type "has_many" }}
-//   {{ lower $.Model.Name }}WithAll{{ .Name }}, err := repo.With{{ .Name }}().Find()
+//   {{ lower $.Model.Name }}WithAll{{ .Name }}, err := repo.With{{ .Name }}(ctx).Find()
 //   // Each {{ $.Model.Name }} will have its {{ .Name }} slice populated
 {{- else if eq .Relationship.Type "has_one" }}
-//   {{ lower $.Model.Name }}With{{ .Name }}, err := repo.With{{ .Name }}().Find()
+//   {{ lower $.Model.Name }}With{{ .Name }}, err := repo.With{{ .Name }}(ctx).Find()
 //   // Each {{ $.Model.Name }} will have its {{ .Name }} loaded if it exists
 {{- else }}
-//   {{ lower $.Model.Name }}With{{ .Name }}, err := repo.With{{ .Name }}().Find()
+//   {{ lower $.Model.Name }}With{{ .Name }}, err := repo.With{{ .Name }}(ctx).Find()
 {{- end }}
-func (r *{{ $.Model.Name }}Repository) With{{ .Name }}() *{{ $.Model.Name }}Query {
+func (r *{{ $.Model.Name }}Repository) With{{ .Name }}(ctx context.Context) *{{ $.Model.Name }}Query {
 	return &{{ $.Model.Name }}Query{
-		Query: r.Repository.Query().Include("{{ .Name }}"),
+		Query: r.Repository.Query(ctx).Include("{{ .Name }}"),
 		repo:  r,
 	}
 }
@@ -358,7 +314,7 @@ func (r *{{ $.Model.Name }}Repository) With{{ .Name }}() *{{ $.Model.Name }}Quer
 
 // {{ .Model.Name }}Query provides type-safe query building for {{ .Model.Name }}
 //
-// Query Methods (returned by Query()):
+// Query Methods (returned by Query(ctx)):
 //   - Where(condition) - Add WHERE conditions
 //   - OrderBy(expressions...) - Add ORDER BY
 //   - Limit(limit) - Set LIMIT
@@ -382,22 +338,22 @@ func (r *{{ $.Model.Name }}Repository) With{{ .Name }}() *{{ $.Model.Name }}Quer
 //
 // Example usage:
 //   // Simple query
-//   results, err := repo.Query().Where({{ .Model.Name }}s.FieldName.Eq("value")).Find()
+//   results, err := repo.Query(ctx).Where({{ .Model.Name }}s.FieldName.Eq("value")).Find()
 //   
 //   // Complex query with joins and ordering
-//   results, err := repo.Query().
+//   results, err := repo.Query(ctx).
 //       Where(condition).
 //       OrderBy("created_at DESC").
 //       Limit(10).
 //       Find()
 //   
 //   // Query with relationships
-//   results, err := repo.Query().
+//   results, err := repo.Query(ctx).
 //       Include("RelationshipName").
 //       Where(condition).
 //       Find()
 type {{ .Model.Name }}Query struct {
-	*orm.Query[{{ .Model.Name }}]
+	*storm.Query[{{ .Model.Name }}]
 	repo *{{ .Model.Name }}Repository
 }
 
@@ -495,14 +451,14 @@ func (q *{{ .Model.Name }}Query) Offset(offset uint64) *{{ .Model.Name }}Query {
 //
 // Examples:
 //   // Get all {{ lower .Model.Name }}s
-//   all{{ .Model.Name }}s, err := repo.Query().Find()
+//   all{{ .Model.Name }}s, err := repo.Query(ctx).Find()
 {{- if $firstBoolField }}
 //   // Get all active {{ lower .Model.Name }}s
-//   active{{ .Model.Name }}s, err := repo.Query().Where({{ .Model.Name }}s.{{ sanitizeGoName $firstBoolField }}.Eq(true)).Find()
+//   active{{ .Model.Name }}s, err := repo.Query(ctx).Where({{ .Model.Name }}s.{{ sanitizeGoName $firstBoolField }}.Eq(true)).Find()
 {{- end }}
 {{- if $firstStringField }}
 //   // Search {{ lower .Model.Name }}s by {{ lower $firstStringField }}
-//   matching{{ .Model.Name }}s, err := repo.Query().Where({{ .Model.Name }}s.{{ sanitizeGoName $firstStringField }}.Like("%search%")).Find()
+//   matching{{ .Model.Name }}s, err := repo.Query(ctx).Where({{ .Model.Name }}s.{{ sanitizeGoName $firstStringField }}.Like("%search%")).Find()
 {{- end }}
 func (q *{{ .Model.Name }}Query) Find() ([]{{ .Model.Name }}, error) {
 	return q.Query.Find()
@@ -513,14 +469,14 @@ func (q *{{ .Model.Name }}Query) Find() ([]{{ .Model.Name }}, error) {
 //
 // Examples:
 //   // Get first {{ lower .Model.Name }}
-//   first{{ .Model.Name }}, err := repo.Query().First()
+//   first{{ .Model.Name }}, err := repo.Query(ctx).First()
 {{- if $firstTimeField }}
 //   // Get most recent {{ lower .Model.Name }}
-//   latest{{ .Model.Name }}, err := repo.Query().OrderBy("{{ $firstTimeField }} DESC").First()
+//   latest{{ .Model.Name }}, err := repo.Query(ctx).OrderBy("{{ $firstTimeField }} DESC").First()
 {{- end }}
 {{- if $firstStringField }}
 //   // Get specific {{ lower .Model.Name }} by {{ lower $firstStringField }}
-//   specific{{ .Model.Name }}, err := repo.Query().Where({{ .Model.Name }}s.{{ sanitizeGoName $firstStringField }}.Eq("value")).First()
+//   specific{{ .Model.Name }}, err := repo.Query(ctx).Where({{ .Model.Name }}s.{{ sanitizeGoName $firstStringField }}.Eq("value")).First()
 {{- end }}
 func (q *{{ .Model.Name }}Query) First() (*{{ .Model.Name }}, error) {
 	return q.Query.First()
@@ -531,14 +487,14 @@ func (q *{{ .Model.Name }}Query) First() (*{{ .Model.Name }}, error) {
 //
 // Examples:
 //   // Count all {{ lower .Model.Name }}s
-//   total, err := repo.Query().Count()
+//   total, err := repo.Query(ctx).Count()
 {{- if $firstBoolField }}
 //   // Count active {{ lower .Model.Name }}s
-//   activeCount, err := repo.Query().Where({{ .Model.Name }}s.{{ sanitizeGoName $firstBoolField }}.Eq(true)).Count()
+//   activeCount, err := repo.Query(ctx).Where({{ .Model.Name }}s.{{ sanitizeGoName $firstBoolField }}.Eq(true)).Count()
 {{- end }}
 {{- if $firstStringField }}
 //   // Count {{ lower .Model.Name }}s matching criteria
-//   matchingCount, err := repo.Query().Where({{ .Model.Name }}s.{{ sanitizeGoName $firstStringField }}.Like("%search%")).Count()
+//   matchingCount, err := repo.Query(ctx).Where({{ .Model.Name }}s.{{ sanitizeGoName $firstStringField }}.Like("%search%")).Count()
 {{- end }}
 func (q *{{ .Model.Name }}Query) Count() (int64, error) {
 	return q.Query.Count()
@@ -550,14 +506,14 @@ func (q *{{ .Model.Name }}Query) Count() (int64, error) {
 //
 // Examples:
 //   // Check if any {{ lower .Model.Name }}s exist
-//   hasAny, err := repo.Query().Exists()
+//   hasAny, err := repo.Query(ctx).Exists()
 {{- if $firstStringField }}
 //   // Check if {{ lower .Model.Name }} with specific {{ lower $firstStringField }} exists
-//   exists, err := repo.Query().Where({{ .Model.Name }}s.{{ sanitizeGoName $firstStringField }}.Eq("value")).Exists()
+//   exists, err := repo.Query(ctx).Where({{ .Model.Name }}s.{{ sanitizeGoName $firstStringField }}.Eq("value")).Exists()
 {{- end }}
 {{- if $firstBoolField }}
 //   // Check if any active {{ lower .Model.Name }}s exist
-//   hasActive, err := repo.Query().Where({{ .Model.Name }}s.{{ sanitizeGoName $firstBoolField }}.Eq(true)).Exists()
+//   hasActive, err := repo.Query(ctx).Where({{ .Model.Name }}s.{{ sanitizeGoName $firstBoolField }}.Eq(true)).Exists()
 {{- end }}
 func (q *{{ .Model.Name }}Query) Exists() (bool, error) {
 	return q.Query.Exists()
@@ -569,14 +525,14 @@ func (q *{{ .Model.Name }}Query) Exists() (bool, error) {
 //
 // Examples:
 //   // Delete all {{ lower .Model.Name }}s (use with caution!)
-//   deleted, err := repo.Query().Delete()
+//   deleted, err := repo.Query(ctx).Delete()
 {{- if $firstBoolField }}
 //   // Delete inactive {{ lower .Model.Name }}s
-//   deleted, err := repo.Query().Where({{ .Model.Name }}s.{{ sanitizeGoName $firstBoolField }}.Eq(false)).Delete()
+//   deleted, err := repo.Query(ctx).Where({{ .Model.Name }}s.{{ sanitizeGoName $firstBoolField }}.Eq(false)).Delete()
 {{- end }}
 {{- if $firstStringField }}
 //   // Delete {{ lower .Model.Name }}s matching criteria
-//   deleted, err := repo.Query().Where({{ .Model.Name }}s.{{ sanitizeGoName $firstStringField }}.Like("temp_%")).Delete()
+//   deleted, err := repo.Query(ctx).Where({{ .Model.Name }}s.{{ sanitizeGoName $firstStringField }}.Like("temp_%")).Delete()
 {{- end }}
 func (q *{{ .Model.Name }}Query) Delete() (int64, error) {
 	return q.Query.Delete()
@@ -618,7 +574,7 @@ import (
 	"database/sql"
 	"fmt"
 	
-	orm "github.com/eleven-am/storm/pkg/storm-orm"
+	storm "github.com/eleven-am/storm/pkg/storm-orm"
 )
 {{- end }}
 
@@ -687,7 +643,7 @@ package {{ .Package }}
 import (
 	"context"
 	"fmt"
-	orm "github.com/eleven-am/storm/pkg/storm-orm"
+	storm "github.com/eleven-am/storm/pkg/storm-orm"
 	"github.com/jmoiron/sqlx"
 )
 
@@ -696,7 +652,7 @@ import (
 // Basic usage:
 //   storm := NewStorm(db)
 //   user, err := storm.Users.FindByID(ctx, "123")
-//   users, err := storm.Users.Query().Where(Users.IsActive.Eq(true)).Find()
+//   users, err := storm.Users.Query(ctx).Where(Users.IsActive.Eq(true)).Find()
 //
 // All repositories inherit these methods from the base repository:
 //
@@ -720,7 +676,7 @@ import (
 //       return txStorm.Users.Create(ctx, newUser)
 //   })
 type Storm struct {
-	*orm.Storm
+	*storm.Storm
 	
 	// All repositories
 	{{range $modelName, $model := .Models}}
@@ -729,7 +685,7 @@ type Storm struct {
 }
 
 func NewStorm(db *sqlx.DB) *Storm {
-	baseStorm := orm.NewStorm(db)
+	baseStorm := storm.NewStorm(db)
 	
 	storm := &Storm{
 		Storm: baseStorm,
@@ -741,7 +697,7 @@ func NewStorm(db *sqlx.DB) *Storm {
 }
 
 func (s *Storm) WithTransaction(ctx context.Context, fn func(*Storm) error) error {
-	return s.Storm.WithTransaction(ctx, func(baseStorm *orm.Storm) error {
+	return s.Storm.WithTransaction(ctx, func(baseStorm *storm.Storm) error {
 		txStorm := &Storm{
 			Storm: baseStorm,
 		}
@@ -751,7 +707,7 @@ func (s *Storm) WithTransaction(ctx context.Context, fn func(*Storm) error) erro
 }
 
 func (s *Storm) WithTransactionOptions(ctx context.Context, opts *orm.TransactionOptions, fn func(*Storm) error) error {
-	return s.Storm.WithTransactionOptions(ctx, opts, func(baseStorm *orm.Storm) error {
+	return s.Storm.WithTransactionOptions(ctx, opts, func(baseStorm *storm.Storm) error {
 		txStorm := &Storm{
 			Storm: baseStorm,
 		}
@@ -764,7 +720,7 @@ func (s *Storm) initializeRepositories() {
 	executor := s.GetExecutor()
 	
 	{{range $modelName, $model := .Models}}
-	if baseRepo, err := orm.NewRepositoryWithExecutor[{{ $model.Name }}](executor, {{ $model.Name }}Metadata); err == nil {
+	if baseRepo, err := storm.NewRepositoryWithExecutor[{{ $model.Name }}](executor, {{ $model.Name }}Metadata); err == nil {
 		s.{{ plural $model.Name }} = &{{ $model.Name }}Repository{
 			Repository: baseRepo,
 		}
