@@ -103,6 +103,64 @@ func createTestUserMetadata() *ModelMetadata {
 	}
 }
 
+// TestMiddlewareUpdateFields tests middleware for UpdateFields operations
+func TestMiddlewareUpdateFields(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	sqlxDB := sqlx.NewDb(db, "postgres")
+	metadata := createTestUserMetadata()
+
+	repo, err := NewRepository[TestUser](sqlxDB, metadata)
+	require.NoError(t, err)
+
+	// Add middleware that modifies the update
+	repo.AddMiddleware(func(next QueryMiddlewareFunc) QueryMiddlewareFunc {
+		return func(ctx *MiddlewareContext) error {
+			if ctx.Operation == OpUpdate {
+				if updateBuilder, ok := ctx.QueryBuilder.(squirrel.UpdateBuilder); ok {
+					// Add additional field to update
+					ctx.QueryBuilder = updateBuilder.Set("updated_by", "middleware")
+				}
+			}
+			return next(ctx)
+		}
+	})
+
+	userID := 1
+	now := time.Now()
+	updates := map[string]interface{}{
+		"name": "Updated Name",
+	}
+
+	// Set up mock expectations
+	// First expect FindByID
+	mock.ExpectQuery(`SELECT .* FROM users WHERE id = \$1`).
+		WithArgs(userID).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "name", "email", "is_active", "created_at", "updated_at"}).
+			AddRow(userID, "Old Name", "old@example.com", true, now, now))
+
+	// Then expect UPDATE with additional field from middleware
+	mock.ExpectExec(`UPDATE users SET`).
+		WithArgs("Updated Name", "middleware", userID).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	// Then expect another FindByID
+	mock.ExpectQuery(`SELECT .* FROM users WHERE id = \$1`).
+		WithArgs(userID).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "name", "email", "is_active", "created_at", "updated_at"}).
+			AddRow(userID, "Updated Name", "old@example.com", true, now, now))
+
+	// Execute UpdateFields
+	user, err := repo.UpdateFields(context.Background(), userID, updates)
+	require.NoError(t, err)
+	require.NotNil(t, user)
+
+	// Verify all expectations were met
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 // TestMiddlewareDelete tests middleware for Delete operations
 func TestMiddlewareDelete(t *testing.T) {
 	db, mock, err := sqlmock.New()
@@ -254,7 +312,7 @@ func TestMiddlewareUpdateMany(t *testing.T) {
 	}
 	nameCol := StringColumn{Column: Column[string]{Name: "name", Table: "users"}}
 	condition := nameCol.Like("test%")
-	rowsAffected, err := repo.Query(context.Background()).Where(condition).UpdateMany(updates)
+	rowsAffected, err := repo.Query(context.Background()).Where(condition).Update(updates)
 	require.NoError(t, err)
 	assert.Equal(t, int64(3), rowsAffected)
 

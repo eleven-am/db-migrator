@@ -16,12 +16,6 @@ type UpsertOptions struct {
 	UpdateExpr      map[string]string // Custom update expressions (column -> expression)
 }
 
-// BulkUpdateOptions configures bulk update behavior
-type BulkUpdateOptions struct {
-	UpdateColumns []string // Columns to update (if empty, updates all non-primary key columns)
-	WhereColumns  []string // Columns to match on for WHERE clause (if empty, uses primary keys)
-}
-
 func (r *Repository[T]) Create(ctx context.Context, record *T) (*T, error) {
 	if record == nil {
 		return nil, &Error{
@@ -182,6 +176,93 @@ func (r *Repository[T]) Update(ctx context.Context, record *T) (*T, error) {
 
 		if rowsAffected == 0 {
 			return ErrNotFound
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return record, nil
+}
+
+// UpdateFields updates specific fields of a single record by primary key
+func (r *Repository[T]) UpdateFields(ctx context.Context, id interface{}, updates map[string]interface{}) (*T, error) {
+	if len(r.metadata.PrimaryKeys) != 1 {
+		return nil, &Error{
+			Op:    "updateFields",
+			Table: r.metadata.TableName,
+			Err:   fmt.Errorf("composite primary keys not supported"),
+		}
+	}
+
+	if len(updates) == 0 {
+		return nil, &Error{
+			Op:    "updateFields",
+			Table: r.metadata.TableName,
+			Err:   fmt.Errorf("no updates provided"),
+		}
+	}
+
+	query := squirrel.Update(r.metadata.TableName).
+		PlaceholderFormat(squirrel.Dollar).
+		Where(squirrel.Eq{r.metadata.PrimaryKeys[0]: id})
+
+	for column, value := range updates {
+		query = query.Set(column, value)
+	}
+
+	var record *T
+
+	err := r.executeQueryMiddleware(OpUpdate, ctx, updates, query, func(middlewareCtx *MiddlewareContext) error {
+		// First, fetch the record that will be updated (within middleware execution)
+		var err error
+		record, err = r.FindByID(ctx, id)
+		if err != nil {
+			return err
+		}
+
+		finalQuery := middlewareCtx.QueryBuilder.(squirrel.UpdateBuilder)
+
+		sqlQuery, args, err := finalQuery.ToSql()
+		if err != nil {
+			return &Error{
+				Op:    "updateFields",
+				Table: r.metadata.TableName,
+				Err:   fmt.Errorf("failed to build query: %w", err),
+			}
+		}
+
+		middlewareCtx.Query = sqlQuery
+		middlewareCtx.Args = args
+
+		result, err := r.db.ExecContext(ctx, sqlQuery, args...)
+		if err != nil {
+			return parsePostgreSQLError(err, "updateFields", r.metadata.TableName)
+		}
+
+		rowsAffected, err := result.RowsAffected()
+		if err != nil {
+			return &Error{
+				Op:    "updateFields",
+				Table: r.metadata.TableName,
+				Err:   fmt.Errorf("failed to get rows affected: %w", err),
+			}
+		}
+
+		if rowsAffected == 0 {
+			return ErrNotFound
+		}
+
+		// Note: We would need reflection here to apply updates to the fetched record
+		// For now, we'll fetch the updated record from the database
+
+		// Re-fetch the updated record to return it
+		record, err = r.FindByID(ctx, id)
+		if err != nil {
+			return err
 		}
 
 		return nil
@@ -603,149 +684,4 @@ func (r *Repository[T]) UpsertMany(ctx context.Context, records []T, opts Upsert
 
 		return nil
 	})
-}
-
-func (r *Repository[T]) BulkUpdate(ctx context.Context, records []T, opts BulkUpdateOptions) (int64, error) {
-	if len(records) == 0 {
-		return 0, nil
-	}
-
-	updateColumns := opts.UpdateColumns
-	if len(updateColumns) == 0 {
-		if len(records) > 0 {
-			updateFields := r.getUpdateFields(records[0])
-			for col := range updateFields {
-				updateColumns = append(updateColumns, col)
-			}
-		}
-	}
-
-	whereColumns := opts.WhereColumns
-	if len(whereColumns) == 0 {
-		whereColumns = r.metadata.PrimaryKeys
-	}
-
-	if len(whereColumns) == 0 {
-		return 0, &Error{
-			Op:    "bulkUpdate",
-			Table: r.metadata.TableName,
-			Err:   fmt.Errorf("no where columns specified and no primary keys found"),
-		}
-	}
-
-	var executor DBExecutor
-	needsCommit := false
-	if _, isTransaction := r.db.(*sqlx.Tx); isTransaction {
-		executor = r.db
-	} else {
-		db := r.db.(*sqlx.DB)
-		tx, err := db.BeginTxx(ctx, nil)
-		if err != nil {
-			return 0, &Error{
-				Op:    "bulkUpdate",
-				Table: r.metadata.TableName,
-				Err:   fmt.Errorf("failed to begin transaction: %w", err),
-			}
-		}
-		defer tx.Rollback()
-		executor = tx
-		needsCommit = true
-	}
-
-	var valueParts []string
-	var args []interface{}
-	argIndex := 1
-
-	allColumns := append(whereColumns, updateColumns...)
-
-	for _, record := range records {
-		var rowValues []string
-		for _, column := range allColumns {
-			fieldName := r.metadata.ReverseMap[column]
-			if colMeta, exists := r.metadata.Columns[fieldName]; exists && colMeta.GetValue != nil {
-				value := colMeta.GetValue(record)
-				if value != nil {
-					rowValues = append(rowValues, fmt.Sprintf("$%d", argIndex))
-					args = append(args, value)
-					argIndex++
-				} else {
-					rowValues = append(rowValues, "NULL")
-				}
-			} else {
-				rowValues = append(rowValues, "NULL")
-			}
-		}
-
-		valueParts = append(valueParts, "("+strings.Join(rowValues, ", ")+")")
-	}
-
-	if len(valueParts) == 0 {
-		return 0, nil
-	}
-
-	cteQuery := fmt.Sprintf(`
-		WITH updates(%s) AS (
-			VALUES %s
-		)
-		UPDATE %s 
-		SET %s
-		FROM updates
-		WHERE %s`,
-		strings.Join(allColumns, ", "),
-		strings.Join(valueParts, ", "),
-		r.metadata.TableName,
-		r.buildUpdateSetClause(updateColumns, whereColumns),
-		r.buildWhereClause(whereColumns),
-	)
-
-	var rowsAffected int64
-	err := r.executeQueryMiddleware(OpBulkUpdate, ctx, records, squirrel.Update(r.metadata.TableName), func(middlewareCtx *MiddlewareContext) error {
-		middlewareCtx.Query = cteQuery
-		middlewareCtx.Args = args
-
-		result, err := executor.ExecContext(ctx, cteQuery, args...)
-		if err != nil {
-			return parsePostgreSQLError(err, "bulkUpdate", r.metadata.TableName)
-		}
-
-		rowsAffected, err = result.RowsAffected()
-		if err != nil {
-			return &Error{
-				Op:    "bulkUpdate",
-				Table: r.metadata.TableName,
-				Err:   fmt.Errorf("failed to get rows affected: %w", err),
-			}
-		}
-
-		if needsCommit {
-			tx := executor.(*sqlx.Tx)
-			if err := tx.Commit(); err != nil {
-				return &Error{
-					Op:    "bulkUpdate",
-					Table: r.metadata.TableName,
-					Err:   fmt.Errorf("failed to commit transaction: %w", err),
-				}
-			}
-		}
-
-		return nil
-	})
-
-	return rowsAffected, err
-}
-
-func (r *Repository[T]) buildUpdateSetClause(updateColumns, whereColumns []string) string {
-	var setParts []string
-	for _, col := range updateColumns {
-		setParts = append(setParts, fmt.Sprintf("%s = updates.%s", col, col))
-	}
-	return strings.Join(setParts, ", ")
-}
-
-func (r *Repository[T]) buildWhereClause(whereColumns []string) string {
-	var whereParts []string
-	for _, col := range whereColumns {
-		whereParts = append(whereParts, fmt.Sprintf("%s.%s = updates.%s", r.metadata.TableName, col, col))
-	}
-	return strings.Join(whereParts, " AND ")
 }

@@ -375,78 +375,10 @@ func (q *Query[T]) Delete() (int64, error) {
 	return rowsAffected, err
 }
 
-func (q *Query[T]) Update(record *T) error {
-	if record == nil {
-		return &Error{
-			Op:    "update",
-			Table: q.repo.metadata.TableName,
-			Err:   fmt.Errorf("record cannot be nil"),
-		}
-	}
-
-	updateBuilder := squirrel.Update(q.repo.metadata.TableName).
-		PlaceholderFormat(squirrel.Dollar)
-
-	updateFields := q.repo.getUpdateFields(*record)
-	for column, value := range updateFields {
-		updateBuilder = updateBuilder.Set(column, value)
-	}
-
-	if len(q.whereClause) > 0 {
-		updateBuilder = updateBuilder.Where(q.whereClause)
-	}
-
-	return q.repo.executeQueryMiddleware(OpUpdate, q.ctx, record, updateBuilder, func(middlewareCtx *MiddlewareContext) error {
-		finalQuery := middlewareCtx.QueryBuilder.(squirrel.UpdateBuilder)
-
-		sqlQuery, args, err := finalQuery.ToSql()
-		if err != nil {
-			return &Error{
-				Op:    "update",
-				Table: q.repo.metadata.TableName,
-				Err:   fmt.Errorf("failed to build query: %w", err),
-			}
-		}
-
-		middlewareCtx.Query = sqlQuery
-		middlewareCtx.Args = args
-
-		var result sql.Result
-		if q.tx != nil {
-			result, err = q.tx.ExecContext(q.ctx, sqlQuery, args...)
-		} else {
-			result, err = q.repo.db.ExecContext(q.ctx, sqlQuery, args...)
-		}
-
-		if err != nil {
-			return parsePostgreSQLError(err, "update", q.repo.metadata.TableName)
-		}
-
-		rowsAffected, err := result.RowsAffected()
-		if err != nil {
-			return &Error{
-				Op:    "update",
-				Table: q.repo.metadata.TableName,
-				Err:   fmt.Errorf("failed to get rows affected: %w", err),
-			}
-		}
-
-		if rowsAffected == 0 {
-			return &Error{
-				Op:    "update",
-				Table: q.repo.metadata.TableName,
-				Err:   ErrNotFound,
-			}
-		}
-
-		return nil
-	})
-}
-
-func (q *Query[T]) UpdateMany(updates map[string]interface{}) (int64, error) {
+func (q *Query[T]) Update(updates map[string]interface{}) (int64, error) {
 	if len(updates) == 0 {
 		return 0, &Error{
-			Op:    "updateMany",
+			Op:    "update",
 			Table: q.repo.metadata.TableName,
 			Err:   fmt.Errorf("no updates provided"),
 		}
@@ -470,7 +402,7 @@ func (q *Query[T]) UpdateMany(updates map[string]interface{}) (int64, error) {
 		sqlQuery, args, err := finalQuery.ToSql()
 		if err != nil {
 			return &Error{
-				Op:    "updateMany",
+				Op:    "update",
 				Table: q.repo.metadata.TableName,
 				Err:   fmt.Errorf("failed to build update query: %w", err),
 			}
@@ -487,13 +419,13 @@ func (q *Query[T]) UpdateMany(updates map[string]interface{}) (int64, error) {
 		}
 
 		if err != nil {
-			return parsePostgreSQLError(err, "updateMany", q.repo.metadata.TableName)
+			return parsePostgreSQLError(err, "update", q.repo.metadata.TableName)
 		}
 
 		rowsAffected, err = result.RowsAffected()
 		if err != nil {
 			return &Error{
-				Op:    "updateMany",
+				Op:    "update",
 				Table: q.repo.metadata.TableName,
 				Err:   fmt.Errorf("failed to get rows affected: %w", err),
 			}
