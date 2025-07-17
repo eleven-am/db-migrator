@@ -89,7 +89,7 @@ func TestDeleteRecord(t *testing.T) {
 			WillReturnResult(sqlmock.NewResult(0, 1))
 
 		// Execute DeleteRecord
-		err := repo.DeleteRecord(context.Background(), user)
+		_, err := repo.DeleteRecord(context.Background(), user)
 		require.NoError(t, err)
 
 		require.NoError(t, mock.ExpectationsWereMet())
@@ -109,7 +109,7 @@ func TestDeleteRecord(t *testing.T) {
 			WillReturnResult(sqlmock.NewResult(0, 0))
 
 		// Execute DeleteRecord
-		err := repo.DeleteRecord(context.Background(), user)
+		_, err := repo.DeleteRecord(context.Background(), user)
 		assert.Error(t, err)
 		assert.Equal(t, ErrNotFound, err)
 
@@ -130,7 +130,7 @@ func TestCreateMany(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("CreateMany with multiple records", func(t *testing.T) {
-		users := []*TestUser{
+		users := []TestUser{
 			{Name: "User1", Email: "user1@example.com", IsActive: true},
 			{Name: "User2", Email: "user2@example.com", IsActive: false},
 		}
@@ -150,7 +150,7 @@ func TestCreateMany(t *testing.T) {
 	})
 
 	t.Run("CreateMany with empty slice", func(t *testing.T) {
-		users := []*TestUser{}
+		users := []TestUser{}
 
 		// Execute CreateMany
 		err := repo.CreateMany(context.Background(), users)
@@ -161,7 +161,7 @@ func TestCreateMany(t *testing.T) {
 	})
 
 	t.Run("CreateMany with transaction error", func(t *testing.T) {
-		users := []*TestUser{
+		users := []TestUser{
 			{Name: "User1", Email: "user1@example.com", IsActive: true},
 		}
 

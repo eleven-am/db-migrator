@@ -71,7 +71,7 @@ func TestMiddlewareBehavior(t *testing.T) {
 		})
 
 		// Try to delete - should fail
-		err = repo.Delete(context.Background(), 1)
+		_, err = repo.Delete(context.Background(), 1)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "delete operations are not allowed")
 	})
@@ -149,7 +149,7 @@ func TestMiddlewareBehavior(t *testing.T) {
 
 		// Execute create
 		user := &TestUser{Name: "Test", Email: "test@example.com", IsActive: true}
-		err = repo.Create(context.Background(), user)
+		_, err = repo.Create(context.Background(), user)
 		require.NoError(t, err)
 
 		// Verify metadata was captured
@@ -236,7 +236,7 @@ func TestMiddlewareRealWorldScenarios(t *testing.T) {
 
 		// Test UPDATE
 		mock.ExpectExec("UPDATE").WillReturnResult(sqlmock.NewResult(0, 1))
-		err = repo.Update(context.Background(), &TestUser{ID: 1, Name: "Updated"})
+		_, err = repo.Update(context.Background(), &TestUser{ID: 1, Name: "Updated"})
 		require.NoError(t, err)
 
 		require.NoError(t, mock.ExpectationsWereMet())

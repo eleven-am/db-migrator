@@ -127,7 +127,7 @@ func TestMiddlewareDelete(t *testing.T) {
 	})
 
 	// No SQL should be executed due to middleware blocking
-	err = repo.Delete(context.Background(), 1)
+	_, err = repo.Delete(context.Background(), 1)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "deletion not allowed")
 
@@ -159,7 +159,7 @@ func TestMiddlewareErrorHandling(t *testing.T) {
 
 	// Try to create - should fail
 	user := &TestUser{Name: "Test", Email: "test@example.com"}
-	err = repo.Create(context.Background(), user)
+	_, err = repo.Create(context.Background(), user)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "create operation blocked by middleware")
 

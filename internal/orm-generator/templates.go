@@ -199,11 +199,11 @@ import (
 // The repository inherits these operations from storm.Repository:
 //
 // Single Record Operations:
-//   - Create(ctx, record) - Insert single record
+//   - Create(ctx, record) - Insert single record, returns saved record
 //   - FindByID(ctx, id) - Find record by primary key
-//   - Update(ctx, record) - Update single record by primary key
-//   - Delete(ctx, id) - Delete record by primary key ID
-//   - DeleteRecord(ctx, record) - Delete record using the record instance
+//   - Update(ctx, record) - Update single record by primary key, returns updated record
+//   - Delete(ctx, id) - Delete record by primary key ID, returns deleted record
+//   - DeleteRecord(ctx, record) - Delete record using the record instance, returns deleted record
 //
 // Batch Operations:
 //   - CreateMany(ctx, records) - Insert multiple records in transaction
@@ -217,7 +217,9 @@ import (
 // Example usage:
 //   // Single operations
 //   {{ lower .Model.Name }}, err := repo.FindByID(ctx, "123")
-//   err = repo.Create(ctx, &new{{ .Model.Name }})
+//   saved{{ .Model.Name }}, err := repo.Create(ctx, &new{{ .Model.Name }})
+//   updated{{ .Model.Name }}, err := repo.Update(ctx, &existing{{ .Model.Name }})
+//   deleted{{ .Model.Name }}, err := repo.Delete(ctx, "123")
 //   
 //   // Batch operations
 //   err = repo.CreateMany(ctx, multiple{{ .Model.Name }}s)
@@ -604,11 +606,11 @@ import (
 // All repositories inherit these methods from the base repository:
 //
 // Single Record Operations:
-//   - Create(ctx, record) - Insert single record
+//   - Create(ctx, record) - Insert single record, returns saved record
 //   - FindByID(ctx, id) - Find record by primary key
-//   - Update(ctx, record) - Update single record by primary key
-//   - Delete(ctx, id) - Delete record by primary key ID
-//   - DeleteRecord(ctx, record) - Delete record using the record instance
+//   - Update(ctx, record) - Update single record by primary key, returns updated record
+//   - Delete(ctx, id) - Delete record by primary key ID, returns deleted record
+//   - DeleteRecord(ctx, record) - Delete record using the record instance, returns deleted record
 //
 // Batch Operations:
 //   - CreateMany(ctx, records) - Insert multiple records in transaction
