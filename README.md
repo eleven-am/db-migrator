@@ -340,18 +340,14 @@ func main() {
         Limit(10).
         Find()
     
-    // === RAW QUERIES ===
+    // === JOINS & RELATIONSHIPS ===
     
-    // When you need custom SQL
-    customResults, err := storm.Users.Query().
-        ExecuteRaw(`
-            SELECT u.*, COUNT(p.id) as post_count 
-            FROM users u 
-            LEFT JOIN posts p ON u.id = p.user_id 
-            WHERE u.created_at > $1 
-            GROUP BY u.id 
-            ORDER BY post_count DESC
-        `, time.Now().AddDate(0, -1, 0))
+    // Get users with their posts from last month
+    usersWithPosts, err := storm.Users.Query(ctx).
+        Where(models.Users.CreatedAt.After(time.Now().AddDate(0, -1, 0))).
+        Include("Posts").
+        OrderBy(models.Users.CreatedAt.Desc()).
+        Find()
 }
 ```
 
@@ -480,25 +476,16 @@ func ProductExamples(storm *models.Storm, ctx context.Context) {
             "updated_at": time.Now(),
         })
     
-    // Complex inventory report with custom SQL
-    inventoryReport, err := storm.Products.Query().
-        ExecuteRaw(`
-            SELECT 
-                p.name,
-                p.sku,
-                p.stock,
-                p.price,
-                c.name as category_name,
-                COUNT(r.id) as review_count,
-                AVG(r.rating) as avg_rating
-            FROM products p
-            LEFT JOIN categories c ON p.category_id = c.id
-            LEFT JOIN reviews r ON p.id = r.product_id
-            WHERE p.is_active = true
-            GROUP BY p.id, c.name
-            HAVING COUNT(r.id) > $1
-            ORDER BY avg_rating DESC, p.stock DESC
-        `, 5)
+    // Popular products with low stock alert
+    lowStockProducts, err := storm.Products.Query(ctx).
+        Where(storm.And(
+            models.Products.IsActive.Eq(true),
+            models.Products.Stock.Lt(10),
+        )).
+        Include("Category", "Reviews").
+        OrderBy(models.Products.Stock.Asc()).
+        Limit(20).
+        Find()
 }
 ```
 
@@ -525,24 +512,19 @@ type Event struct {
 }
 
 func EventExamples(storm *models.Storm, ctx context.Context) {
-    // Find upcoming events with available seats
-    upcomingEvents, err := storm.Events.Query().
+    // Find upcoming events with venue information
+    upcomingEvents, err := storm.Events.Query(ctx).
         Where(storm.And(
             models.Events.StartTime.After(time.Now()),
             models.Events.Status.Eq("scheduled"),
-            storm.Not(models.Events.VenueID.IsNull()),
         )).
-        ExecuteRaw(`
-            SELECT e.*, v.name as venue_name,
-                   (e.max_capacity - COUNT(r.id)) as available_seats
-            FROM events e
-            LEFT JOIN venues v ON e.venue_id = v.id
-            LEFT JOIN registrations r ON e.id = r.event_id AND r.status = 'confirmed'
-            WHERE e.start_time > $1 AND e.status = 'scheduled'
-            GROUP BY e.id, v.name
-            HAVING (e.max_capacity - COUNT(r.id)) > 0
-            ORDER BY e.start_time ASC
-        `, time.Now())
+        Include("Venue").                              // Eager load venue
+        IncludeWhere("Registrations",                  // Only load confirmed registrations
+            models.Registrations.Status.Eq("confirmed"),
+        ).
+        OrderBy(models.Events.StartTime.Asc()).
+        Limit(10).
+        Find()
     
     // Batch registration with transaction
     err = storm.WithTransaction(ctx, func(tx *models.Storm) error {
@@ -581,60 +563,48 @@ func EventExamples(storm *models.Storm, ctx context.Context) {
 
 ```go
 func AnalyticsExamples(storm *models.Storm, ctx context.Context) {
-    // Daily user activity report
-    dailyStats, err := storm.Users.Query().
-        ExecuteRaw(`
-            SELECT 
-                DATE(created_at) as signup_date,
-                COUNT(*) as new_users,
-                COUNT(*) FILTER (WHERE is_active = true) as active_users
-            FROM users 
-            WHERE created_at >= $1
-            GROUP BY DATE(created_at)
-            ORDER BY signup_date DESC
-        `, time.Now().AddDate(0, 0, -30))
+    // Get active users from last 30 days
+    activeRecentUsers, err := storm.Users.Query(ctx).
+        Where(storm.And(
+            models.Users.CreatedAt.After(time.Now().AddDate(0, 0, -30)),
+            models.Users.IsActive.Eq(true),
+        )).
+        OrderBy(models.Users.CreatedAt.Desc()).
+        Find()
     
-    // Revenue by category with PostgreSQL window functions
-    revenueReport, err := storm.Products.Query().
-        ExecuteRaw(`
-            WITH category_revenue AS (
-                SELECT 
-                    c.name as category,
-                    SUM(oi.quantity * oi.price) as revenue,
-                    COUNT(DISTINCT o.id) as order_count,
-                    AVG(oi.quantity * oi.price) as avg_order_value
-                FROM categories c
-                LEFT JOIN products p ON c.id = p.category_id
-                LEFT JOIN order_items oi ON p.id = oi.product_id
-                LEFT JOIN orders o ON oi.order_id = o.id
-                WHERE o.created_at >= $1
-                GROUP BY c.id, c.name
-            )
-            SELECT *,
-                   revenue / SUM(revenue) OVER() * 100 as revenue_percentage,
-                   RANK() OVER(ORDER BY revenue DESC) as revenue_rank
-            FROM category_revenue
-            ORDER BY revenue DESC
-        `, time.Now().AddDate(0, -3, 0))
+    // Count total vs active
+    totalRecentUsers, err := storm.Users.Query(ctx).
+        Where(models.Users.CreatedAt.After(time.Now().AddDate(0, 0, -30))).
+        Count()
     
-    // Customer lifetime value calculation
-    clvReport, err := storm.Users.Query().
-        ExecuteRaw(`
-            SELECT 
-                u.id,
-                u.email,
-                COUNT(o.id) as total_orders,
-                SUM(o.total_amount) as lifetime_value,
-                AVG(o.total_amount) as avg_order_value,
-                EXTRACT(DAYS FROM (MAX(o.created_at) - MIN(o.created_at))) as customer_lifespan_days
-            FROM users u
-            LEFT JOIN orders o ON u.id = o.user_id
-            WHERE o.status = 'completed'
-            GROUP BY u.id, u.email
-            HAVING COUNT(o.id) > 0
-            ORDER BY lifetime_value DESC
-            LIMIT 100
-        `)
+    // Get high-value orders from last quarter
+    highValueOrders, err := storm.Orders.Query(ctx).
+        Where(storm.And(
+            models.Orders.CreatedAt.After(time.Now().AddDate(0, -3, 0)),
+            models.Orders.Status.Eq("completed"),
+            models.Orders.TotalAmount.Gt(decimal.NewFromInt(1000)),
+        )).
+        Include("Customer", "OrderItems.Product").
+        OrderBy(models.Orders.TotalAmount.Desc()).
+        Limit(100).
+        Find()
+    
+    // Get VIP customers with high lifetime value
+    vipCustomers, err := storm.Users.Query(ctx).
+        Include("Orders").                             // Load all orders
+        IncludeWhere("Orders",                         // But only completed ones
+            models.Orders.Status.Eq("completed"),
+        ).
+        Where(models.Users.IsActive.Eq(true)).
+        Find()
+    
+    // Simple filtering in memory for customers with 10+ orders
+    var topCustomers []*models.User
+    for _, customer := range vipCustomers {
+        if len(customer.Orders) >= 10 {
+            topCustomers = append(topCustomers, customer)
+        }
+    }
 }
 ```
 
@@ -687,34 +657,55 @@ func MultiTenantExamples(storm *models.Storm, ctx context.Context, orgID string,
         )).
         Find()
     
-    // Tenant-specific analytics
-    orgStats, err := storm.Projects.Query().
-        ExecuteRaw(`
-            SELECT 
-                COUNT(*) as total_projects,
-                COUNT(*) FILTER (WHERE status = 'active') as active_projects,
-                COUNT(DISTINCT user_id) as active_users,
-                AVG(EXTRACT(DAYS FROM (updated_at - created_at))) as avg_project_duration
-            FROM projects 
-            WHERE org_id = $1
-        `, orgID)
+    // Tenant-specific project counts
+    totalProjects, err := storm.Projects.Query(ctx).
+        ForTenant(orgID).
+        Count()
+    
+    activeProjects, err := storm.Projects.Query(ctx).
+        ForTenant(orgID).
+        Where(models.Projects.Status.Eq("active")).
+        Count()
+    
+    // Get projects with their users
+    projectsWithUsers, err := storm.Projects.Query(ctx).
+        ForTenant(orgID).
+        Include("AssignedUsers").
+        Find()
     
     // Cross-tenant reporting (admin only)
-    tenantComparison, err := storm.Organizations.Query().
-        ExecuteRaw(`
-            SELECT 
-                o.name,
-                o.plan,
-                COUNT(u.id) as user_count,
-                COUNT(p.id) as project_count,
-                MAX(p.created_at) as last_activity
-            FROM organizations o
-            LEFT JOIN users u ON o.id = u.org_id
-            LEFT JOIN projects p ON o.id = p.org_id
-            WHERE o.is_active = true
-            GROUP BY o.id, o.name, o.plan
-            ORDER BY user_count DESC
-        `)
+    activeOrgs, err := storm.Organizations.Query(ctx).
+        Where(models.Organizations.IsActive.Eq(true)).
+        Include("Users", "Projects").
+        OrderBy(models.Organizations.CreatedAt.Desc()).
+        Find()
+    
+    // Build report from loaded data
+    type TenantReport struct {
+        Name         string
+        Plan         string
+        UserCount    int
+        ProjectCount int
+        LastActivity time.Time
+    }
+    
+    var tenantReports []TenantReport
+    for _, org := range activeOrgs {
+        lastActivity := org.CreatedAt
+        for _, project := range org.Projects {
+            if project.CreatedAt.After(lastActivity) {
+                lastActivity = project.CreatedAt
+            }
+        }
+        
+        tenantReports = append(tenantReports, TenantReport{
+            Name:         org.Name,
+            Plan:         org.Plan,
+            UserCount:    len(org.Users),
+            ProjectCount: len(org.Projects),
+            LastActivity: lastActivity,
+        })
+    }
 }
 ```
 
@@ -817,7 +808,7 @@ func (q *Query[T]) AccessibleBy(userID string, role string) *Query[T] {
         return q // Admins see everything in their tenant
     case "manager":
         // Managers see their department's data
-        return q.Where(Or(
+        return q.Where(storm.Or(
             OwnerID.Eq(userID),
             DepartmentID.In(getUserDepartments(userID)),
         ))
@@ -838,11 +829,11 @@ users, err := storm.Users.Query(ctx).
 // Complex authorization with visibility rules
 posts, err := storm.Posts.Query(ctx).
     ForTenant(tenantID).
-    Where(And(
+    Where(storm.And(
         Posts.Published.Eq(true),
-        Or(
+        storm.Or(
             Posts.Visibility.Eq("public"),
-            And(
+            storm.And(
                 Posts.Visibility.Eq("team"),
                 Posts.TeamID.Eq(userTeamID),
             ),
@@ -890,17 +881,17 @@ func (q *Query[Project]) VisibleTo(auth AuthFilters) *Query[Project] {
         return base // See all projects in tenant
     case "pm":
         // Project managers see their projects + public ones
-        return base.Where(Or(
+        return base.Where(storm.Or(
             Projects.ManagerID.Eq(auth.UserID),
             Projects.Visibility.Eq("public"),
             Projects.TeamID.In(auth.TeamIDs...),
         ))
     default:
         // Members only see projects they're assigned to
-        return base.Where(Or(
+        return base.Where(storm.Or(
             Projects.OwnerID.Eq(auth.UserID),
             Projects.MemberIDs.Contains(auth.UserID),
-            And(
+            storm.And(
                 Projects.Visibility.Eq("public"),
                 Projects.TeamID.In(auth.TeamIDs...),
             ),
