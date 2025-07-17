@@ -152,15 +152,12 @@ func TestStormLogicalOperators(t *testing.T) {
 	}
 	defer mockDB.Close()
 
-	db := sqlx.NewDb(mockDB, "postgres")
-	storm := NewStorm(db)
-
 	cond1 := Condition{condition: squirrel.Eq{"name": "John"}}
 	cond2 := Condition{condition: squirrel.Eq{"age": 25}}
 	cond3 := Condition{condition: squirrel.Eq{"active": true}}
 
 	t.Run("And", func(t *testing.T) {
-		result := storm.And(cond1, cond2, cond3)
+		result := And(cond1, cond2, cond3)
 		sql, _, err := result.ToSqlizer().ToSql()
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -172,7 +169,7 @@ func TestStormLogicalOperators(t *testing.T) {
 	})
 
 	t.Run("Or", func(t *testing.T) {
-		result := storm.Or(cond1, cond2)
+		result := Or(cond1, cond2)
 		sql, _, err := result.ToSqlizer().ToSql()
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -183,7 +180,7 @@ func TestStormLogicalOperators(t *testing.T) {
 	})
 
 	t.Run("Not", func(t *testing.T) {
-		result := storm.Not(cond1)
+		result := Not(cond1)
 		sql, _, err := result.ToSqlizer().ToSql()
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -195,7 +192,7 @@ func TestStormLogicalOperators(t *testing.T) {
 	})
 
 	t.Run("empty And", func(t *testing.T) {
-		result := storm.And()
+		result := And()
 		sql, _, err := result.ToSqlizer().ToSql()
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -207,7 +204,7 @@ func TestStormLogicalOperators(t *testing.T) {
 	})
 
 	t.Run("empty Or", func(t *testing.T) {
-		result := storm.Or()
+		result := Or()
 		sql, _, err := result.ToSqlizer().ToSql()
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)

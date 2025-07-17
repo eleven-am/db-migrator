@@ -108,7 +108,7 @@ func (s *Storm) GetExecutor() DBExecutor {
 	return s.executor
 }
 
-func (s *Storm) And(conditions ...Condition) Condition {
+func And(conditions ...Condition) Condition {
 	sqlizers := make([]squirrel.Sqlizer, len(conditions))
 	for i, c := range conditions {
 		sqlizers[i] = c.condition
@@ -116,7 +116,7 @@ func (s *Storm) And(conditions ...Condition) Condition {
 	return Condition{squirrel.And(sqlizers)}
 }
 
-func (s *Storm) Or(conditions ...Condition) Condition {
+func Or(conditions ...Condition) Condition {
 	sqlizers := make([]squirrel.Sqlizer, len(conditions))
 	for i, c := range conditions {
 		sqlizers[i] = c.condition
@@ -124,7 +124,7 @@ func (s *Storm) Or(conditions ...Condition) Condition {
 	return Condition{squirrel.Or(sqlizers)}
 }
 
-func (s *Storm) Not(condition Condition) Condition {
+func Not(condition Condition) Condition {
 	return Condition{squirrel.Expr("NOT (?)", condition.ToSqlizer())}
 }
 
