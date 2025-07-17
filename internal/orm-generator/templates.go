@@ -242,7 +242,7 @@ func new{{ .Model.Name }}Repository(db *sqlx.DB) (*{{ .Model.Name }}Repository, 
 }
 
 func new{{ .Model.Name }}RepositoryWithTx(tx *sqlx.Tx) (*{{ .Model.Name }}Repository, error) {
-	baseRepo, err := ststorm.NewRepositoryWithTx[{{ .Model.Name }}](tx, {{ .Model.Name }}Metadata)
+	baseRepo, err := storm.NewRepositoryWithTx[{{ .Model.Name }}](tx, {{ .Model.Name }}Metadata)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create base repository with transaction: %w", err)
 	}
@@ -394,7 +394,7 @@ type {{ .Model.Name }}Query struct {
 {{- end }}
 //   // Combine conditions
 //   query.Where({{ .Model.Name }}s.{{ sanitizeGoName (index .Model.Columns 0).Name }}.Eq("value").And({{ .Model.Name }}s.{{ sanitizeGoName (index .Model.Columns 1).Name }}.IsNotNull()))
-func (q *{{ .Model.Name }}Query) Where(condition orm.Condition) *{{ .Model.Name }}Query {
+func (q *{{ .Model.Name }}Query) Where(condition storm.Condition) *{{ .Model.Name }}Query {
 	q.Query = q.Query.Where(condition)
 	return q
 }
