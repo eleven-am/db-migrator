@@ -371,59 +371,6 @@ func (r *Repository[T]) CreateMany(ctx context.Context, records []*T) error {
 	})
 }
 
-func (r *Repository[T]) UpdateMany(ctx context.Context, updates map[string]interface{}, condition Condition) (int64, error) {
-	if len(updates) == 0 {
-		return 0, &Error{
-			Op:    "updateMany",
-			Table: r.metadata.TableName,
-			Err:   fmt.Errorf("no updates provided"),
-		}
-	}
-
-	query := squirrel.Update(r.metadata.TableName).
-		PlaceholderFormat(squirrel.Dollar).
-		Where(condition.ToSqlizer())
-
-	for column, value := range updates {
-		query = query.Set(column, value)
-	}
-
-	var rowsAffected int64
-	err := r.executeQueryMiddleware(OpUpdateMany, ctx, updates, query, func(middlewareCtx *MiddlewareContext) error {
-		finalQuery := middlewareCtx.QueryBuilder.(squirrel.UpdateBuilder)
-
-		sqlQuery, args, err := finalQuery.ToSql()
-		if err != nil {
-			return &Error{
-				Op:    "updateMany",
-				Table: r.metadata.TableName,
-				Err:   fmt.Errorf("failed to build update query: %w", err),
-			}
-		}
-
-		middlewareCtx.Query = sqlQuery
-		middlewareCtx.Args = args
-
-		result, err := r.db.ExecContext(ctx, sqlQuery, args...)
-		if err != nil {
-			return parsePostgreSQLError(err, "updateMany", r.metadata.TableName)
-		}
-
-		rowsAffected, err = result.RowsAffected()
-		if err != nil {
-			return &Error{
-				Op:    "updateMany",
-				Table: r.metadata.TableName,
-				Err:   fmt.Errorf("failed to get rows affected: %w", err),
-			}
-		}
-
-		return nil
-	})
-
-	return rowsAffected, err
-}
-
 func (r *Repository[T]) Upsert(ctx context.Context, record *T, opts UpsertOptions) error {
 	if record == nil {
 		return &Error{

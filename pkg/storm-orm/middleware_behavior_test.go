@@ -42,11 +42,9 @@ func TestMiddlewareBehavior(t *testing.T) {
 			}
 		})
 
-		// Set up mock to return empty result
 		mock.ExpectQuery("SELECT").WillReturnRows(sqlmock.NewRows([]string{"id", "name", "email", "is_active", "created_at", "updated_at"}))
 
-		// Execute query
-		_, err = repo.Query().Find()
+		_, err = repo.Query(context.Background()).Find()
 		require.NoError(t, err)
 		require.NoError(t, mock.ExpectationsWereMet())
 	})
@@ -113,7 +111,7 @@ func TestMiddlewareBehavior(t *testing.T) {
 		mock.ExpectQuery("SELECT").WillReturnRows(sqlmock.NewRows([]string{"id", "name", "email", "is_active", "created_at", "updated_at"}))
 
 		// Execute query
-		_, err = repo.Query().Find()
+		_, err = repo.Query(context.Background()).Find()
 		require.NoError(t, err)
 
 		// Verify execution order
@@ -192,7 +190,7 @@ func TestMiddlewareBehavior(t *testing.T) {
 		mock.ExpectQuery("SELECT").WillReturnRows(sqlmock.NewRows([]string{"id", "name", "email", "is_active", "created_at", "updated_at"}))
 
 		// Execute query
-		_, err = repo.Query().Find()
+		_, err = repo.Query(context.Background()).Find()
 		require.NoError(t, err)
 	})
 }
@@ -233,7 +231,7 @@ func TestMiddlewareRealWorldScenarios(t *testing.T) {
 
 		// Test SELECT
 		mock.ExpectQuery("SELECT").WillReturnRows(sqlmock.NewRows([]string{"id"}))
-		_, err = repo.Query().Find()
+		_, err = repo.Query(context.Background()).Find()
 		require.NoError(t, err)
 
 		// Test UPDATE
@@ -280,7 +278,7 @@ func TestMiddlewareRealWorldScenarios(t *testing.T) {
 		// Test that queries filter out deleted records
 		mock.ExpectQuery("SELECT.*deleted_at IS NULL").
 			WillReturnRows(sqlmock.NewRows([]string{"id"}))
-		_, err = repo.Query().Find()
+		_, err = repo.Query(context.Background()).Find()
 		require.NoError(t, err)
 
 		require.NoError(t, mock.ExpectationsWereMet())

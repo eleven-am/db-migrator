@@ -126,6 +126,14 @@ func (c StringColumn) Regexp(pattern string) Condition {
 	return Condition{squirrel.Expr(c.String()+" ~ ?", pattern)}
 }
 
+func (c StringColumn) FullTextSearch(query string) Condition {
+	return Condition{squirrel.Expr(c.String()+" @@ plainto_tsquery('english', ?)", query)}
+}
+
+func (c StringColumn) FullTextSearchLang(language, query string) Condition {
+	return Condition{squirrel.Expr(c.String()+" @@ plainto_tsquery(?, ?)", language, query)}
+}
+
 // NumericColumn provides numeric-specific operations
 type NumericColumn[T Numeric] struct {
 	ComparableColumn[T]

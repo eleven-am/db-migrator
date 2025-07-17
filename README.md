@@ -666,14 +666,12 @@ type User struct {
     Organization *Organization `storm:"relation:belongs_to:Organization;foreign_key:org_id"`
 }
 
-func MultiTenantExamples(storm *models.Storm, ctx context.Context, orgID string) {
-    // All queries are automatically scoped to organization
-    orgUsers, err := storm.Users.Query().
-        Where(storm.And(
-            models.Users.OrgID.Eq(orgID),
-            models.Users.IsActive.Eq(true),
-            storm.Not(models.Users.DeletedAt.IsNotNull()),
-        )).
+func MultiTenantExamples(storm *models.Storm, ctx context.Context, orgID string, userID string, userRole string) {
+    // Explicitly scope queries to organization and user permissions
+    orgUsers, err := storm.Users.Query(ctx).
+        ForTenant(orgID).
+        AccessibleBy(userID, userRole).
+        Where(models.Users.IsActive.Eq(true)).
         Include("Organization").
         Find()
     
@@ -796,33 +794,126 @@ repo.AddMiddleware(func(next QueryMiddlewareFunc) QueryMiddlewareFunc {
 
 ### Production-Ready Examples
 
-#### 🏢 Multi-Tenancy
+#### 🏢 Multi-Tenancy & Authorization
 
-Automatically scope all queries to the current tenant:
+Storm encourages explicit, type-safe filtering for multi-tenancy and authorization through the query builder rather than hidden middleware magic:
 
 ```go
-func AddTenancyMiddleware(repo *Repository[T], tenantID string) {
-    repo.AddMiddleware(func(next QueryMiddlewareFunc) QueryMiddlewareFunc {
-        return func(ctx *MiddlewareContext) error {
-            switch v := ctx.QueryBuilder.(type) {
-            case squirrel.SelectBuilder:
-                ctx.QueryBuilder = v.Where(squirrel.Eq{"tenant_id": tenantID})
-            case squirrel.UpdateBuilder:
-                ctx.QueryBuilder = v.Where(squirrel.Eq{"tenant_id": tenantID})
-            case squirrel.DeleteBuilder:
-                ctx.QueryBuilder = v.Where(squirrel.Eq{"tenant_id": tenantID})
-            case squirrel.InsertBuilder:
-                // Auto-add tenant_id to inserts
-                ctx.QueryBuilder = v.Columns("tenant_id").Values(tenantID)
-            }
-            return next(ctx)
-        }
-    })
+// Extend your generated queries with tenant/auth methods
+type TenantQuery[T any] struct {
+    *Query[T]
+    tenantID string
 }
 
-// Usage
-AddTenancyMiddleware(storm.Users, getCurrentTenantID(request))
-users, err := storm.Users.Query().Find() // Automatically filtered by tenant
+// Add tenant filtering method to your queries
+func (q *Query[T]) ForTenant(tenantID string) *Query[T] {
+    return q.Where(TenantID.Eq(tenantID))
+}
+
+// Add authorization filtering based on user role
+func (q *Query[T]) AccessibleBy(userID string, role string) *Query[T] {
+    switch role {
+    case "admin":
+        return q // Admins see everything in their tenant
+    case "manager":
+        // Managers see their department's data
+        return q.Where(Or(
+            OwnerID.Eq(userID),
+            DepartmentID.In(getUserDepartments(userID)),
+        ))
+    default:
+        // Regular users only see their own data
+        return q.Where(OwnerID.Eq(userID))
+    }
+}
+
+// Usage - Explicit and type-safe:
+users, err := storm.Users.Query(ctx).
+    ForTenant(currentTenantID).
+    AccessibleBy(currentUserID, currentRole).
+    Where(Users.IsActive.Eq(true)).
+    OrderBy(Users.CreatedAt.Desc()).
+    Find()
+
+// Complex authorization with visibility rules
+posts, err := storm.Posts.Query(ctx).
+    ForTenant(tenantID).
+    Where(And(
+        Posts.Published.Eq(true),
+        Or(
+            Posts.Visibility.Eq("public"),
+            And(
+                Posts.Visibility.Eq("team"),
+                Posts.TeamID.Eq(userTeamID),
+            ),
+            Posts.AuthorID.Eq(userID),
+        ),
+    )).
+    Include("Author", "Tags").
+    Find()
+
+// For create operations, explicitly set tenant
+newUser := &User{
+    TenantID: currentTenantID, // Explicit tenant assignment
+    Email:    "user@example.com",
+    Role:     "member",
+}
+err = storm.Users.Create(ctx, newUser)
+
+// For updates, ensure tenant scope
+rowsUpdated, err := storm.Users.Query(ctx).
+    ForTenant(currentTenantID).
+    Where(Users.Role.Eq("trial")).
+    UpdateMany(map[string]interface{}{
+        "role": "expired",
+        "updated_at": time.Now(),
+    })
+```
+
+#### 🔐 Row-Level Security Patterns
+
+```go
+// Define reusable authorization helpers
+type AuthFilters struct {
+    UserID   string
+    TenantID string
+    Role     string
+    TeamIDs  []string
+}
+
+// Create domain-specific query extensions
+func (q *Query[Project]) VisibleTo(auth AuthFilters) *Query[Project] {
+    base := q.ForTenant(auth.TenantID)
+    
+    switch auth.Role {
+    case "admin":
+        return base // See all projects in tenant
+    case "pm":
+        // Project managers see their projects + public ones
+        return base.Where(Or(
+            Projects.ManagerID.Eq(auth.UserID),
+            Projects.Visibility.Eq("public"),
+            Projects.TeamID.In(auth.TeamIDs...),
+        ))
+    default:
+        // Members only see projects they're assigned to
+        return base.Where(Or(
+            Projects.OwnerID.Eq(auth.UserID),
+            Projects.MemberIDs.Contains(auth.UserID),
+            And(
+                Projects.Visibility.Eq("public"),
+                Projects.TeamID.In(auth.TeamIDs...),
+            ),
+        ))
+    }
+}
+
+// Usage remains clean and explicit
+projects, err := storm.Projects.Query(ctx).
+    VisibleTo(authFilters).
+    Where(Projects.Status.NotEq("archived")).
+    Include("Tasks", "Members").
+    Find()
 ```
 
 #### 🗑️ Soft Delete System
@@ -857,31 +948,42 @@ err := storm.Users.Delete(ctx, userID) // Sets deleted_at instead of removing
 users, err := storm.Users.Query().Find() // Only returns non-deleted users
 ```
 
-#### 🔐 Authorization & Security
+#### 🔍 Query Tracing & Debugging
 
-Block operations based on custom authorization logic:
+Use middleware for query inspection and debugging:
 
 ```go
-func AddAuthorizationMiddleware(repo *Repository[T], userRole string) {
+func AddQueryTracingMiddleware(repo *Repository[T], logger *log.Logger) {
     repo.AddMiddleware(func(next QueryMiddlewareFunc) QueryMiddlewareFunc {
         return func(ctx *MiddlewareContext) error {
-            // Block all delete operations for non-admin users
-            if ctx.Operation == OpDelete && userRole != "admin" {
-                return fmt.Errorf("unauthorized: only admins can delete %s", ctx.TableName)
+            // Log the query before execution
+            if ctx.Query != "" {
+                logger.Debug("Executing query", map[string]interface{}{
+                    "table":     ctx.TableName,
+                    "operation": string(ctx.Operation),
+                    "query":     ctx.Query,
+                    "args":      ctx.Args,
+                })
             }
             
-            // Restrict sensitive queries
-            if ctx.TableName == "financial_records" && userRole != "finance" {
-                return fmt.Errorf("unauthorized: access denied to %s", ctx.TableName)
+            err := next(ctx)
+            
+            if err != nil {
+                logger.Error("Query failed", map[string]interface{}{
+                    "error": err.Error(),
+                    "query": ctx.Query,
+                })
             }
             
-            return next(ctx)
+            return err
         }
     })
 }
 
-// Usage
-AddAuthorizationMiddleware(storm.Users, getCurrentUserRole(request))
+// Usage - helpful for development and debugging
+if config.DebugMode {
+    AddQueryTracingMiddleware(storm.Users, debugLogger)
+}
 ```
 
 #### 📊 Audit Logging
@@ -1018,20 +1120,41 @@ func UserHandler(w http.ResponseWriter, r *http.Request) {
 }
 ```
 
-### Middleware Chaining
+### Middleware Best Practices
 
-Middleware executes in the order it's added, with each middleware wrapping the next:
+Use middleware for cross-cutting concerns that don't affect query logic:
 
 ```go
-// Add multiple middleware - they execute in order
-repo.AddMiddleware(authMiddleware)      // Executes first
-repo.AddMiddleware(tenancyMiddleware)   // Executes second  
-repo.AddMiddleware(auditMiddleware)     // Executes third
-repo.AddMiddleware(performanceMiddleware) // Executes last
+// ✅ GOOD: Middleware for operational concerns
+repo.AddMiddleware(performanceMiddleware)  // Monitor slow queries
+repo.AddMiddleware(auditMiddleware)        // Log all operations
+repo.AddMiddleware(retryMiddleware)        // Retry on connection errors
+repo.AddMiddleware(circuitBreakerMiddleware) // Prevent cascading failures
 
-// Execution flow:
-// auth -> tenancy -> audit -> performance -> actual DB operation -> performance -> audit -> tenancy -> auth
+// ❌ AVOID: Using middleware for business logic
+// Instead of hiding filters in middleware:
+// repo.AddMiddleware(tenantFilterMiddleware)
+// repo.AddMiddleware(authorizationMiddleware)
+
+// ✅ BETTER: Make filtering explicit in queries
+users, err := storm.Users.Query(ctx).
+    ForTenant(tenantID).          // Explicit tenant scope
+    AccessibleBy(userID, role).   // Explicit authorization
+    Where(Users.IsActive.Eq(true)).
+    Find()
 ```
+
+### When to Use Middleware vs Query Methods
+
+| Use Case | Middleware | Query Method |
+|----------|------------|---------------|
+| Multi-tenancy filtering | ❌ Hidden magic | ✅ Explicit `.ForTenant()` |
+| Authorization rules | ❌ Hard to test | ✅ Explicit `.AccessibleBy()` |
+| Soft deletes | ✅ Transparent | ✅ Or use `.NotDeleted()` |
+| Audit logging | ✅ Cross-cutting | ❌ Too verbose |
+| Performance monitoring | ✅ Operational | ❌ Not business logic |
+| Query retry | ✅ Infrastructure | ❌ Not domain concern |
+| Request context | ✅ Pass-through | ❌ Automatic |
 
 ### Available Operation Types
 

@@ -204,7 +204,7 @@ func TestMiddlewareCount(t *testing.T) {
 
 	// Execute count
 	activeCol := Column[bool]{Name: "is_active", Table: "users"}
-	query := repo.Query().Where(activeCol.Eq(true))
+	query := repo.Query(context.Background()).Where(activeCol.Eq(true))
 	count, err := query.Count()
 	require.NoError(t, err)
 	assert.Equal(t, int64(5), count)
@@ -254,7 +254,7 @@ func TestMiddlewareUpdateMany(t *testing.T) {
 	}
 	nameCol := StringColumn{Column: Column[string]{Name: "name", Table: "users"}}
 	condition := nameCol.Like("test%")
-	rowsAffected, err := repo.UpdateMany(context.Background(), updates, condition)
+	rowsAffected, err := repo.Query(context.Background()).Where(condition).UpdateMany(updates)
 	require.NoError(t, err)
 	assert.Equal(t, int64(3), rowsAffected)
 

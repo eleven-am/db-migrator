@@ -25,13 +25,13 @@ func TestNewStorm(t *testing.T) {
 	if storm == nil {
 		t.Fatal("expected storm instance, got nil")
 	}
-	if ststorm.db != db {
+	if storm.db != db {
 		t.Error("storm db does not match input db")
 	}
-	if ststorm.executor != db {
+	if storm.executor != db {
 		t.Error("storm executor should be db by default")
 	}
-	if ststorm.repositories == nil {
+	if storm.repositories == nil {
 		t.Error("repositories map should be initialized")
 	}
 }
@@ -52,12 +52,12 @@ func TestStormWithTransaction(t *testing.T) {
 		mock.ExpectCommit()
 
 		executed := false
-		err := ststorm.WithTransaction(context.Background(), func(txStorm *Storm) error {
+		err := storm.WithTransaction(context.Background(), func(txStorm *Storm) error {
 			executed = true
 			if txStorm == storm {
 				t.Error("transaction storm should be different instance")
 			}
-			if txStstorm.db != ststorm.db {
+			if txStorm.db != storm.db {
 				t.Error("transaction storm should have same db")
 			}
 
@@ -81,7 +81,7 @@ func TestStormWithTransaction(t *testing.T) {
 		mock.ExpectRollback()
 
 		expectedErr := errors.New("transaction error")
-		err := ststorm.WithTransaction(context.Background(), func(txStorm *Storm) error {
+		err := storm.WithTransaction(context.Background(), func(txStorm *Storm) error {
 			return expectedErr
 		})
 
@@ -104,7 +104,7 @@ func TestStormWithTransaction(t *testing.T) {
 			}
 		}()
 
-		ststorm.WithTransaction(context.Background(), func(txStorm *Storm) error {
+		storm.WithTransaction(context.Background(), func(txStorm *Storm) error {
 			panic("test panic")
 		})
 	})
@@ -130,7 +130,7 @@ func TestStormWithTransactionOptions(t *testing.T) {
 			ReadOnly:  true,
 		}
 
-		err := ststorm.WithTransactionOptions(context.Background(), opts, func(txStorm *Storm) error {
+		err := storm.WithTransactionOptions(context.Background(), opts, func(txStorm *Storm) error {
 			return nil
 		})
 
@@ -160,7 +160,7 @@ func TestStormLogicalOperators(t *testing.T) {
 	cond3 := Condition{condition: squirrel.Eq{"active": true}}
 
 	t.Run("And", func(t *testing.T) {
-		result := ststorm.And(cond1, cond2, cond3)
+		result := storm.And(cond1, cond2, cond3)
 		sql, _, err := result.ToSqlizer().ToSql()
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -172,7 +172,7 @@ func TestStormLogicalOperators(t *testing.T) {
 	})
 
 	t.Run("Or", func(t *testing.T) {
-		result := ststorm.Or(cond1, cond2)
+		result := storm.Or(cond1, cond2)
 		sql, _, err := result.ToSqlizer().ToSql()
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -183,7 +183,7 @@ func TestStormLogicalOperators(t *testing.T) {
 	})
 
 	t.Run("Not", func(t *testing.T) {
-		result := ststorm.Not(cond1)
+		result := storm.Not(cond1)
 		sql, _, err := result.ToSqlizer().ToSql()
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -195,7 +195,7 @@ func TestStormLogicalOperators(t *testing.T) {
 	})
 
 	t.Run("empty And", func(t *testing.T) {
-		result := ststorm.And()
+		result := storm.And()
 		sql, _, err := result.ToSqlizer().ToSql()
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -207,7 +207,7 @@ func TestStormLogicalOperators(t *testing.T) {
 	})
 
 	t.Run("empty Or", func(t *testing.T) {
-		result := ststorm.Or()
+		result := storm.Or()
 		sql, _, err := result.ToSqlizer().ToSql()
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -231,14 +231,14 @@ func TestStormGetters(t *testing.T) {
 	storm := NewStorm(db)
 
 	t.Run("GetDB", func(t *testing.T) {
-		result := ststorm.GetDB()
+		result := storm.GetDB()
 		if result != db {
 			t.Error("GetDB should return the underlying database")
 		}
 	})
 
 	t.Run("GetExecutor", func(t *testing.T) {
-		result := ststorm.GetExecutor()
+		result := storm.GetExecutor()
 		if result != db {
 			t.Error("GetExecutor should return db by default")
 		}

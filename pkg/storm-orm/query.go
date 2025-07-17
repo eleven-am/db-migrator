@@ -4,10 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"reflect"
-
 	"github.com/Masterminds/squirrel"
 	"github.com/jmoiron/sqlx"
+	"reflect"
 )
 
 // Query provides a fluent interface for building database queries with all features integrated
@@ -31,23 +30,17 @@ type Query[T any] struct {
 	includes []include
 }
 
-func (r *Repository[T]) Query() *Query[T] {
+func (r *Repository[T]) Query(ctx context.Context) *Query[T] {
 	return &Query[T]{
 		repo: r,
 		builder: squirrel.Select(r.Columns()...).
 			From(r.metadata.TableName).
 			PlaceholderFormat(squirrel.Dollar),
-		ctx:         context.Background(),
+		ctx:         ctx,
 		whereClause: squirrel.And{},
 		joins:       make([]join, 0),
 		includes:    make([]include, 0),
 	}
-}
-
-func (r *Repository[T]) QueryContext(ctx context.Context) *Query[T] {
-	q := r.Query()
-	q.ctx = ctx
-	return q
 }
 
 func (q *Query[T]) WithTx(tx *sqlx.Tx) *Query[T] {
@@ -86,8 +79,6 @@ func (q *Query[T]) Offset(offset uint64) *Query[T] {
 	q.offset = &offset
 	return q
 }
-
-// Join methods
 
 func (q *Query[T]) Join(joinType JoinType, table, condition string) *Query[T] {
 	if q.err != nil {
@@ -141,10 +132,6 @@ func (q *Query[T]) IncludeWhere(relationship string, conditions ...Condition) *Q
 	return q
 }
 
-// Advanced PostgreSQL features
-
-// Build methods
-
 func (q *Query[T]) buildQuery() (string, []interface{}, error) {
 	if q.err != nil {
 		return "", nil, q.err
@@ -188,8 +175,6 @@ func (q *Query[T]) buildQuery() (string, []interface{}, error) {
 
 	return baseSQL, baseArgs, nil
 }
-
-// Execution methods
 
 func (q *Query[T]) Find() ([]T, error) {
 	if len(q.includes) > 0 {
@@ -390,7 +375,135 @@ func (q *Query[T]) Delete() (int64, error) {
 	return rowsAffected, err
 }
 
-// Utility methods
+func (q *Query[T]) Update(record *T) error {
+	if record == nil {
+		return &Error{
+			Op:    "update",
+			Table: q.repo.metadata.TableName,
+			Err:   fmt.Errorf("record cannot be nil"),
+		}
+	}
+
+	updateBuilder := squirrel.Update(q.repo.metadata.TableName).
+		PlaceholderFormat(squirrel.Dollar)
+
+	updateFields := q.repo.getUpdateFields(*record)
+	for column, value := range updateFields {
+		updateBuilder = updateBuilder.Set(column, value)
+	}
+
+	if len(q.whereClause) > 0 {
+		updateBuilder = updateBuilder.Where(q.whereClause)
+	}
+
+	return q.repo.executeQueryMiddleware(OpUpdate, q.ctx, record, updateBuilder, func(middlewareCtx *MiddlewareContext) error {
+		finalQuery := middlewareCtx.QueryBuilder.(squirrel.UpdateBuilder)
+
+		sqlQuery, args, err := finalQuery.ToSql()
+		if err != nil {
+			return &Error{
+				Op:    "update",
+				Table: q.repo.metadata.TableName,
+				Err:   fmt.Errorf("failed to build query: %w", err),
+			}
+		}
+
+		middlewareCtx.Query = sqlQuery
+		middlewareCtx.Args = args
+
+		var result sql.Result
+		if q.tx != nil {
+			result, err = q.tx.ExecContext(q.ctx, sqlQuery, args...)
+		} else {
+			result, err = q.repo.db.ExecContext(q.ctx, sqlQuery, args...)
+		}
+
+		if err != nil {
+			return parsePostgreSQLError(err, "update", q.repo.metadata.TableName)
+		}
+
+		rowsAffected, err := result.RowsAffected()
+		if err != nil {
+			return &Error{
+				Op:    "update",
+				Table: q.repo.metadata.TableName,
+				Err:   fmt.Errorf("failed to get rows affected: %w", err),
+			}
+		}
+
+		if rowsAffected == 0 {
+			return &Error{
+				Op:    "update",
+				Table: q.repo.metadata.TableName,
+				Err:   ErrNotFound,
+			}
+		}
+
+		return nil
+	})
+}
+
+func (q *Query[T]) UpdateMany(updates map[string]interface{}) (int64, error) {
+	if len(updates) == 0 {
+		return 0, &Error{
+			Op:    "updateMany",
+			Table: q.repo.metadata.TableName,
+			Err:   fmt.Errorf("no updates provided"),
+		}
+	}
+
+	updateBuilder := squirrel.Update(q.repo.metadata.TableName).
+		PlaceholderFormat(squirrel.Dollar)
+
+	for column, value := range updates {
+		updateBuilder = updateBuilder.Set(column, value)
+	}
+
+	if len(q.whereClause) > 0 {
+		updateBuilder = updateBuilder.Where(q.whereClause)
+	}
+
+	var rowsAffected int64
+	err := q.repo.executeQueryMiddleware(OpUpdateMany, q.ctx, updates, updateBuilder, func(middlewareCtx *MiddlewareContext) error {
+		finalQuery := middlewareCtx.QueryBuilder.(squirrel.UpdateBuilder)
+
+		sqlQuery, args, err := finalQuery.ToSql()
+		if err != nil {
+			return &Error{
+				Op:    "updateMany",
+				Table: q.repo.metadata.TableName,
+				Err:   fmt.Errorf("failed to build update query: %w", err),
+			}
+		}
+
+		middlewareCtx.Query = sqlQuery
+		middlewareCtx.Args = args
+
+		var result sql.Result
+		if q.tx != nil {
+			result, err = q.tx.ExecContext(q.ctx, sqlQuery, args...)
+		} else {
+			result, err = q.repo.db.ExecContext(q.ctx, sqlQuery, args...)
+		}
+
+		if err != nil {
+			return parsePostgreSQLError(err, "updateMany", q.repo.metadata.TableName)
+		}
+
+		rowsAffected, err = result.RowsAffected()
+		if err != nil {
+			return &Error{
+				Op:    "updateMany",
+				Table: q.repo.metadata.TableName,
+				Err:   fmt.Errorf("failed to get rows affected: %w", err),
+			}
+		}
+
+		return nil
+	})
+
+	return rowsAffected, err
+}
 
 func (q *Query[T]) findWithRelationships() ([]T, error) {
 

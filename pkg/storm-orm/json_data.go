@@ -58,14 +58,14 @@ func (j *JSONData) Scan(value interface{}) error {
 	return nil
 }
 
-func (j JSONData) Value() (driver.Value, error) {
+func (j *JSONData) Value() (driver.Value, error) {
 	if len(j.RawMessage) == 0 {
 		return nil, nil
 	}
 	return []byte(j.RawMessage), nil
 }
 
-func (j JSONData) String() string {
+func (j *JSONData) String() string {
 	if len(j.RawMessage) == 0 {
 		return "null"
 	}

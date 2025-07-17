@@ -1,6 +1,7 @@
 package orm
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/jmoiron/sqlx"
@@ -120,8 +121,8 @@ func (r *Repository[T]) relationships() *relationshipManager {
 	return r.relationshipManager
 }
 
-func (r *Repository[T]) WithRelationships() *Query[T] {
-	return r.Query()
+func (r *Repository[T]) WithRelationships(ctx context.Context) *Query[T] {
+	return r.Query(ctx)
 }
 
 func (r *Repository[T]) getInsertFields(model T) (columns []string, values []interface{}) {
