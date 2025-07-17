@@ -25,7 +25,7 @@ func NewStorm(db *sqlx.DB) *Storm {
 		repositories: make(map[string]interface{}),
 	}
 
-	ststorm.initializeRepositories()
+	storm.initializeRepositories()
 
 	return storm
 }
@@ -37,7 +37,7 @@ func newStormWithExecutor(db *sqlx.DB, executor DBExecutor) *Storm {
 		repositories: make(map[string]interface{}),
 	}
 
-	ststorm.initializeRepositories()
+	storm.initializeRepositories()
 	return storm
 }
 

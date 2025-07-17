@@ -26,7 +26,7 @@ Storm provides powerful tools for:
 - ORM code generation from Go models
 - Database schema introspection and analysis
 - Modern CLI with rich output capabilities`,
-		Version: ststorm.Version,
+		Version: storm.Version,
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
 			var err error
 			stormConfig, err = LoadStormConfig(configFile)
@@ -47,7 +47,7 @@ Storm provides powerful tools for:
 		},
 	}
 
-	rootCmd.PersistentFlags().StringVar(&configFile, "config", "", "config file (default: ststorm.yaml)")
+	rootCmd.PersistentFlags().StringVar(&configFile, "config", "", "config file (default: storm.yaml)")
 	rootCmd.PersistentFlags().StringVar(&databaseURL, "url", "", "database connection URL")
 	rootCmd.PersistentFlags().BoolVar(&debug, "debug", false, "enable debug output")
 	rootCmd.PersistentFlags().BoolVar(&verbose, "verbose", false, "enable verbose output")

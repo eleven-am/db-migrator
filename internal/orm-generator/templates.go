@@ -26,11 +26,11 @@ import (
 )
 
 // {{ .Model.Name }}Metadata provides compile-time metadata for {{ .Model.Name }}
-var {{ .Model.Name }}Metadata = &storm.ModelMetadata{
+var {{ .Model.Name }}Metadata = &orm.ModelMetadata{
 	TableName:  "{{ .Model.TableName }}",
 	StructName: "{{ .Model.Name }}",
 	
-	Columns: map[string]*storm.ColumnMetadata{
+	Columns: map[string]*orm.ColumnMetadata{
 		{{- range .Model.Columns }}
 		"{{ .Name }}": {
 			FieldName:       "{{ .Name }}",
@@ -605,6 +605,14 @@ const relationshipsTemplate = `//go:build !exclude_generated
 
 package {{ .Package }}
 
+{{- $hasRelationships := false }}
+{{- range .Models }}
+  {{- if .Relationships }}
+    {{- $hasRelationships = true }}
+  {{- end }}
+{{- end }}
+
+{{- if $hasRelationships }}
 import (
 	"context"
 	"database/sql"
@@ -612,6 +620,7 @@ import (
 	
 	orm "github.com/eleven-am/storm/pkg/storm-orm"
 )
+{{- end }}
 
 {{ range .Models }}
 // {{ .Name }} relationship helpers

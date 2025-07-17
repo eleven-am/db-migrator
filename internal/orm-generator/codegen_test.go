@@ -123,7 +123,7 @@ type TestProfile struct {
 		"test_post_repository.go",
 		"test_profile_repository.go",
 		"relationships.go",
-		"ststorm.go",
+		"storm.go",
 	}
 
 	for _, filename := range expectedFiles {

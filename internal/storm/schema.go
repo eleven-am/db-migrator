@@ -12,11 +12,11 @@ import (
 // SchemaInspectorImpl implements schema introspection
 type SchemaInspectorImpl struct {
 	db     *sqlx.DB
-	config *ststorm.Config
-	logger ststorm.Logger
+	config *storm.Config
+	logger storm.Logger
 }
 
-func NewSchemaInspector(db *sqlx.DB, config *ststorm.Config, logger ststorm.Logger) *SchemaInspectorImpl {
+func NewSchemaInspector(db *sqlx.DB, config *storm.Config, logger storm.Logger) *SchemaInspectorImpl {
 	return &SchemaInspectorImpl{
 		db:     db,
 		config: config,
@@ -24,7 +24,7 @@ func NewSchemaInspector(db *sqlx.DB, config *ststorm.Config, logger ststorm.Logg
 	}
 }
 
-func (s *SchemaInspectorImpl) Inspect(ctx context.Context) (*ststorm.Schema, error) {
+func (s *SchemaInspectorImpl) Inspect(ctx context.Context) (*storm.Schema, error) {
 	s.logger.Info("Inspecting database schema...")
 
 	inspector := introspect.NewInspector(s.db.DB, "postgres")
@@ -40,13 +40,13 @@ func (s *SchemaInspectorImpl) Inspect(ctx context.Context) (*ststorm.Schema, err
 	return stormSchema, nil
 }
 
-func (s *SchemaInspectorImpl) Compare(ctx context.Context, from, to *ststorm.Schema) (*ststorm.SchemaDiff, error) {
+func (s *SchemaInspectorImpl) Compare(ctx context.Context, from, to *storm.Schema) (*storm.SchemaDiff, error) {
 	s.logger.Info("Comparing schemas...")
 
-	diff := &ststorm.SchemaDiff{
-		AddedTables:    make(map[string]*ststorm.Table),
-		DroppedTables:  make(map[string]*ststorm.Table),
-		ModifiedTables: make(map[string]*ststorm.TableDiff),
+	diff := &storm.SchemaDiff{
+		AddedTables:    make(map[string]*storm.Table),
+		DroppedTables:  make(map[string]*storm.Table),
+		ModifiedTables: make(map[string]*storm.TableDiff),
 	}
 
 	for name, toTable := range to.Tables {
@@ -111,19 +111,19 @@ func (s *SchemaInspectorImpl) ExportGo(ctx context.Context) (string, error) {
 	return goCode, nil
 }
 
-func (s *SchemaInspectorImpl) convertIntrospectSchemaToStorm(dbSchema *introspect.DatabaseSchema) *ststorm.Schema {
-	stormSchema := &ststorm.Schema{
-		Tables: make(map[string]*ststorm.Table),
+func (s *SchemaInspectorImpl) convertIntrospectSchemaToStorm(dbSchema *introspect.DatabaseSchema) *storm.Schema {
+	stormSchema := &storm.Schema{
+		Tables: make(map[string]*storm.Table),
 	}
 
 	for tableName, table := range dbSchema.Tables {
-		stormTable := &ststorm.Table{
+		stormTable := &storm.Table{
 			Name:    table.Name,
-			Columns: make(map[string]*ststorm.Column),
+			Columns: make(map[string]*storm.Column),
 		}
 
 		for _, col := range table.Columns {
-			stormCol := &ststorm.Column{
+			stormCol := &storm.Column{
 				Name:     col.Name,
 				Type:     col.DataType,
 				Nullable: col.IsNullable,
@@ -135,14 +135,14 @@ func (s *SchemaInspectorImpl) convertIntrospectSchemaToStorm(dbSchema *introspec
 		}
 
 		if table.PrimaryKey != nil {
-			stormTable.PrimaryKey = &ststorm.PrimaryKey{
+			stormTable.PrimaryKey = &storm.PrimaryKey{
 				Name:    table.PrimaryKey.Name,
 				Columns: table.PrimaryKey.Columns,
 			}
 		}
 
 		for _, fk := range table.ForeignKeys {
-			stormFK := &ststorm.ForeignKey{
+			stormFK := &storm.ForeignKey{
 				Name:           fk.Name,
 				Columns:        fk.Columns,
 				ForeignTable:   fk.ReferencedTable,
@@ -156,7 +156,7 @@ func (s *SchemaInspectorImpl) convertIntrospectSchemaToStorm(dbSchema *introspec
 			for i, col := range idx.Columns {
 				columns[i] = col.Name
 			}
-			stormIdx := &ststorm.Index{
+			stormIdx := &storm.Index{
 				Name:    idx.Name,
 				Columns: columns,
 				Unique:  idx.IsUnique,
@@ -170,11 +170,11 @@ func (s *SchemaInspectorImpl) convertIntrospectSchemaToStorm(dbSchema *introspec
 	return stormSchema
 }
 
-func (s *SchemaInspectorImpl) compareTable(from, to *ststorm.Table) *ststorm.TableDiff {
-	diff := &ststorm.TableDiff{
-		AddedColumns:    make(map[string]*ststorm.Column),
-		DroppedColumns:  make(map[string]*ststorm.Column),
-		ModifiedColumns: make(map[string]*ststorm.ColumnDiff),
+func (s *SchemaInspectorImpl) compareTable(from, to *storm.Table) *storm.TableDiff {
+	diff := &storm.TableDiff{
+		AddedColumns:    make(map[string]*storm.Column),
+		DroppedColumns:  make(map[string]*storm.Column),
+		ModifiedColumns: make(map[string]*storm.ColumnDiff),
 	}
 
 	for name, toColumn := range to.Columns {
@@ -197,8 +197,8 @@ func (s *SchemaInspectorImpl) compareTable(from, to *ststorm.Table) *ststorm.Tab
 	return diff
 }
 
-func (s *SchemaInspectorImpl) compareColumn(from, to *ststorm.Column) *ststorm.ColumnDiff {
-	diff := &ststorm.ColumnDiff{}
+func (s *SchemaInspectorImpl) compareColumn(from, to *storm.Column) *storm.ColumnDiff {
+	diff := &storm.ColumnDiff{}
 
 	if from.Type != to.Type {
 		diff.TypeChanged = true

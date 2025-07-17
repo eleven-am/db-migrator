@@ -11,18 +11,18 @@ import (
 
 // ORMImpl implements ORM code generation
 type ORMImpl struct {
-	config *ststorm.Config
-	logger ststorm.Logger
+	config *storm.Config
+	logger storm.Logger
 }
 
-func NewORM(config *ststorm.Config, logger ststorm.Logger) *ORMImpl {
+func NewORM(config *storm.Config, logger storm.Logger) *ORMImpl {
 	return &ORMImpl{
 		config: config,
 		logger: logger,
 	}
 }
 
-func (o *ORMImpl) Generate(ctx context.Context, opts ststorm.GenerateOptions) error {
+func (o *ORMImpl) Generate(ctx context.Context, opts storm.GenerateOptions) error {
 	o.logger.Info("Generating ORM code...", "package", opts.PackagePath)
 
 	config := orm_generator.GenerationConfig{

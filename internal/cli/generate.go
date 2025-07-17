@@ -37,11 +37,11 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("Parsing structs from: %s\n", absPath)
 
-	config := ststorm.NewConfig()
+	config := storm.NewConfig()
 	config.ModelsPackage = absPath
 	config.Debug = debug
 
-	stormClient, err := ststorm.NewWithConfig(config)
+	stormClient, err := storm.NewWithConfig(config)
 	if err != nil {
 		return fmt.Errorf("failed to create Storm client: %w", err)
 	}

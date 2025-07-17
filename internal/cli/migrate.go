@@ -79,7 +79,7 @@ func runMigrate(cmd *cobra.Command, args []string) error {
 		dsn = fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s",
 			dbUser, dbPassword, dbHost, dbPort, dbName, dbSSLMode)
 	} else {
-		return fmt.Errorf("database connection required: use --url flag, individual connection flags, or specify in ststorm.yaml")
+		return fmt.Errorf("database connection required: use --url flag, individual connection flags, or specify in storm.yaml")
 	}
 
 	if verbose {
@@ -90,13 +90,13 @@ func runMigrate(cmd *cobra.Command, args []string) error {
 
 	fmt.Println("Initializing Storm migration engine...")
 
-	config := ststorm.NewConfig()
+	config := storm.NewConfig()
 	config.DatabaseURL = dsn
 	config.ModelsPackage = packagePath
 	config.MigrationsDir = outputDir
 	config.Debug = debug
 
-	stormClient, err := ststorm.NewWithConfig(config)
+	stormClient, err := storm.NewWithConfig(config)
 	if err != nil {
 		return fmt.Errorf("failed to create Storm client: %w", err)
 	}
@@ -108,7 +108,7 @@ func runMigrate(cmd *cobra.Command, args []string) error {
 
 	fmt.Println("Generating migration...")
 
-	opts := ststorm.MigrateOptions{
+	opts := storm.MigrateOptions{
 		PackagePath: packagePath,
 		OutputDir:   outputDir,
 		DryRun:      dryRun,

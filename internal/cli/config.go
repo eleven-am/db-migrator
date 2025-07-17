@@ -8,7 +8,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// StormConfig represents the ststorm.yaml configuration structure
+// StormConfig represents the storm.yaml configuration structure
 type StormConfig struct {
 	Version string `yaml:"version"`
 	Project string `yaml:"project"`
@@ -43,7 +43,7 @@ type StormConfig struct {
 
 func LoadStormConfig(path string) (*StormConfig, error) {
 	if path == "" {
-		locations := []string{"ststorm.yaml", "ststorm.yml", ".ststorm.yaml", ".ststorm.yml"}
+		locations := []string{"storm.yaml", "storm.yml", ".storm.yaml", ".storm.yml"}
 		for _, loc := range locations {
 			if _, err := os.Stat(loc); err == nil {
 				path = loc
@@ -92,7 +92,7 @@ func GetConfigPath() string {
 		return path
 	}
 
-	locations := []string{"ststorm.yaml", "ststorm.yml", ".ststorm.yaml", ".ststorm.yml"}
+	locations := []string{"storm.yaml", "storm.yml", ".storm.yaml", ".storm.yml"}
 	for _, loc := range locations {
 		if _, err := os.Stat(loc); err == nil {
 			return loc
@@ -104,7 +104,7 @@ func GetConfigPath() string {
 
 func SaveStormConfig(config *StormConfig, path string) error {
 	if path == "" {
-		path = "ststorm.yaml"
+		path = "storm.yaml"
 	}
 
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {

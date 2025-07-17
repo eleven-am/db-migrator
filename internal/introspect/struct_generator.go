@@ -52,7 +52,11 @@ func (g *StructGenerator) GenerateStructs() (string, error) {
 	if len(imports) > 0 {
 		b.WriteString("import (\n")
 		for _, imp := range imports {
-			b.WriteString(fmt.Sprintf("\t\"%s\"\n", imp))
+			if imp == "github.com/eleven-am/storm/pkg/storm-orm" {
+				b.WriteString(fmt.Sprintf("\torm \"%s\"\n", imp))
+			} else {
+				b.WriteString(fmt.Sprintf("\t\"%s\"\n", imp))
+			}
 		}
 		b.WriteString(")\n\n")
 	}
@@ -510,7 +514,7 @@ func (g *StructGenerator) collectImports() []string {
 				imports["time"] = true
 			}
 			if col.DataType == "json" || col.DataType == "jsonb" {
-				imports["orm github.com/eleven-am/storm/pkg/storm-orm"] = true
+				imports["github.com/eleven-am/storm/pkg/storm-orm"] = true
 			}
 		}
 	}

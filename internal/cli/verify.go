@@ -39,12 +39,12 @@ func runVerify(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("either --url or both --user and --dbname must be provided")
 	}
 
-	config := ststorm.NewConfig()
+	config := storm.NewConfig()
 	config.DatabaseURL = dsn
 	config.ModelsPackage = packagePath
 	config.Debug = debug
 
-	stormClient, err := ststorm.NewWithConfig(config)
+	stormClient, err := storm.NewWithConfig(config)
 	if err != nil {
 		return fmt.Errorf("failed to create Storm client: %w", err)
 	}

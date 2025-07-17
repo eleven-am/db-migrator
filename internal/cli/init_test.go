@@ -34,7 +34,7 @@ func TestRunInit(t *testing.T) {
 		initForce = origForce
 	}()
 
-	t.Run("creates ststorm.yaml with default values", func(t *testing.T) {
+	t.Run("creates storm.yaml with default values", func(t *testing.T) {
 		// Reset flags
 		initProject = ""
 		initDriver = "postgres"
@@ -45,13 +45,13 @@ func TestRunInit(t *testing.T) {
 			t.Fatalf("runInit failed: %v", err)
 		}
 
-		// Check that ststorm.yaml was created
-		if _, err := os.Stat("ststorm.yaml"); os.IsNotExist(err) {
-			t.Error("ststorm.yaml was not created")
+		// Check that storm.yaml was created
+		if _, err := os.Stat("storm.yaml"); os.IsNotExist(err) {
+			t.Error("storm.yaml was not created")
 		}
 
 		// Load and verify the config
-		config, err := LoadStormConfig("ststorm.yaml")
+		config, err := LoadStormConfig("storm.yaml")
 		if err != nil {
 			t.Fatalf("failed to load created config: %v", err)
 		}
@@ -98,9 +98,9 @@ func TestRunInit(t *testing.T) {
 		// which is that the config file is created correctly with proper values
 	})
 
-	t.Run("creates ststorm.yaml with custom project name", func(t *testing.T) {
+	t.Run("creates storm.yaml with custom project name", func(t *testing.T) {
 		// Clean up previous test
-		os.Remove("ststorm.yaml")
+		os.Remove("storm.yaml")
 
 		// Set custom project name
 		initProject = "my-awesome-project"
@@ -113,7 +113,7 @@ func TestRunInit(t *testing.T) {
 		}
 
 		// Load and verify the config
-		config, err := LoadStormConfig("ststorm.yaml")
+		config, err := LoadStormConfig("storm.yaml")
 		if err != nil {
 			t.Fatalf("failed to load created config: %v", err)
 		}
@@ -123,9 +123,9 @@ func TestRunInit(t *testing.T) {
 		}
 	})
 
-	t.Run("creates ststorm.yaml with custom driver", func(t *testing.T) {
+	t.Run("creates storm.yaml with custom driver", func(t *testing.T) {
 		// Clean up previous test
-		os.Remove("ststorm.yaml")
+		os.Remove("storm.yaml")
 
 		// Set custom driver
 		initProject = "test-project"
@@ -138,7 +138,7 @@ func TestRunInit(t *testing.T) {
 		}
 
 		// Load and verify the config
-		config, err := LoadStormConfig("ststorm.yaml")
+		config, err := LoadStormConfig("storm.yaml")
 		if err != nil {
 			t.Fatalf("failed to load created config: %v", err)
 		}
@@ -151,11 +151,11 @@ func TestRunInit(t *testing.T) {
 		}
 	})
 
-	t.Run("fails when ststorm.yaml already exists", func(t *testing.T) {
+	t.Run("fails when storm.yaml already exists", func(t *testing.T) {
 		// Clean up previous test
-		os.Remove("ststorm.yaml")
+		os.Remove("storm.yaml")
 
-		// Create ststorm.yaml
+		// Create storm.yaml
 		initProject = "test-project"
 		initDriver = "postgres"
 		initForce = false
@@ -168,7 +168,7 @@ func TestRunInit(t *testing.T) {
 		// Try to create again without force
 		err = runInit(initCmd, []string{})
 		if err == nil {
-			t.Error("expected error when ststorm.yaml already exists")
+			t.Error("expected error when storm.yaml already exists")
 		}
 		if !strings.Contains(err.Error(), "already exists") {
 			t.Errorf("expected 'already exists' error, got: %v", err)
@@ -176,7 +176,7 @@ func TestRunInit(t *testing.T) {
 	})
 
 	t.Run("overwrites when force flag is set", func(t *testing.T) {
-		// ststorm.yaml already exists from previous test
+		// storm.yaml already exists from previous test
 		initProject = "forced-project"
 		initDriver = "postgres"
 		initForce = true
@@ -187,7 +187,7 @@ func TestRunInit(t *testing.T) {
 		}
 
 		// Load and verify the config was overwritten
-		config, err := LoadStormConfig("ststorm.yaml")
+		config, err := LoadStormConfig("storm.yaml")
 		if err != nil {
 			t.Fatalf("failed to load created config: %v", err)
 		}
@@ -220,7 +220,7 @@ func TestRunInit(t *testing.T) {
 		}
 
 		// Load and verify the config
-		config, err := LoadStormConfig("ststorm.yaml")
+		config, err := LoadStormConfig("storm.yaml")
 		if err != nil {
 			t.Fatalf("failed to load created config: %v", err)
 		}
