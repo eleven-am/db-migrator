@@ -21,13 +21,13 @@ package todo
 import (
 	"context"
 	"fmt"
-	"github.com/eleven-am/storm/internal/orm"
+	"github.com/eleven-am/storm/pkg/storm"
 	"github.com/jmoiron/sqlx"
 )
 
 // UserRepository provides type-safe operations for User
 //
-// The repository inherits these operations from orm.Repository:
+// The repository inherits these operations from storm.Repository:
 //
 // Single Record Operations:
 //   - Create(ctx, record) - Insert single record
@@ -60,11 +60,11 @@ import (
 //	// Complex queries
 //	results, err := repo.Query().Where(condition).OrderBy("created_at DESC").Find()
 type UserRepository struct {
-	*orm.Repository[User]
+	*storm.Repository[User]
 }
 
 func newUserRepository(db *sqlx.DB) (*UserRepository, error) {
-	baseRepo, err := orm.NewRepository[User](db, UserMetadata)
+	baseRepo, err := storm.NewRepository[User](db, UserMetadata)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create base repository: %w", err)
 	}
@@ -75,7 +75,7 @@ func newUserRepository(db *sqlx.DB) (*UserRepository, error) {
 }
 
 func newUserRepositoryWithTx(tx *sqlx.Tx) (*UserRepository, error) {
-	baseRepo, err := orm.NewRepositoryWithTx[User](tx, UserMetadata)
+	baseRepo, err := storm.NewRepositoryWithTx[User](tx, UserMetadata)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create base repository with transaction: %w", err)
 	}
@@ -205,7 +205,7 @@ func (r *UserRepository) WithTags() *UserQuery {
 //	    Where(condition).
 //	    Find()
 type UserQuery struct {
-	*orm.Query[User]
+	*storm.Query[User]
 	repo *UserRepository
 }
 
@@ -226,7 +226,7 @@ type UserQuery struct {
 //	query.Where(Users.CreatedAt.After(time.Now().AddDate(0, -1, 0)))
 //	// Combine conditions
 //	query.Where(Users.ID.Eq("value").And(Users.Email.IsNotNull()))
-func (q *UserQuery) Where(condition orm.Condition) *UserQuery {
+func (q *UserQuery) Where(condition storm.Condition) *UserQuery {
 	q.Query = q.Query.Where(condition)
 	return q
 }

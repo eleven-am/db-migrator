@@ -12,6 +12,6 @@ var versionCmd = &cobra.Command{
 	Short: "Show version information",
 	Long:  "Display Storm version and build information",
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Print(storm.FullVersionInfo())
+		fmt.Print(ststorm.FullVersionInfo())
 	},
 }

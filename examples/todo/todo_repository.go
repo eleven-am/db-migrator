@@ -21,13 +21,13 @@ package todo
 import (
 	"context"
 	"fmt"
-	"github.com/eleven-am/storm/internal/orm"
+	"github.com/eleven-am/storm/pkg/storm"
 	"github.com/jmoiron/sqlx"
 )
 
 // TodoRepository provides type-safe operations for Todo
 //
-// The repository inherits these operations from orm.Repository:
+// The repository inherits these operations from storm.Repository:
 //
 // Single Record Operations:
 //   - Create(ctx, record) - Insert single record
@@ -60,11 +60,11 @@ import (
 //	// Complex queries
 //	results, err := repo.Query().Where(condition).OrderBy("created_at DESC").Find()
 type TodoRepository struct {
-	*orm.Repository[Todo]
+	*storm.Repository[Todo]
 }
 
 func newTodoRepository(db *sqlx.DB) (*TodoRepository, error) {
-	baseRepo, err := orm.NewRepository[Todo](db, TodoMetadata)
+	baseRepo, err := storm.NewRepository[Todo](db, TodoMetadata)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create base repository: %w", err)
 	}
@@ -75,7 +75,7 @@ func newTodoRepository(db *sqlx.DB) (*TodoRepository, error) {
 }
 
 func newTodoRepositoryWithTx(tx *sqlx.Tx) (*TodoRepository, error) {
-	baseRepo, err := orm.NewRepositoryWithTx[Todo](tx, TodoMetadata)
+	baseRepo, err := storm.NewRepositoryWithTx[Todo](tx, TodoMetadata)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create base repository with transaction: %w", err)
 	}
@@ -218,7 +218,7 @@ func (r *TodoRepository) WithComments() *TodoQuery {
 //	    Where(condition).
 //	    Find()
 type TodoQuery struct {
-	*orm.Query[Todo]
+	*storm.Query[Todo]
 	repo *TodoRepository
 }
 
@@ -237,7 +237,7 @@ type TodoQuery struct {
 //	query.Where(Todos.DueDate.After(time.Now().AddDate(0, -1, 0)))
 //	// Combine conditions
 //	query.Where(Todos.ID.Eq("value").And(Todos.UserID.IsNotNull()))
-func (q *TodoQuery) Where(condition orm.Condition) *TodoQuery {
+func (q *TodoQuery) Where(condition storm.Condition) *TodoQuery {
 	q.Query = q.Query.Where(condition)
 	return q
 }

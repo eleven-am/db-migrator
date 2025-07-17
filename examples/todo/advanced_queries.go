@@ -3,7 +3,7 @@ package todo
 import (
 	"context"
 	"fmt"
-	"github.com/eleven-am/storm/internal/orm"
+	"github.com/eleven-am/storm/pkg/storm"
 	"log"
 	"time"
 
@@ -42,7 +42,7 @@ func AdvancedQueryExamples() {
 
 	// Example 1: Simple AND (implicit - multiple Where calls)
 	fmt.Println("1. Simple AND - High priority pending todos:")
-	todos1, err := storm.Todos.Query().
+	todos1, err := ststorm.Todos.Query().
 		Where(Todos.UserID.Eq(userID)).
 		Where(Todos.Status.Eq(string(TodoStatusPending))).
 		Where(Todos.Priority.Eq(string(TodoPriorityHigh))).
@@ -52,10 +52,10 @@ func AdvancedQueryExamples() {
 	}
 	fmt.Printf("   Found %d todos\n\n", len(todos1))
 
-	// Example 2: Explicit AND using storm.And()
-	fmt.Println("2. Explicit AND - Same query using storm.And():")
-	todos2, err := storm.Todos.Query().
-		Where(storm.And(
+	// Example 2: Explicit AND using ststorm.And()
+	fmt.Println("2. Explicit AND - Same query using ststorm.And():")
+	todos2, err := ststorm.Todos.Query().
+		Where(ststorm.And(
 			Todos.UserID.Eq(userID),
 			Todos.Status.Eq(string(TodoStatusPending)),
 			Todos.Priority.Eq(string(TodoPriorityHigh)),
@@ -66,11 +66,11 @@ func AdvancedQueryExamples() {
 	}
 	fmt.Printf("   Found %d todos\n\n", len(todos2))
 
-	// Example 3: OR conditions using storm.Or()
+	// Example 3: OR conditions using ststorm.Or()
 	fmt.Println("3. OR - High or Urgent priority todos:")
-	todos3, err := storm.Todos.Query().
+	todos3, err := ststorm.Todos.Query().
 		Where(Todos.UserID.Eq(userID)).
-		Where(storm.Or(
+		Where(ststorm.Or(
 			Todos.Priority.Eq(string(TodoPriorityHigh)),
 			Todos.Priority.Eq(string(TodoPriorityUrgent)),
 		)).
@@ -80,11 +80,11 @@ func AdvancedQueryExamples() {
 	}
 	fmt.Printf("   Found %d todos\n\n", len(todos3))
 
-	// Example 4: NOT condition using storm.Not()
+	// Example 4: NOT condition using ststorm.Not()
 	fmt.Println("4. NOT - Todos that are NOT completed:")
-	todos4, err := storm.Todos.Query().
+	todos4, err := ststorm.Todos.Query().
 		Where(Todos.UserID.Eq(userID)).
-		Where(storm.Not(Todos.Status.Eq(string(TodoStatusCompleted)))).
+		Where(ststorm.Not(Todos.Status.Eq(string(TodoStatusCompleted)))).
 		Find()
 	if err != nil {
 		log.Fatal(err)
@@ -97,10 +97,10 @@ func AdvancedQueryExamples() {
 	startOfDay := time.Date(today.Year(), today.Month(), today.Day(), 0, 0, 0, 0, today.Location())
 	endOfDay := startOfDay.Add(24 * time.Hour)
 
-	todos5, err := storm.Todos.Query().
+	todos5, err := ststorm.Todos.Query().
 		Where(Todos.UserID.Eq(userID)).
-		Where(storm.Or(
-			storm.And(
+		Where(ststorm.Or(
+			ststorm.And(
 				Todos.Priority.Eq(string(TodoPriorityHigh)),
 				Todos.DueDate.Between(startOfDay, endOfDay),
 			),
@@ -114,10 +114,10 @@ func AdvancedQueryExamples() {
 
 	// Example 6: Combining NOT with OR
 	fmt.Println("6. NOT with OR - Todos that are NOT (completed OR cancelled):")
-	todos6, err := storm.Todos.Query().
+	todos6, err := ststorm.Todos.Query().
 		Where(Todos.UserID.Eq(userID)).
-		Where(storm.Not(
-			storm.Or(
+		Where(ststorm.Not(
+			ststorm.Or(
 				Todos.Status.Eq(string(TodoStatusCompleted)),
 				Todos.Status.Eq(string(TodoStatusCancelled)),
 			),
@@ -131,7 +131,7 @@ func AdvancedQueryExamples() {
 	// Example 7: Using method chaining on conditions
 	fmt.Println("7. Method chaining - High priority OR (Medium priority AND due soon):")
 	tomorrow := time.Now().Add(24 * time.Hour)
-	todos7, err := storm.Todos.Query().
+	todos7, err := ststorm.Todos.Query().
 		Where(Todos.UserID.Eq(userID)).
 		Where(
 			Todos.Priority.Eq(string(TodoPriorityHigh)).Or(
@@ -148,7 +148,7 @@ func AdvancedQueryExamples() {
 
 	// Example 8: IN and NOT IN operations
 	fmt.Println("8. IN/NOT IN - High priority todos not in completed/cancelled status:")
-	todos8, err := storm.Todos.Query().
+	todos8, err := ststorm.Todos.Query().
 		Where(Todos.UserID.Eq(userID)).
 		Where(Todos.Priority.In(
 			string(TodoPriorityHigh),
@@ -167,9 +167,9 @@ func AdvancedQueryExamples() {
 	// Example 9: NULL checks combined with other conditions
 	fmt.Println("9. NULL checks - Todos without category OR with specific category:")
 	workCategoryID := "category-work-id"
-	todos9, err := storm.Todos.Query().
+	todos9, err := ststorm.Todos.Query().
 		Where(Todos.UserID.Eq(userID)).
-		Where(storm.Or(
+		Where(ststorm.Or(
 			Todos.CategoryID.IsNull(),
 			Todos.CategoryID.Eq(workCategoryID),
 		)).
@@ -182,22 +182,22 @@ func AdvancedQueryExamples() {
 	// Example 10: Complex business logic query
 	fmt.Println("10. Business logic - Overdue or high-priority upcoming todos:")
 	now := time.Now()
-	todos10, err := storm.Todos.Query().
+	todos10, err := ststorm.Todos.Query().
 		Where(Todos.UserID.Eq(userID)).
-		Where(storm.And(
+		Where(ststorm.And(
 			// Not completed
-			storm.Not(Todos.Status.Eq(string(TodoStatusCompleted))),
+			ststorm.Not(Todos.Status.Eq(string(TodoStatusCompleted))),
 			// Either overdue OR high priority due tomorrow
-			storm.Or(
+			ststorm.Or(
 				// Overdue (due date passed and not null)
-				storm.And(
+				ststorm.And(
 					Todos.DueDate.Lt(now),
 					Todos.DueDate.IsNotNull(),
 				),
 				// High/Urgent priority due within 24 hours
-				storm.And(
+				ststorm.And(
 					Todos.DueDate.Between(now, tomorrow),
-					storm.Or(
+					ststorm.Or(
 						Todos.Priority.Eq(string(TodoPriorityHigh)),
 						Todos.Priority.Eq(string(TodoPriorityUrgent)),
 					),
@@ -213,7 +213,7 @@ func AdvancedQueryExamples() {
 
 	// Example 11: Using string operations (LIKE)
 	fmt.Println("11. String operations - Todos with 'meeting' in title:")
-	todos11, err := storm.Todos.Query().
+	todos11, err := ststorm.Todos.Query().
 		Where(Todos.UserID.Eq(userID)).
 		Where(Todos.Title.Like("%meeting%")).
 		Find()
@@ -224,7 +224,7 @@ func AdvancedQueryExamples() {
 
 	// Example 12: Time-based operations
 	fmt.Println("12. Time operations - Todos created this week:")
-	todos12, err := storm.Todos.Query().
+	todos12, err := ststorm.Todos.Query().
 		Where(Todos.UserID.Eq(userID)).
 		Where(Todos.CreatedAt.ThisWeek()).
 		OrderBy(Todos.CreatedAt.Desc()).
@@ -237,21 +237,21 @@ func AdvancedQueryExamples() {
 	// Example 13: Complex reporting query
 	fmt.Println("13. Complex reporting - Active todos by status and priority:")
 	lastWeek := now.Add(-7 * 24 * time.Hour)
-	todos13, err := storm.Todos.Query().
-		Where(storm.And(
+	todos13, err := ststorm.Todos.Query().
+		Where(ststorm.And(
 			Todos.UserID.Eq(userID),
-			storm.Or(
+			ststorm.Or(
 				// Recently completed
-				storm.And(
+				ststorm.And(
 					Todos.Status.Eq(string(TodoStatusCompleted)),
 					Todos.CompletedAt.Gte(lastWeek),
 				),
 				// Currently in progress
 				Todos.Status.Eq(string(TodoStatusInProgress)),
 				// Pending but high priority
-				storm.And(
+				ststorm.And(
 					Todos.Status.Eq(string(TodoStatusPending)),
-					storm.Or(
+					ststorm.Or(
 						Todos.Priority.Eq(string(TodoPriorityHigh)),
 						Todos.Priority.Eq(string(TodoPriorityUrgent)),
 					),
@@ -268,11 +268,11 @@ func AdvancedQueryExamples() {
 
 	// Example 14: Count with complex conditions
 	fmt.Println("14. Count with conditions - Active todos count:")
-	count, err := storm.Todos.Query().
+	count, err := ststorm.Todos.Query().
 		Where(Todos.UserID.Eq(userID)).
-		Where(storm.And(
+		Where(ststorm.And(
 			Todos.Status.NotIn(string(TodoStatusCompleted), string(TodoStatusCancelled)),
-			storm.Or(
+			ststorm.Or(
 				Todos.DueDate.IsNull(),
 				Todos.DueDate.Gte(now),
 			),
@@ -285,7 +285,7 @@ func AdvancedQueryExamples() {
 
 	// Example 15: Dynamic query building
 	fmt.Println("15. Dynamic query building:")
-	query := storm.Todos.Query().Where(Todos.UserID.Eq(userID))
+	query := ststorm.Todos.Query().Where(Todos.UserID.Eq(userID))
 
 	// Simulate filters
 	var filters struct {
@@ -310,7 +310,7 @@ func AdvancedQueryExamples() {
 		query = query.Where(Todos.DueDate.IsNotNull())
 	}
 	if filters.SearchText != "" {
-		query = query.Where(storm.Or(
+		query = query.Where(ststorm.Or(
 			Todos.Title.Like("%"+filters.SearchText+"%"),
 			Todos.Description.Like("%"+filters.SearchText+"%"),
 		))
@@ -329,10 +329,10 @@ func AdvancedQueryExamples() {
 
 	// Example 16: Using conditions with transactions
 	fmt.Println("\n16. Complex query in transaction:")
-	err = storm.WithTransaction(ctx, func(txStorm *Storm) error {
+	err = ststorm.WithTransaction(ctx, func(txStorm *Storm) error {
 		// Find all overdue todos
-		overdueTodos, err := txStorm.Todos.Query().
-			Where(storm.And(
+		overdueTodos, err := txStstorm.Todos.Query().
+			Where(ststorm.And(
 				Todos.UserID.Eq(userID),
 				Todos.Status.NotEq(string(TodoStatusCompleted)),
 				Todos.DueDate.Lt(now),
@@ -348,7 +348,7 @@ func AdvancedQueryExamples() {
 		// Update them (in a real app)
 		for _, todo := range overdueTodos {
 			todo.Priority = TodoPriorityUrgent
-			// txStorm.Todos.Update(ctx, &todo)
+			// txStstorm.Todos.Update(ctx, &todo)
 		}
 
 		return nil
@@ -359,28 +359,28 @@ func AdvancedQueryExamples() {
 }
 
 // BuildSearchConditions demonstrates building reusable condition sets
-func BuildSearchConditions(storm *Storm, params SearchParams) orm.Condition {
-	var conditions []orm.Condition
+func BuildSearchConditions(storm *Storm, params SearchParams) storm.Condition {
+	var conditions []storm.Condition
 
 	// Always filter by user
 	conditions = append(conditions, Todos.UserID.Eq(params.UserID))
 
 	// Status filters
 	if len(params.Statuses) > 0 {
-		statusConditions := make([]orm.Condition, len(params.Statuses))
+		statusConditions := make([]storm.Condition, len(params.Statuses))
 		for i, status := range params.Statuses {
 			statusConditions[i] = Todos.Status.Eq(string(status))
 		}
-		conditions = append(conditions, storm.Or(statusConditions...))
+		conditions = append(conditions, ststorm.Or(statusConditions...))
 	}
 
 	// Priority filters
 	if len(params.Priorities) > 0 {
-		priorityConditions := make([]orm.Condition, len(params.Priorities))
+		priorityConditions := make([]storm.Condition, len(params.Priorities))
 		for i, priority := range params.Priorities {
 			priorityConditions[i] = Todos.Priority.Eq(string(priority))
 		}
-		conditions = append(conditions, storm.Or(priorityConditions...))
+		conditions = append(conditions, ststorm.Or(priorityConditions...))
 	}
 
 	// Date range
@@ -391,7 +391,7 @@ func BuildSearchConditions(storm *Storm, params SearchParams) orm.Condition {
 	// Search text
 	if params.SearchText != "" {
 		searchPattern := "%" + params.SearchText + "%"
-		conditions = append(conditions, storm.Or(
+		conditions = append(conditions, ststorm.Or(
 			Todos.Title.Like(searchPattern),
 			Todos.Description.Like(searchPattern),
 		))
@@ -399,7 +399,7 @@ func BuildSearchConditions(storm *Storm, params SearchParams) orm.Condition {
 
 	// Category filter with null handling
 	if params.IncludeUncategorized && len(params.CategoryIDs) > 0 {
-		conditions = append(conditions, storm.Or(
+		conditions = append(conditions, ststorm.Or(
 			Todos.CategoryID.IsNull(),
 			Todos.CategoryID.In(params.CategoryIDs...),
 		))
@@ -409,5 +409,5 @@ func BuildSearchConditions(storm *Storm, params SearchParams) orm.Condition {
 		conditions = append(conditions, Todos.CategoryID.In(params.CategoryIDs...))
 	}
 
-	return storm.And(conditions...)
+	return ststorm.And(conditions...)
 }

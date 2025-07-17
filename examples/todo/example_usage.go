@@ -31,7 +31,7 @@ func ExampleUsage() {
 		IsActive: true,
 	}
 
-	if err := storm.Users.Create(ctx, user); err != nil {
+	if err := ststorm.Users.Create(ctx, user); err != nil {
 		log.Fatal("Failed to create user:", err)
 	}
 	fmt.Printf("Created user: %s (ID: %s)\n", user.Name, user.ID)
@@ -44,7 +44,7 @@ func ExampleUsage() {
 		Description: strPtr("Work-related tasks"),
 	}
 
-	if err := storm.Categorys.Create(ctx, category); err != nil {
+	if err := ststorm.Categorys.Create(ctx, category); err != nil {
 		log.Fatal("Failed to create category:", err)
 	}
 
@@ -71,7 +71,7 @@ func ExampleUsage() {
 	}
 
 	for _, todo := range todos {
-		if err := storm.Todos.Create(ctx, todo); err != nil {
+		if err := ststorm.Todos.Create(ctx, todo); err != nil {
 			log.Fatal("Failed to create todo:", err)
 		}
 		fmt.Printf("Created todo: %s\n", todo.Title)
@@ -85,7 +85,7 @@ func ExampleUsage() {
 	}
 
 	for _, tag := range tags {
-		if err := storm.Tags.Create(ctx, tag); err != nil {
+		if err := ststorm.Tags.Create(ctx, tag); err != nil {
 			log.Fatal("Failed to create tag:", err)
 		}
 	}
@@ -95,7 +95,7 @@ func ExampleUsage() {
 		TodoID: todos[0].ID,
 		TagID:  tags[0].ID, // urgent tag
 	}
-	if err := storm.TodoTags.Create(ctx, todoTag); err != nil {
+	if err := ststorm.TodoTags.Create(ctx, todoTag); err != nil {
 		log.Fatal("Failed to create todo-tag association:", err)
 	}
 
@@ -103,7 +103,7 @@ func ExampleUsage() {
 	fmt.Println("\n--- Querying Todos ---")
 
 	// Find all pending todos for a user
-	pendingTodos, err := storm.Todos.Query().
+	pendingTodos, err := ststorm.Todos.Query().
 		Where(Todos.UserID.Eq(user.ID)).
 		Where(Todos.Status.Eq(string(TodoStatusPending))).
 		OrderBy(Todos.Priority.Desc()).
@@ -119,7 +119,7 @@ func ExampleUsage() {
 	}
 
 	// Example 7: Find todos by category
-	categoryTodos, err := storm.Todos.Query().
+	categoryTodos, err := ststorm.Todos.Query().
 		Where(Todos.CategoryID.Eq(category.ID)).
 		OrderBy(Todos.CreatedAt.Desc()).
 		Find()
@@ -134,7 +134,7 @@ func ExampleUsage() {
 	tomorrow := time.Now().Add(24 * time.Hour)
 	nextWeek := time.Now().Add(7 * 24 * time.Hour)
 
-	upcomingTodos, err := storm.Todos.Query().
+	upcomingTodos, err := ststorm.Todos.Query().
 		Where(Todos.UserID.Eq(user.ID)).
 		Where(Todos.DueDate.Between(tomorrow, nextWeek)).
 		Where(Todos.Status.NotEq(string(TodoStatusCompleted))).
@@ -150,7 +150,7 @@ func ExampleUsage() {
 	// Example 9: Update a todo
 	if len(todos) > 0 {
 		todos[0].Status = TodoStatusInProgress
-		if err := storm.Todos.Update(ctx, todos[0]); err != nil {
+		if err := ststorm.Todos.Update(ctx, todos[0]); err != nil {
 			log.Fatal("Failed to update todo:", err)
 		}
 		fmt.Printf("\nUpdated todo '%s' to in-progress\n", todos[0].Title)
@@ -163,13 +163,13 @@ func ExampleUsage() {
 		Content: "Started working on the proposal draft",
 	}
 
-	if err := storm.Comments.Create(ctx, comment); err != nil {
+	if err := ststorm.Comments.Create(ctx, comment); err != nil {
 		log.Fatal("Failed to create comment:", err)
 	}
 	fmt.Printf("Added comment to todo '%s'\n", todos[0].Title)
 
 	// Example 11: Transaction example
-	err = storm.WithTransaction(ctx, func(txStorm *Storm) error {
+	err = ststorm.WithTransaction(ctx, func(txStorm *Storm) error {
 		// Create a new todo
 		newTodo := &Todo{
 			UserID:   user.ID,
@@ -178,7 +178,7 @@ func ExampleUsage() {
 			Priority: TodoPriorityLow,
 		}
 
-		if err := txStorm.Todos.Create(ctx, newTodo); err != nil {
+		if err := txStstorm.Todos.Create(ctx, newTodo); err != nil {
 			return err
 		}
 
@@ -189,7 +189,7 @@ func ExampleUsage() {
 			Content: "Created via transaction",
 		}
 
-		if err := txStorm.Comments.Create(ctx, newComment); err != nil {
+		if err := txStstorm.Comments.Create(ctx, newComment); err != nil {
 			return err // This will rollback the entire transaction
 		}
 
@@ -202,7 +202,7 @@ func ExampleUsage() {
 	}
 
 	// Example 12: Count and aggregation
-	totalTodos, err := storm.Todos.Query().
+	totalTodos, err := ststorm.Todos.Query().
 		Where(Todos.UserID.Eq(user.ID)).
 		Count()
 
@@ -213,7 +213,7 @@ func ExampleUsage() {
 	fmt.Printf("\nTotal todos for user: %d\n", totalTodos)
 
 	// Example 13: Check if a record exists
-	exists, err := storm.Users.Query().
+	exists, err := ststorm.Users.Query().
 		Where(Users.Email.Eq("john@example.com")).
 		Exists()
 
@@ -227,7 +227,7 @@ func ExampleUsage() {
 	// Delete completed todos older than 30 days
 	thirtyDaysAgo := time.Now().Add(-30 * 24 * time.Hour)
 
-	deletedCount, err := storm.Todos.Query().
+	deletedCount, err := ststorm.Todos.Query().
 		Where(Todos.Status.Eq(string(TodoStatusCompleted))).
 		Where(Todos.CompletedAt.Lt(thirtyDaysAgo)).
 		Delete()

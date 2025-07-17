@@ -17,7 +17,7 @@ var (
 var initCmd = &cobra.Command{
 	Use:   "init",
 	Short: "Initialize a new Storm configuration file",
-	Long: `Creates a storm.yaml configuration file with default settings.
+	Long: `Creates a ststorm.yaml configuration file with default settings.
 This helps you get started with Storm by creating a template configuration
 that you can customize for your project.`,
 	RunE: runInit,
@@ -30,9 +30,9 @@ func init() {
 }
 
 func runInit(cmd *cobra.Command, args []string) error {
-	configPath := "storm.yaml"
+	configPath := "ststorm.yaml"
 	if _, err := os.Stat(configPath); err == nil && !initForce {
-		return fmt.Errorf("storm.yaml already exists. Use --force to overwrite")
+		return fmt.Errorf("ststorm.yaml already exists. Use --force to overwrite")
 	}
 
 	if initProject == "" {
@@ -70,9 +70,9 @@ func runInit(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to save configuration: %w", err)
 	}
 
-	fmt.Printf("Created storm.yaml configuration file\n")
+	fmt.Printf("Created ststorm.yaml configuration file\n")
 	fmt.Printf("\nNext steps:\n")
-	fmt.Printf("1. Update the database URL in storm.yaml\n")
+	fmt.Printf("1. Update the database URL in ststorm.yaml\n")
 	fmt.Printf("2. Adjust the models package path if needed\n")
 	fmt.Printf("3. Run 'storm migrate' to generate migrations\n")
 	fmt.Printf("4. Run 'storm orm' to generate ORM code\n")

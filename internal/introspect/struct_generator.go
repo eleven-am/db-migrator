@@ -412,7 +412,7 @@ func postgresTypeToGoType(dataType, udtName string, isNullable bool) (string, er
 		case "uuid":
 			goType = "string"
 		case "json", "jsonb":
-			goType = "map[string]interface{}"
+			goType = "orm.JSONData"
 		case "bytea":
 			goType = "[]byte"
 		case "USER-DEFINED":
@@ -508,7 +508,9 @@ func (g *StructGenerator) collectImports() []string {
 		for _, col := range table.Columns {
 			if strings.Contains(col.DataType, "time") || col.DataType == "date" {
 				imports["time"] = true
-				break
+			}
+			if col.DataType == "json" || col.DataType == "jsonb" {
+				imports["orm github.com/eleven-am/storm/pkg/storm-orm"] = true
 			}
 		}
 	}

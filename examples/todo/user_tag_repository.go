@@ -21,13 +21,13 @@ package todo
 import (
 	"context"
 	"fmt"
-	"github.com/eleven-am/storm/internal/orm"
+	"github.com/eleven-am/storm/pkg/storm"
 	"github.com/jmoiron/sqlx"
 )
 
 // UserTagRepository provides type-safe operations for UserTag
 //
-// The repository inherits these operations from orm.Repository:
+// The repository inherits these operations from storm.Repository:
 //
 // Single Record Operations:
 //   - Create(ctx, record) - Insert single record
@@ -60,11 +60,11 @@ import (
 //	// Complex queries
 //	results, err := repo.Query().Where(condition).OrderBy("created_at DESC").Find()
 type UserTagRepository struct {
-	*orm.Repository[UserTag]
+	*storm.Repository[UserTag]
 }
 
 func newUserTagRepository(db *sqlx.DB) (*UserTagRepository, error) {
-	baseRepo, err := orm.NewRepository[UserTag](db, UserTagMetadata)
+	baseRepo, err := storm.NewRepository[UserTag](db, UserTagMetadata)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create base repository: %w", err)
 	}
@@ -75,7 +75,7 @@ func newUserTagRepository(db *sqlx.DB) (*UserTagRepository, error) {
 }
 
 func newUserTagRepositoryWithTx(tx *sqlx.Tx) (*UserTagRepository, error) {
-	baseRepo, err := orm.NewRepositoryWithTx[UserTag](tx, UserTagMetadata)
+	baseRepo, err := storm.NewRepositoryWithTx[UserTag](tx, UserTagMetadata)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create base repository with transaction: %w", err)
 	}
@@ -164,7 +164,7 @@ func (r *UserTagRepository) QueryContext(ctx context.Context) *UserTagQuery {
 //	    Where(condition).
 //	    Find()
 type UserTagQuery struct {
-	*orm.Query[UserTag]
+	*storm.Query[UserTag]
 	repo *UserTagRepository
 }
 
@@ -177,7 +177,7 @@ type UserTagQuery struct {
 //	query.Where(UserTags.CreatedAt.After(time.Now().AddDate(0, -1, 0)))
 //	// Combine conditions
 //	query.Where(UserTags.UserID.Eq("value").And(UserTags.TagID.IsNotNull()))
-func (q *UserTagQuery) Where(condition orm.Condition) *UserTagQuery {
+func (q *UserTagQuery) Where(condition storm.Condition) *UserTagQuery {
 	q.Query = q.Query.Where(condition)
 	return q
 }

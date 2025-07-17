@@ -21,13 +21,13 @@ package todo
 import (
 	"context"
 	"fmt"
-	"github.com/eleven-am/storm/internal/orm"
+	"github.com/eleven-am/storm/pkg/storm"
 	"github.com/jmoiron/sqlx"
 )
 
 // TagRepository provides type-safe operations for Tag
 //
-// The repository inherits these operations from orm.Repository:
+// The repository inherits these operations from storm.Repository:
 //
 // Single Record Operations:
 //   - Create(ctx, record) - Insert single record
@@ -60,11 +60,11 @@ import (
 //	// Complex queries
 //	results, err := repo.Query().Where(condition).OrderBy("created_at DESC").Find()
 type TagRepository struct {
-	*orm.Repository[Tag]
+	*storm.Repository[Tag]
 }
 
 func newTagRepository(db *sqlx.DB) (*TagRepository, error) {
-	baseRepo, err := orm.NewRepository[Tag](db, TagMetadata)
+	baseRepo, err := storm.NewRepository[Tag](db, TagMetadata)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create base repository: %w", err)
 	}
@@ -75,7 +75,7 @@ func newTagRepository(db *sqlx.DB) (*TagRepository, error) {
 }
 
 func newTagRepositoryWithTx(tx *sqlx.Tx) (*TagRepository, error) {
-	baseRepo, err := orm.NewRepositoryWithTx[Tag](tx, TagMetadata)
+	baseRepo, err := storm.NewRepositoryWithTx[Tag](tx, TagMetadata)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create base repository with transaction: %w", err)
 	}
@@ -191,7 +191,7 @@ func (r *TagRepository) WithUsers() *TagQuery {
 //	    Where(condition).
 //	    Find()
 type TagQuery struct {
-	*orm.Query[Tag]
+	*storm.Query[Tag]
 	repo *TagRepository
 }
 
@@ -210,7 +210,7 @@ type TagQuery struct {
 //	query.Where(Tags.CreatedAt.After(time.Now().AddDate(0, -1, 0)))
 //	// Combine conditions
 //	query.Where(Tags.ID.Eq("value").And(Tags.Name.IsNotNull()))
-func (q *TagQuery) Where(condition orm.Condition) *TagQuery {
+func (q *TagQuery) Where(condition storm.Condition) *TagQuery {
 	q.Query = q.Query.Where(condition)
 	return q
 }

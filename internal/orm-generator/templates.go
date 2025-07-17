@@ -22,15 +22,15 @@ const metadataTemplate = `//go:build !exclude_generated
 package {{ .Package }}
 
 import (
-	"github.com/eleven-am/storm/internal/orm"
+	orm "github.com/eleven-am/storm/pkg/storm-orm"
 )
 
 // {{ .Model.Name }}Metadata provides compile-time metadata for {{ .Model.Name }}
-var {{ .Model.Name }}Metadata = &orm.ModelMetadata{
+var {{ .Model.Name }}Metadata = &storm.ModelMetadata{
 	TableName:  "{{ .Model.TableName }}",
 	StructName: "{{ .Model.Name }}",
 	
-	Columns: map[string]*orm.ColumnMetadata{
+	Columns: map[string]*storm.ColumnMetadata{
 		{{- range .Model.Columns }}
 		"{{ .Name }}": {
 			FieldName:       "{{ .Name }}",
@@ -142,18 +142,18 @@ package {{ .Package }}
 
 import (
 	"time"
-	"github.com/eleven-am/storm/internal/orm"
+	orm "github.com/eleven-am/storm/pkg/storm-orm"
 )
 
 {{range $modelName, $model := .Models}}
 // {{ $model.Name }}s provides type-safe column references for {{ $model.Name }}
 var {{ $model.Name }}s = struct {
 	{{range $model.Columns}}
-	{{ sanitizeGoName .Name }} {{ if eq .Type "string" }}orm.StringColumn{{ else if eq .Type "int" }}orm.NumericColumn[int]{{ else if eq .Type "int32" }}orm.NumericColumn[int32]{{ else if eq .Type "int64" }}orm.NumericColumn[int64]{{ else if eq .Type "float32" }}orm.NumericColumn[float32]{{ else if eq .Type "float64" }}orm.NumericColumn[float64]{{ else if eq .Type "bool" }}orm.BoolColumn{{ else if eq .Type "time.Time" }}orm.TimeColumn{{ else if hasPrefix .Type "[]" }}orm.ArrayColumn[{{ .Type }}]{{ else if eq .Type "json.RawMessage" }}orm.JSONBColumn{{ else if hasPrefix .Type "JSONField[" }}orm.JSONBColumn{{ else if eq .Type "" }}orm.StringColumn{{ else }}orm.Column[interface{}]{{ end }} ` + "`json:\"{{ .DBName }}\"`" + `
+	{{ sanitizeGoName .Name }} {{ if eq .Type "string" }}orm.StringColumn{{ else if eq .Type "int" }}orm.NumericColumn[int]{{ else if eq .Type "int32" }}orm.NumericColumn[int32]{{ else if eq .Type "int64" }}orm.NumericColumn[int64]{{ else if eq .Type "float32" }}orm.NumericColumn[float32]{{ else if eq .Type "float64" }}orm.NumericColumn[float64]{{ else if eq .Type "bool" }}orm.BoolColumn{{ else if eq .Type "time.Time" }}orm.TimeColumn{{ else if hasPrefix .Type "[]" }}orm.ArrayColumn[{{ .Type }}]{{ else if eq .Type "json.RawMessage" }}orm.JSONBColumn{{ else if eq .Type "orm.JSONData" }}orm.JSONBColumn{{ else if hasPrefix .Type "JSONField[" }}orm.JSONBColumn{{ else if eq .Type "" }}orm.StringColumn{{ else }}orm.Column[interface{}]{{ end }} ` + "`json:\"{{ .DBName }}\"`" + `
 	{{end}}
 }{
 	{{range $model.Columns}}
-	{{ sanitizeGoName .Name }}: {{ if eq .Type "string" }}orm.StringColumn{Column: orm.Column[string]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}{{ else if eq .Type "int" }}orm.NumericColumn[int]{ComparableColumn: orm.ComparableColumn[int]{Column: orm.Column[int]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}}{{ else if eq .Type "int32" }}orm.NumericColumn[int32]{ComparableColumn: orm.ComparableColumn[int32]{Column: orm.Column[int32]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}}{{ else if eq .Type "int64" }}orm.NumericColumn[int64]{ComparableColumn: orm.ComparableColumn[int64]{Column: orm.Column[int64]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}}{{ else if eq .Type "float32" }}orm.NumericColumn[float32]{ComparableColumn: orm.ComparableColumn[float32]{Column: orm.Column[float32]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}}{{ else if eq .Type "float64" }}orm.NumericColumn[float64]{ComparableColumn: orm.ComparableColumn[float64]{Column: orm.Column[float64]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}}{{ else if eq .Type "bool" }}orm.BoolColumn{Column: orm.Column[bool]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}{{ else if eq .Type "time.Time" }}orm.TimeColumn{ComparableColumn: orm.ComparableColumn[time.Time]{Column: orm.Column[time.Time]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}}{{ else if hasPrefix .Type "[]" }}orm.ArrayColumn[{{ .Type }}]{Column: orm.Column[{{ .Type }}]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}{{ else if eq .Type "json.RawMessage" }}orm.JSONBColumn{Column: orm.Column[interface{}]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}{{ else if hasPrefix .Type "JSONField[" }}orm.JSONBColumn{Column: orm.Column[interface{}]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}{{ else if eq .Type "" }}orm.StringColumn{Column: orm.Column[string]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}{{ else }}orm.Column[interface{}]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}{{ end }},
+	{{ sanitizeGoName .Name }}: {{ if eq .Type "string" }}orm.StringColumn{Column: orm.Column[string]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}{{ else if eq .Type "int" }}orm.NumericColumn[int]{ComparableColumn: orm.ComparableColumn[int]{Column: orm.Column[int]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}}{{ else if eq .Type "int32" }}orm.NumericColumn[int32]{ComparableColumn: orm.ComparableColumn[int32]{Column: orm.Column[int32]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}}{{ else if eq .Type "int64" }}orm.NumericColumn[int64]{ComparableColumn: orm.ComparableColumn[int64]{Column: orm.Column[int64]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}}{{ else if eq .Type "float32" }}orm.NumericColumn[float32]{ComparableColumn: orm.ComparableColumn[float32]{Column: orm.Column[float32]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}}{{ else if eq .Type "float64" }}orm.NumericColumn[float64]{ComparableColumn: orm.ComparableColumn[float64]{Column: orm.Column[float64]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}}{{ else if eq .Type "bool" }}orm.BoolColumn{Column: orm.Column[bool]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}{{ else if eq .Type "time.Time" }}orm.TimeColumn{ComparableColumn: orm.ComparableColumn[time.Time]{Column: orm.Column[time.Time]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}}{{ else if hasPrefix .Type "[]" }}orm.ArrayColumn[{{ .Type }}]{Column: orm.Column[{{ .Type }}]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}{{ else if eq .Type "json.RawMessage" }}orm.JSONBColumn{Column: orm.Column[interface{}]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}{{ else if eq .Type "orm.JSONData" }}orm.JSONBColumn{Column: orm.Column[interface{}]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}{{ else if hasPrefix .Type "JSONField[" }}orm.JSONBColumn{Column: orm.Column[interface{}]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}{{ else if eq .Type "" }}orm.StringColumn{Column: orm.Column[string]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}}{{ else }}orm.Column[interface{}]{Name: "{{ .DBName }}", Table: "{{ $model.TableName }}"}{{ end }},
 	{{end}}
 }
 
@@ -190,13 +190,13 @@ package {{ .Package }}
 import (
 	"context"
 	"fmt"
-	"github.com/eleven-am/storm/internal/orm"
+	orm "github.com/eleven-am/storm/pkg/storm-orm"
 	"github.com/jmoiron/sqlx"
 )
 
 // {{ .Model.Name }}Repository provides type-safe operations for {{ .Model.Name }}
 //
-// The repository inherits these operations from orm.Repository:
+// The repository inherits these operations from storm.Repository:
 //
 // Single Record Operations:
 //   - Create(ctx, record) - Insert single record
@@ -610,7 +610,7 @@ import (
 	"database/sql"
 	"fmt"
 	
-	"github.com/eleven-am/storm/internal/orm"
+	orm "github.com/eleven-am/storm/pkg/storm-orm"
 )
 
 {{ range .Models }}
@@ -678,7 +678,7 @@ package {{ .Package }}
 import (
 	"context"
 	"fmt"
-	"github.com/eleven-am/storm/internal/orm"
+	orm "github.com/eleven-am/storm/pkg/storm-orm"
 	"github.com/jmoiron/sqlx"
 )
 

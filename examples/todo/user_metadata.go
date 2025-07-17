@@ -19,15 +19,15 @@
 package todo
 
 import (
-	"github.com/eleven-am/storm/internal/orm"
+	"github.com/eleven-am/storm/pkg/storm"
 )
 
 // UserMetadata provides compile-time metadata for User
-var UserMetadata = &orm.ModelMetadata{
+var UserMetadata = &storm.ModelMetadata{
 	TableName:  "users",
 	StructName: "User",
 
-	Columns: map[string]*orm.ColumnMetadata{
+	Columns: map[string]*storm.ColumnMetadata{
 		"ID": {
 			FieldName:       "ID",
 			DBName:          "id",
@@ -152,7 +152,7 @@ var UserMetadata = &orm.ModelMetadata{
 		"id",
 	},
 
-	Relationships: map[string]*orm.RelationshipMetadata{
+	Relationships: map[string]*storm.RelationshipMetadata{
 		"Todos": {
 			Name:       "Todos",
 			Type:       "has_many",

@@ -143,12 +143,13 @@ func TestStructGenerator_ComplexTypes(t *testing.T) {
 	}
 
 	expectedContents := []string{
+		`"github.com/eleven-am/storm/pkg/storm"`,
 		"type ComplexType struct",
 		"Id int32",
 		"type:integer;primary_key",
 		"Tags []string",
 		"type:text[];not_null",
-		"Metadata *map[string]interface{}",
+		"Metadata *storm.JSONData",
 		"type:jsonb",
 		"Status string",
 		"type:order_status;not_null",
@@ -279,8 +280,8 @@ func TestPostgresTypeToGoType(t *testing.T) {
 		{"boolean", "", true, "*bool"},
 		{"timestamp with time zone", "", false, "time.Time"},
 		{"timestamp with time zone", "", true, "*time.Time"},
-		{"jsonb", "", false, "map[string]interface{}"},
-		{"jsonb", "", true, "*map[string]interface{}"},
+		{"jsonb", "", false, "storm.JSONData"},
+		{"jsonb", "", true, "*storm.JSONData"},
 		{"ARRAY", "_text", false, "[]string"},
 		{"ARRAY", "_text", true, "[]string"},
 		{"uuid", "", false, "string"},

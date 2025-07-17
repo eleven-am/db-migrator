@@ -97,7 +97,7 @@ schema:
   strict_mode: true
   naming_convention: "camel_case"
 `
-		configFile := filepath.Join(tempDir, "storm.yaml")
+		configFile := filepath.Join(tempDir, "ststorm.yaml")
 		err := ioutil.WriteFile(configFile, []byte(configContent), 0644)
 		if err != nil {
 			t.Fatal(err)
@@ -180,11 +180,11 @@ project: "test-project"
 	})
 
 	t.Run("load config with empty path", func(t *testing.T) {
-		// Create storm.yaml in current directory
+		// Create ststorm.yaml in current directory
 		configContent := `version: "1.0"
 project: "auto-detect"
 `
-		err := ioutil.WriteFile("storm.yaml", []byte(configContent), 0644)
+		err := ioutil.WriteFile("ststorm.yaml", []byte(configContent), 0644)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -233,10 +233,10 @@ invalid: yaml: content:
 
 	t.Run("load config returns nil when no file found", func(t *testing.T) {
 		// Remove any existing config files
-		os.Remove("storm.yaml")
-		os.Remove("storm.yml")
-		os.Remove(".storm.yaml")
-		os.Remove(".storm.yml")
+		os.Remove("ststorm.yaml")
+		os.Remove("ststorm.yml")
+		os.Remove(".ststorm.yaml")
+		os.Remove(".ststorm.yml")
 
 		config, err := LoadStormConfig("")
 		if err != nil {
@@ -265,7 +265,7 @@ func TestGetConfigPath(t *testing.T) {
 	os.Chdir(tempDir)
 
 	t.Run("get config path with env var", func(t *testing.T) {
-		envPath := "/custom/storm.yaml"
+		envPath := "/custom/ststorm.yaml"
 		os.Setenv("STORM_CONFIG", envPath)
 		defer os.Unsetenv("STORM_CONFIG")
 
@@ -278,16 +278,16 @@ func TestGetConfigPath(t *testing.T) {
 	t.Run("get config path from current directory", func(t *testing.T) {
 		os.Unsetenv("STORM_CONFIG")
 
-		// Create storm.yaml in current directory
+		// Create ststorm.yaml in current directory
 		configContent := `version: "1.0"`
-		err := ioutil.WriteFile("storm.yaml", []byte(configContent), 0644)
+		err := ioutil.WriteFile("ststorm.yaml", []byte(configContent), 0644)
 		if err != nil {
 			t.Fatal(err)
 		}
 
 		path := GetConfigPath()
-		if path != "storm.yaml" {
-			t.Errorf("expected path storm.yaml, got %s", path)
+		if path != "ststorm.yaml" {
+			t.Errorf("expected path ststorm.yaml, got %s", path)
 		}
 	})
 
@@ -295,10 +295,10 @@ func TestGetConfigPath(t *testing.T) {
 		os.Unsetenv("STORM_CONFIG")
 
 		// Remove any existing config files
-		os.Remove("storm.yaml")
-		os.Remove("storm.yml")
-		os.Remove(".storm.yaml")
-		os.Remove(".storm.yml")
+		os.Remove("ststorm.yaml")
+		os.Remove("ststorm.yml")
+		os.Remove(".ststorm.yaml")
+		os.Remove(".ststorm.yml")
 
 		path := GetConfigPath()
 		if path != "" {
@@ -371,7 +371,7 @@ func TestSaveStormConfig(t *testing.T) {
 		}
 
 		// Verify the file was created with default name
-		if _, err := os.Stat("storm.yaml"); os.IsNotExist(err) {
+		if _, err := os.Stat("ststorm.yaml"); os.IsNotExist(err) {
 			t.Error("default config file was not created")
 		}
 	})

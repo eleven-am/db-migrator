@@ -21,13 +21,13 @@ package todo
 import (
 	"context"
 	"fmt"
-	"github.com/eleven-am/storm/internal/orm"
+	"github.com/eleven-am/storm/pkg/storm"
 	"github.com/jmoiron/sqlx"
 )
 
 // CategoryRepository provides type-safe operations for Category
 //
-// The repository inherits these operations from orm.Repository:
+// The repository inherits these operations from storm.Repository:
 //
 // Single Record Operations:
 //   - Create(ctx, record) - Insert single record
@@ -60,11 +60,11 @@ import (
 //	// Complex queries
 //	results, err := repo.Query().Where(condition).OrderBy("created_at DESC").Find()
 type CategoryRepository struct {
-	*orm.Repository[Category]
+	*storm.Repository[Category]
 }
 
 func newCategoryRepository(db *sqlx.DB) (*CategoryRepository, error) {
-	baseRepo, err := orm.NewRepository[Category](db, CategoryMetadata)
+	baseRepo, err := storm.NewRepository[Category](db, CategoryMetadata)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create base repository: %w", err)
 	}
@@ -75,7 +75,7 @@ func newCategoryRepository(db *sqlx.DB) (*CategoryRepository, error) {
 }
 
 func newCategoryRepositoryWithTx(tx *sqlx.Tx) (*CategoryRepository, error) {
-	baseRepo, err := orm.NewRepositoryWithTx[Category](tx, CategoryMetadata)
+	baseRepo, err := storm.NewRepositoryWithTx[Category](tx, CategoryMetadata)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create base repository with transaction: %w", err)
 	}
@@ -193,7 +193,7 @@ func (r *CategoryRepository) WithTodos() *CategoryQuery {
 //	    Where(condition).
 //	    Find()
 type CategoryQuery struct {
-	*orm.Query[Category]
+	*storm.Query[Category]
 	repo *CategoryRepository
 }
 
@@ -212,7 +212,7 @@ type CategoryQuery struct {
 //	query.Where(Categorys.CreatedAt.After(time.Now().AddDate(0, -1, 0)))
 //	// Combine conditions
 //	query.Where(Categorys.ID.Eq("value").And(Categorys.UserID.IsNotNull()))
-func (q *CategoryQuery) Where(condition orm.Condition) *CategoryQuery {
+func (q *CategoryQuery) Where(condition storm.Condition) *CategoryQuery {
 	q.Query = q.Query.Where(condition)
 	return q
 }

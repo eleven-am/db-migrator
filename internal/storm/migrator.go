@@ -15,14 +15,14 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
-// MigratorImpl implements the storm.Migrator interface
+// MigratorImpl implements the ststorm.Migrator interface
 type MigratorImpl struct {
 	db     *sqlx.DB
-	config *storm.Config
-	logger storm.Logger
+	config *ststorm.Config
+	logger ststorm.Logger
 }
 
-func NewMigrator(db *sqlx.DB, config *storm.Config, logger storm.Logger) *MigratorImpl {
+func NewMigrator(db *sqlx.DB, config *ststorm.Config, logger ststorm.Logger) *MigratorImpl {
 	return &MigratorImpl{
 		db:     db,
 		config: config,
@@ -30,7 +30,7 @@ func NewMigrator(db *sqlx.DB, config *storm.Config, logger storm.Logger) *Migrat
 	}
 }
 
-func (m *MigratorImpl) Generate(ctx context.Context, opts storm.MigrateOptions) (*storm.Migration, error) {
+func (m *MigratorImpl) Generate(ctx context.Context, opts ststorm.MigrateOptions) (*ststorm.Migration, error) {
 	m.logger.Info("Generating migration...", "package", opts.PackagePath)
 
 	if err := os.MkdirAll(opts.OutputDir, 0755); err != nil {
@@ -61,7 +61,7 @@ func (m *MigratorImpl) Generate(ctx context.Context, opts storm.MigrateOptions) 
 	return migration, nil
 }
 
-func (m *MigratorImpl) Apply(ctx context.Context, migration *storm.Migration) error {
+func (m *MigratorImpl) Apply(ctx context.Context, migration *ststorm.Migration) error {
 	m.logger.Info("Applying migration...", "name", migration.Name)
 
 	if err := m.createMigrationsTable(ctx); err != nil {
@@ -100,7 +100,7 @@ func (m *MigratorImpl) Apply(ctx context.Context, migration *storm.Migration) er
 	return nil
 }
 
-func (m *MigratorImpl) Rollback(ctx context.Context, migration *storm.Migration) error {
+func (m *MigratorImpl) Rollback(ctx context.Context, migration *ststorm.Migration) error {
 	m.logger.Info("Rolling back migration...", "name", migration.Name)
 
 	applied, err := m.isMigrationApplied(ctx, migration.Name)
@@ -135,7 +135,7 @@ func (m *MigratorImpl) Rollback(ctx context.Context, migration *storm.Migration)
 	return nil
 }
 
-func (m *MigratorImpl) Status(ctx context.Context) (*storm.MigrationStatus, error) {
+func (m *MigratorImpl) Status(ctx context.Context) (*ststorm.MigrationStatus, error) {
 	if err := m.createMigrationsTable(ctx); err != nil {
 		return nil, fmt.Errorf("failed to create migrations table: %w", err)
 	}
@@ -150,7 +150,7 @@ func (m *MigratorImpl) Status(ctx context.Context) (*storm.MigrationStatus, erro
 		return nil, fmt.Errorf("failed to get pending migrations: %w", err)
 	}
 
-	return &storm.MigrationStatus{
+	return &ststorm.MigrationStatus{
 		Applied:   len(applied),
 		Pending:   len(pending),
 		Available: len(applied) + len(pending),
@@ -158,7 +158,7 @@ func (m *MigratorImpl) Status(ctx context.Context) (*storm.MigrationStatus, erro
 	}, nil
 }
 
-func (m *MigratorImpl) History(ctx context.Context) ([]*storm.MigrationRecord, error) {
+func (m *MigratorImpl) History(ctx context.Context) ([]*ststorm.MigrationRecord, error) {
 	if err := m.createMigrationsTable(ctx); err != nil {
 		return nil, fmt.Errorf("failed to create migrations table: %w", err)
 	}
@@ -175,9 +175,9 @@ func (m *MigratorImpl) History(ctx context.Context) ([]*storm.MigrationRecord, e
 	}
 	defer rows.Close()
 
-	var records []*storm.MigrationRecord
+	var records []*ststorm.MigrationRecord
 	for rows.Next() {
-		var record storm.MigrationRecord
+		var record ststorm.MigrationRecord
 		var name, checksum string
 		if err := rows.Scan(&name, &record.AppliedAt, &checksum); err != nil {
 			return nil, fmt.Errorf("failed to scan migration record: %w", err)
@@ -191,7 +191,7 @@ func (m *MigratorImpl) History(ctx context.Context) ([]*storm.MigrationRecord, e
 	return records, nil
 }
 
-func (m *MigratorImpl) Pending(ctx context.Context) ([]*storm.Migration, error) {
+func (m *MigratorImpl) Pending(ctx context.Context) ([]*ststorm.Migration, error) {
 	return m.getPendingMigrations(ctx)
 }
 
@@ -228,7 +228,7 @@ func (m *MigratorImpl) getAppliedMigrations(ctx context.Context) ([]string, erro
 	return names, err
 }
 
-func (m *MigratorImpl) getPendingMigrations(ctx context.Context) ([]*storm.Migration, error) {
+func (m *MigratorImpl) getPendingMigrations(ctx context.Context) ([]*ststorm.Migration, error) {
 	files, err := filepath.Glob(filepath.Join(m.config.MigrationsDir, "*.sql"))
 	if err != nil {
 		return nil, fmt.Errorf("failed to glob migration files: %w", err)
@@ -244,7 +244,7 @@ func (m *MigratorImpl) getPendingMigrations(ctx context.Context) ([]*storm.Migra
 		appliedMap[name] = true
 	}
 
-	var pending []*storm.Migration
+	var pending []*ststorm.Migration
 	for _, file := range files {
 		name := filepath.Base(file)
 		name = strings.TrimSuffix(name, ".sql")
@@ -261,7 +261,7 @@ func (m *MigratorImpl) getPendingMigrations(ctx context.Context) ([]*storm.Migra
 	return pending, nil
 }
 
-func (m *MigratorImpl) loadMigration(filename string) (*storm.Migration, error) {
+func (m *MigratorImpl) loadMigration(filename string) (*ststorm.Migration, error) {
 	content, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read migration file: %w", err)
@@ -280,7 +280,7 @@ func (m *MigratorImpl) loadMigration(filename string) (*storm.Migration, error) 
 	up = strings.TrimPrefix(up, "-- +migrate Up")
 	up = strings.TrimSpace(up)
 
-	return &storm.Migration{
+	return &ststorm.Migration{
 		Name:      name,
 		UpSQL:     up,
 		DownSQL:   down,
@@ -289,7 +289,7 @@ func (m *MigratorImpl) loadMigration(filename string) (*storm.Migration, error) 
 	}, nil
 }
 
-func (m *MigratorImpl) executeMigration(ctx context.Context, tx *sqlx.Tx, migration *storm.Migration) error {
+func (m *MigratorImpl) executeMigration(ctx context.Context, tx *sqlx.Tx, migration *ststorm.Migration) error {
 	if migration.UpSQL == "" {
 		return nil
 	}
@@ -309,7 +309,7 @@ func (m *MigratorImpl) executeMigration(ctx context.Context, tx *sqlx.Tx, migrat
 	return nil
 }
 
-func (m *MigratorImpl) executeRollback(ctx context.Context, tx *sqlx.Tx, migration *storm.Migration) error {
+func (m *MigratorImpl) executeRollback(ctx context.Context, tx *sqlx.Tx, migration *ststorm.Migration) error {
 	if migration.DownSQL == "" {
 		return fmt.Errorf("no rollback script available for migration %s", migration.Name)
 	}
@@ -329,7 +329,7 @@ func (m *MigratorImpl) executeRollback(ctx context.Context, tx *sqlx.Tx, migrati
 	return nil
 }
 
-func (m *MigratorImpl) recordMigration(ctx context.Context, tx *sqlx.Tx, migration *storm.Migration) error {
+func (m *MigratorImpl) recordMigration(ctx context.Context, tx *sqlx.Tx, migration *ststorm.Migration) error {
 	query := fmt.Sprintf(`
 		INSERT INTO %s (name, applied_at, checksum)
 		VALUES ($1, $2, $3)
@@ -339,7 +339,7 @@ func (m *MigratorImpl) recordMigration(ctx context.Context, tx *sqlx.Tx, migrati
 	return err
 }
 
-func (m *MigratorImpl) removeMigrationRecord(ctx context.Context, tx *sqlx.Tx, migration *storm.Migration) error {
+func (m *MigratorImpl) removeMigrationRecord(ctx context.Context, tx *sqlx.Tx, migration *ststorm.Migration) error {
 	query := fmt.Sprintf(`
 		DELETE FROM %s WHERE name = $1
 	`, m.config.MigrationsTable)
@@ -348,12 +348,12 @@ func (m *MigratorImpl) removeMigrationRecord(ctx context.Context, tx *sqlx.Tx, m
 	return err
 }
 
-func (m *MigratorImpl) getCurrentSchema(ctx context.Context) (*storm.Schema, error) {
+func (m *MigratorImpl) getCurrentSchema(ctx context.Context) (*ststorm.Schema, error) {
 	schemaInspector := NewSchemaInspector(m.db, m.config, m.logger)
 	return schemaInspector.Inspect(ctx)
 }
 
-func (m *MigratorImpl) getDesiredSchema(packagePath string) (*storm.Schema, error) {
+func (m *MigratorImpl) getDesiredSchema(packagePath string) (*ststorm.Schema, error) {
 	structParser := NewStructParser()
 	models, err := structParser.ParseDirectory(packagePath)
 	if err != nil {
@@ -369,7 +369,7 @@ func (m *MigratorImpl) getDesiredSchema(packagePath string) (*storm.Schema, erro
 	return m.convertGeneratorSchemaToStorm(schema), nil
 }
 
-func (m *MigratorImpl) generateMigration(current, desired *storm.Schema) (*storm.Migration, error) {
+func (m *MigratorImpl) generateMigration(current, desired *ststorm.Schema) (*ststorm.Migration, error) {
 	atlasMigrator := NewAtlasMigrator(m.config.DatabaseURL)
 
 	opts := MigrationOptions{
@@ -389,7 +389,7 @@ func (m *MigratorImpl) generateMigration(current, desired *storm.Schema) (*storm
 	timestamp := time.Now().Format("20060102150405")
 	name := fmt.Sprintf("%s_auto_migration", timestamp)
 
-	return &storm.Migration{
+	return &ststorm.Migration{
 		Name:      name,
 		UpSQL:     result.UpSQL,
 		DownSQL:   result.DownSQL,
@@ -398,7 +398,7 @@ func (m *MigratorImpl) generateMigration(current, desired *storm.Schema) (*storm
 	}, nil
 }
 
-func (m *MigratorImpl) saveMigration(migration *storm.Migration, outputDir string) error {
+func (m *MigratorImpl) saveMigration(migration *ststorm.Migration, outputDir string) error {
 	filename := filepath.Join(outputDir, migration.Name+".sql")
 	content := fmt.Sprintf("-- +migrate Up\n%s\n\n-- +migrate Down\n%s\n", migration.UpSQL, migration.DownSQL)
 
@@ -424,19 +424,19 @@ func NewAtlasMigrator(databaseURL string) *migrator.AtlasMigrator {
 
 type MigrationOptions = migrator.MigrationOptions
 
-func (m *MigratorImpl) convertGeneratorSchemaToStorm(genSchema *generator.DatabaseSchema) *storm.Schema {
-	stormSchema := &storm.Schema{
-		Tables: make(map[string]*storm.Table),
+func (m *MigratorImpl) convertGeneratorSchemaToStorm(genSchema *generator.DatabaseSchema) *ststorm.Schema {
+	stormSchema := &ststorm.Schema{
+		Tables: make(map[string]*ststorm.Table),
 	}
 
 	for tableName, table := range genSchema.Tables {
-		stormTable := &storm.Table{
+		stormTable := &ststorm.Table{
 			Name:    table.Name,
-			Columns: make(map[string]*storm.Column),
+			Columns: make(map[string]*ststorm.Column),
 		}
 
 		for _, col := range table.Columns {
-			stormCol := &storm.Column{
+			stormCol := &ststorm.Column{
 				Name:     col.Name,
 				Type:     col.Type,
 				Nullable: col.IsNullable,

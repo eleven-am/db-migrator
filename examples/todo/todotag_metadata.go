@@ -19,15 +19,15 @@
 package todo
 
 import (
-	"github.com/eleven-am/storm/internal/orm"
+	"github.com/eleven-am/storm/pkg/storm"
 )
 
 // TodoTagMetadata provides compile-time metadata for TodoTag
-var TodoTagMetadata = &orm.ModelMetadata{
+var TodoTagMetadata = &storm.ModelMetadata{
 	TableName:  "todo_tags",
 	StructName: "TodoTag",
 
-	Columns: map[string]*orm.ColumnMetadata{
+	Columns: map[string]*storm.ColumnMetadata{
 		"TodoID": {
 			FieldName:       "TodoID",
 			DBName:          "todo_id",
@@ -89,5 +89,5 @@ var TodoTagMetadata = &orm.ModelMetadata{
 		"tag_id",
 	},
 
-	Relationships: map[string]*orm.RelationshipMetadata{},
+	Relationships: map[string]*storm.RelationshipMetadata{},
 }

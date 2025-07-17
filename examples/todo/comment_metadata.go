@@ -19,15 +19,15 @@
 package todo
 
 import (
-	"github.com/eleven-am/storm/internal/orm"
+	"github.com/eleven-am/storm/pkg/storm"
 )
 
 // CommentMetadata provides compile-time metadata for Comment
-var CommentMetadata = &orm.ModelMetadata{
+var CommentMetadata = &storm.ModelMetadata{
 	TableName:  "comments",
 	StructName: "Comment",
 
-	Columns: map[string]*orm.ColumnMetadata{
+	Columns: map[string]*storm.ColumnMetadata{
 		"ID": {
 			FieldName:       "ID",
 			DBName:          "id",
@@ -136,7 +136,7 @@ var CommentMetadata = &orm.ModelMetadata{
 		"id",
 	},
 
-	Relationships: map[string]*orm.RelationshipMetadata{
+	Relationships: map[string]*storm.RelationshipMetadata{
 		"Todo": {
 			Name:       "Todo",
 			Type:       "belongs_to",

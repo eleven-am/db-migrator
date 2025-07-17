@@ -21,13 +21,13 @@ package todo
 import (
 	"context"
 	"fmt"
-	"github.com/eleven-am/storm/internal/orm"
+	"github.com/eleven-am/storm/pkg/storm"
 	"github.com/jmoiron/sqlx"
 )
 
 // CommentRepository provides type-safe operations for Comment
 //
-// The repository inherits these operations from orm.Repository:
+// The repository inherits these operations from storm.Repository:
 //
 // Single Record Operations:
 //   - Create(ctx, record) - Insert single record
@@ -60,11 +60,11 @@ import (
 //	// Complex queries
 //	results, err := repo.Query().Where(condition).OrderBy("created_at DESC").Find()
 type CommentRepository struct {
-	*orm.Repository[Comment]
+	*storm.Repository[Comment]
 }
 
 func newCommentRepository(db *sqlx.DB) (*CommentRepository, error) {
-	baseRepo, err := orm.NewRepository[Comment](db, CommentMetadata)
+	baseRepo, err := storm.NewRepository[Comment](db, CommentMetadata)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create base repository: %w", err)
 	}
@@ -75,7 +75,7 @@ func newCommentRepository(db *sqlx.DB) (*CommentRepository, error) {
 }
 
 func newCommentRepositoryWithTx(tx *sqlx.Tx) (*CommentRepository, error) {
-	baseRepo, err := orm.NewRepositoryWithTx[Comment](tx, CommentMetadata)
+	baseRepo, err := storm.NewRepositoryWithTx[Comment](tx, CommentMetadata)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create base repository with transaction: %w", err)
 	}
@@ -193,7 +193,7 @@ func (r *CommentRepository) WithUser() *CommentQuery {
 //	    Where(condition).
 //	    Find()
 type CommentQuery struct {
-	*orm.Query[Comment]
+	*storm.Query[Comment]
 	repo *CommentRepository
 }
 
@@ -212,7 +212,7 @@ type CommentQuery struct {
 //	query.Where(Comments.CreatedAt.After(time.Now().AddDate(0, -1, 0)))
 //	// Combine conditions
 //	query.Where(Comments.ID.Eq("value").And(Comments.TodoID.IsNotNull()))
-func (q *CommentQuery) Where(condition orm.Condition) *CommentQuery {
+func (q *CommentQuery) Where(condition storm.Condition) *CommentQuery {
 	q.Query = q.Query.Where(condition)
 	return q
 }

@@ -71,12 +71,12 @@ func runORM(cmd *cobra.Command, args []string) error {
 		cmd.Printf("Generate mocks: %v\n", ormIncludeMocks)
 	}
 
-	config := storm.NewConfig()
+	config := ststorm.NewConfig()
 	config.ModelsPackage = ormPackage
 	config.Debug = debug
 	config.DatabaseURL = "postgres://localhost/dummy"
 
-	stormClient, err := storm.NewWithConfig(config)
+	stormClient, err := ststorm.NewWithConfig(config)
 	if err != nil {
 		return fmt.Errorf("failed to create Storm client: %w", err)
 	}
@@ -84,7 +84,7 @@ func runORM(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("Generating ORM code from models in %s\n", ormPackage)
 
-	opts := storm.GenerateOptions{
+	opts := ststorm.GenerateOptions{
 		PackagePath:  ormPackage,
 		OutputDir:    ormOutput,
 		IncludeHooks: ormIncludeHooks,

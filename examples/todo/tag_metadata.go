@@ -19,15 +19,15 @@
 package todo
 
 import (
-	"github.com/eleven-am/storm/internal/orm"
+	"github.com/eleven-am/storm/pkg/storm"
 )
 
 // TagMetadata provides compile-time metadata for Tag
-var TagMetadata = &orm.ModelMetadata{
+var TagMetadata = &storm.ModelMetadata{
 	TableName:  "tags",
 	StructName: "Tag",
 
-	Columns: map[string]*orm.ColumnMetadata{
+	Columns: map[string]*storm.ColumnMetadata{
 		"ID": {
 			FieldName:       "ID",
 			DBName:          "id",
@@ -104,7 +104,7 @@ var TagMetadata = &orm.ModelMetadata{
 		"id",
 	},
 
-	Relationships: map[string]*orm.RelationshipMetadata{
+	Relationships: map[string]*storm.RelationshipMetadata{
 		"Todos": {
 			Name:      "Todos",
 			Type:      "has_many_through",

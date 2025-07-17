@@ -123,7 +123,7 @@ type TestProfile struct {
 		"test_post_repository.go",
 		"test_profile_repository.go",
 		"relationships.go",
-		"storm.go",
+		"ststorm.go",
 	}
 
 	for _, filename := range expectedFiles {
@@ -143,10 +143,10 @@ type TestProfile struct {
 		"TestUsers",
 		"TestPosts",
 		"TestProfiles",
-		"orm.StringColumn",
-		"orm.NumericColumn",
-		"orm.BoolColumn",
-		"orm.TimeColumn",
+		"storm.StringColumn",
+		"storm.NumericColumn",
+		"storm.BoolColumn",
+		"storm.TimeColumn",
 	}
 
 	for _, expected := range expectedContent {

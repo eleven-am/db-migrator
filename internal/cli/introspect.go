@@ -136,7 +136,7 @@ func runIntrospect(cmd *cobra.Command, args []string) error {
 	fmt.Printf("\nGenerated files:\n")
 	fmt.Printf("  - models.go          (struct definitions)\n")
 	fmt.Printf("  - columns.go         (type-safe column constants)\n")
-	fmt.Printf("  - storm.go           (main ORM entry point)\n")
+	fmt.Printf("  - ststorm.go           (main ORM entry point)\n")
 	fmt.Printf("  - *_metadata.go      (model metadata)\n")
 	fmt.Printf("  - *_repository.go    (repository implementations with query methods)\n")
 
@@ -144,7 +144,7 @@ func runIntrospect(cmd *cobra.Command, args []string) error {
 	fmt.Printf("  import \"%s\"\n", introspectPackage)
 	fmt.Printf("  \n")
 	fmt.Printf("  storm := %s.NewStorm(db)\n", introspectPackage)
-	fmt.Printf("  users, err := storm.Users.Query().Find()\n")
+	fmt.Printf("  users, err := ststorm.Users.Query().Find()\n")
 
 	if introspectFormat != "orm" && introspectFormat != "" {
 		fmt.Printf("\nGenerating additional %s export...\n", introspectFormat)

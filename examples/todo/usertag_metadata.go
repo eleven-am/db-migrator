@@ -19,15 +19,15 @@
 package todo
 
 import (
-	"github.com/eleven-am/storm/internal/orm"
+	"github.com/eleven-am/storm/pkg/storm"
 )
 
 // UserTagMetadata provides compile-time metadata for UserTag
-var UserTagMetadata = &orm.ModelMetadata{
+var UserTagMetadata = &storm.ModelMetadata{
 	TableName:  "user_tags",
 	StructName: "UserTag",
 
-	Columns: map[string]*orm.ColumnMetadata{
+	Columns: map[string]*storm.ColumnMetadata{
 		"UserID": {
 			FieldName:       "UserID",
 			DBName:          "user_id",
@@ -89,5 +89,5 @@ var UserTagMetadata = &orm.ModelMetadata{
 		"tag_id",
 	},
 
-	Relationships: map[string]*orm.RelationshipMetadata{},
+	Relationships: map[string]*storm.RelationshipMetadata{},
 }

@@ -192,7 +192,7 @@ func (g *CodeGenerator) mapSchemaTypeToGo(schemaType string) string {
 	case "double precision", "float8":
 		return "float64"
 	case "jsonb", "json":
-		return "json.RawMessage"
+		return "orm.JSONData"
 	case "bytea":
 		return "[]byte"
 	default:
@@ -351,7 +351,7 @@ func (g *CodeGenerator) generateStorm() error {
 		Now:     time.Now(),
 	}
 
-	return g.executeTemplate("storm", "storm.go", data)
+	return g.executeTemplate("storm", "ststorm.go", data)
 }
 
 func (g *CodeGenerator) executeTemplate(templateName, filename string, data interface{}) error {
@@ -397,7 +397,7 @@ func (g *CodeGenerator) mapDBTypeToGo(dbType string) string {
 	case "uuid":
 		return "string"
 	case "jsonb", "json":
-		return "json.RawMessage"
+		return "orm.JSONData"
 	case "bytea":
 		return "[]byte"
 	default:
@@ -429,7 +429,7 @@ func (g *CodeGenerator) mapGoTypeToPostgreSQL(goType string) string {
 		return "TIMESTAMP WITH TIME ZONE"
 	case "[]byte":
 		return "BYTEA"
-	case "json.RawMessage":
+	case "json.RawMessage", "orm.JSONData":
 		return "JSONB"
 	default:
 		if strings.HasPrefix(goType, "[]") {

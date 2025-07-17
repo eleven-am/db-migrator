@@ -9,7 +9,7 @@ import (
 
 func TestBuildMigrator(t *testing.T) {
 	mockDB := &sqlx.DB{}
-	config := &storm.Config{
+	config := &ststorm.Config{
 		ModelsPackage: "./models",
 	}
 	logger := &TestLogger{}
@@ -21,7 +21,7 @@ func TestBuildMigrator(t *testing.T) {
 }
 
 func TestBuildORM(t *testing.T) {
-	config := &storm.Config{
+	config := &ststorm.Config{
 		ModelsPackage: "./models",
 	}
 	logger := &TestLogger{}
@@ -34,7 +34,7 @@ func TestBuildORM(t *testing.T) {
 
 func TestBuildSchemaInspector(t *testing.T) {
 	mockDB := &sqlx.DB{}
-	config := &storm.Config{
+	config := &ststorm.Config{
 		ModelsPackage: "./models",
 	}
 	logger := &TestLogger{}
@@ -46,7 +46,7 @@ func TestBuildSchemaInspector(t *testing.T) {
 }
 
 func TestFactoryFunctions(t *testing.T) {
-	config := &storm.Config{
+	config := &ststorm.Config{
 		ModelsPackage: "./models",
 	}
 	logger := &TestLogger{}
@@ -76,7 +76,7 @@ func TestFactoryFunctions(t *testing.T) {
 }
 
 func TestBuilderIntegration(t *testing.T) {
-	config := &storm.Config{
+	config := &ststorm.Config{
 		ModelsPackage: "./models",
 	}
 	logger := &TestLogger{}

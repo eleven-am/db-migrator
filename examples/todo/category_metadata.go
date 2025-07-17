@@ -19,15 +19,15 @@
 package todo
 
 import (
-	"github.com/eleven-am/storm/internal/orm"
+	"github.com/eleven-am/storm/pkg/storm"
 )
 
 // CategoryMetadata provides compile-time metadata for Category
-var CategoryMetadata = &orm.ModelMetadata{
+var CategoryMetadata = &storm.ModelMetadata{
 	TableName:  "categories",
 	StructName: "Category",
 
-	Columns: map[string]*orm.ColumnMetadata{
+	Columns: map[string]*storm.ColumnMetadata{
 		"ID": {
 			FieldName:       "ID",
 			DBName:          "id",
@@ -158,7 +158,7 @@ var CategoryMetadata = &orm.ModelMetadata{
 		"id",
 	},
 
-	Relationships: map[string]*orm.RelationshipMetadata{
+	Relationships: map[string]*storm.RelationshipMetadata{
 		"User": {
 			Name:       "User",
 			Type:       "belongs_to",

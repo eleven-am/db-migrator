@@ -7,9 +7,9 @@ import (
 
 func init() {
 	// Register implementation factories
-	stormPkg.MigratorFactory = storm.BuildMigrator
-	stormPkg.ORMFactory = storm.BuildORM
-	stormPkg.SchemaInspectorFactory = storm.BuildSchemaInspector
+	stormPkg.MigratorFactory = ststorm.BuildMigrator
+	stormPkg.ORMFactory = ststorm.BuildORM
+	stormPkg.SchemaInspectorFactory = ststorm.BuildSchemaInspector
 }
 
 // NewStorm creates a new Storm instance with all implementations registered

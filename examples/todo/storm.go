@@ -21,7 +21,7 @@ package todo
 import (
 	"context"
 	"fmt"
-	"github.com/eleven-am/storm/internal/orm"
+	"github.com/eleven-am/storm/pkg/storm"
 	"github.com/jmoiron/sqlx"
 )
 
@@ -30,8 +30,8 @@ import (
 // Basic usage:
 //
 //	storm := NewStorm(db)
-//	user, err := storm.Users.FindByID(ctx, "123")
-//	users, err := storm.Users.Query().Where(Users.IsActive.Eq(true)).Find()
+//	user, err := ststorm.Users.FindByID(ctx, "123")
+//	users, err := ststorm.Users.Query().Where(Users.IsActive.Eq(true)).Find()
 //
 // All repositories inherit these methods from the base repository:
 //
@@ -51,12 +51,12 @@ import (
 //
 // Transaction support:
 //
-//	err := storm.WithTransaction(ctx, func(txStorm *Storm) error {
+//	err := ststorm.WithTransaction(ctx, func(txStorm *Storm) error {
 //	    // All operations here run in a transaction
-//	    return txStorm.Users.Create(ctx, newUser)
+//	    return txStstorm.Users.Create(ctx, newUser)
 //	})
 type Storm struct {
-	*orm.Storm
+	*storm.Storm
 
 	// All repositories
 
@@ -76,33 +76,33 @@ type Storm struct {
 }
 
 func NewStorm(db *sqlx.DB) *Storm {
-	baseStorm := orm.NewStorm(db)
+	baseStorm := storm.NewStorm(db)
 
 	storm := &Storm{
 		Storm: baseStorm,
 	}
 
-	storm.initializeRepositories()
+	ststorm.initializeRepositories()
 
 	return storm
 }
 
 func (s *Storm) WithTransaction(ctx context.Context, fn func(*Storm) error) error {
-	return s.Storm.WithTransaction(ctx, func(baseStorm *orm.Storm) error {
+	return s.Ststorm.WithTransaction(ctx, func(baseStorm *storm.Storm) error {
 		txStorm := &Storm{
 			Storm: baseStorm,
 		}
-		txStorm.initializeRepositories()
+		txStstorm.initializeRepositories()
 		return fn(txStorm)
 	})
 }
 
-func (s *Storm) WithTransactionOptions(ctx context.Context, opts *orm.TransactionOptions, fn func(*Storm) error) error {
-	return s.Storm.WithTransactionOptions(ctx, opts, func(baseStorm *orm.Storm) error {
+func (s *Storm) WithTransactionOptions(ctx context.Context, opts *storm.TransactionOptions, fn func(*Storm) error) error {
+	return s.Ststorm.WithTransactionOptions(ctx, opts, func(baseStorm *storm.Storm) error {
 		txStorm := &Storm{
 			Storm: baseStorm,
 		}
-		txStorm.initializeRepositories()
+		txStstorm.initializeRepositories()
 		return fn(txStorm)
 	})
 }
@@ -110,7 +110,7 @@ func (s *Storm) WithTransactionOptions(ctx context.Context, opts *orm.Transactio
 func (s *Storm) initializeRepositories() {
 	executor := s.GetExecutor()
 
-	if baseRepo, err := orm.NewRepositoryWithExecutor[Category](executor, CategoryMetadata); err == nil {
+	if baseRepo, err := storm.NewRepositoryWithExecutor[Category](executor, CategoryMetadata); err == nil {
 		s.Categories = &CategoryRepository{
 			Repository: baseRepo,
 		}
@@ -118,7 +118,7 @@ func (s *Storm) initializeRepositories() {
 		panic(fmt.Errorf("failed to initialize Category repository: %w", err))
 	}
 
-	if baseRepo, err := orm.NewRepositoryWithExecutor[Comment](executor, CommentMetadata); err == nil {
+	if baseRepo, err := storm.NewRepositoryWithExecutor[Comment](executor, CommentMetadata); err == nil {
 		s.Comments = &CommentRepository{
 			Repository: baseRepo,
 		}
@@ -126,7 +126,7 @@ func (s *Storm) initializeRepositories() {
 		panic(fmt.Errorf("failed to initialize Comment repository: %w", err))
 	}
 
-	if baseRepo, err := orm.NewRepositoryWithExecutor[Tag](executor, TagMetadata); err == nil {
+	if baseRepo, err := storm.NewRepositoryWithExecutor[Tag](executor, TagMetadata); err == nil {
 		s.Tags = &TagRepository{
 			Repository: baseRepo,
 		}
@@ -134,7 +134,7 @@ func (s *Storm) initializeRepositories() {
 		panic(fmt.Errorf("failed to initialize Tag repository: %w", err))
 	}
 
-	if baseRepo, err := orm.NewRepositoryWithExecutor[Todo](executor, TodoMetadata); err == nil {
+	if baseRepo, err := storm.NewRepositoryWithExecutor[Todo](executor, TodoMetadata); err == nil {
 		s.Todos = &TodoRepository{
 			Repository: baseRepo,
 		}
@@ -142,7 +142,7 @@ func (s *Storm) initializeRepositories() {
 		panic(fmt.Errorf("failed to initialize Todo repository: %w", err))
 	}
 
-	if baseRepo, err := orm.NewRepositoryWithExecutor[TodoTag](executor, TodoTagMetadata); err == nil {
+	if baseRepo, err := storm.NewRepositoryWithExecutor[TodoTag](executor, TodoTagMetadata); err == nil {
 		s.TodoTags = &TodoTagRepository{
 			Repository: baseRepo,
 		}
@@ -150,7 +150,7 @@ func (s *Storm) initializeRepositories() {
 		panic(fmt.Errorf("failed to initialize TodoTag repository: %w", err))
 	}
 
-	if baseRepo, err := orm.NewRepositoryWithExecutor[User](executor, UserMetadata); err == nil {
+	if baseRepo, err := storm.NewRepositoryWithExecutor[User](executor, UserMetadata); err == nil {
 		s.Users = &UserRepository{
 			Repository: baseRepo,
 		}
@@ -158,7 +158,7 @@ func (s *Storm) initializeRepositories() {
 		panic(fmt.Errorf("failed to initialize User repository: %w", err))
 	}
 
-	if baseRepo, err := orm.NewRepositoryWithExecutor[UserTag](executor, UserTagMetadata); err == nil {
+	if baseRepo, err := storm.NewRepositoryWithExecutor[UserTag](executor, UserTagMetadata); err == nil {
 		s.UserTags = &UserTagRepository{
 			Repository: baseRepo,
 		}
