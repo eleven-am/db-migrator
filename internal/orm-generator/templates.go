@@ -207,10 +207,9 @@ import (
 //
 // Batch Operations:
 //   - CreateMany(ctx, records) - Insert multiple records in transaction
-//   - UpdateMany(ctx, updates, condition) - Update multiple records with condition
-//   - BulkUpdate(ctx, records, opts) - Bulk update using CTE with VALUES
-//   - Upsert(ctx, record, opts) - Insert or update on conflict
-//   - UpsertMany(ctx, records, opts) - Batch upsert operations
+//   - BulkUpdate(ctx, records, opts) - Update multiple records with bulk operation
+//   - Upsert(ctx, record, opts) - Insert or update single record on conflict
+//   - UpsertMany(ctx, records, opts) - Insert or update multiple records on conflict
 //
 // Query Building:
 //   - Query(ctx) - Create new query builder for complex queries
@@ -222,10 +221,12 @@ import (
 //   
 //   // Batch operations
 //   err = repo.CreateMany(ctx, multiple{{ .Model.Name }}s)
-//   rowsAffected, err := repo.UpdateMany(ctx, updates, condition)
+//   rowsAffected, err := repo.BulkUpdate(ctx, records, opts)
+//   err = repo.Upsert(ctx, record, opts)
 //   
-//   // Complex queries
+//   // Complex queries and operations
 //   results, err := repo.Query(ctx).Where(condition).OrderBy("created_at DESC").Find()
+//   rowsAffected, err := repo.Query(ctx).Where(condition).Delete()
 type {{ .Model.Name }}Repository struct {
 	*storm.Repository[{{ .Model.Name }}]
 }
@@ -561,62 +562,8 @@ const relationshipsTemplate = `//go:build !exclude_generated
 
 package {{ .Package }}
 
-{{- $hasRelationships := false }}
-{{- range .Models }}
-  {{- if .Relationships }}
-    {{- $hasRelationships = true }}
-  {{- end }}
-{{- end }}
-
-{{- if $hasRelationships }}
-import (
-	"context"
-	"database/sql"
-	"fmt"
-	
-	storm "github.com/eleven-am/storm/pkg/storm-orm"
-)
-{{- end }}
-
-{{ range .Models }}
-// {{ .Name }} relationship helpers
-{{- range .Relationships }}
-{{- if eq .Type "has_many" }}
-
-// Load{{ .Name }} loads the {{ .Name }} relationship for {{ $.Name }}
-func (r *{{ $.Name }}Repository) Load{{ .Name }}(ctx context.Context, entity *{{ $.Name }}) ([]{{ .Target }}, error) {
-	query := "SELECT * FROM {{ .Target | lower }}s WHERE {{ .ForeignKey }} = $1"
-	rows, err := r.db.QueryContext(ctx, query, entity.{{ .LocalKey }})
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	
-	var results []{{ .Target }}
-	for rows.Next() {
-		var item {{ .Target }}
-		// Scan logic would go here
-		results = append(results, item)
-	}
-	
-	return results, nil
-}
-{{- end }}
-{{- if eq .Type "belongs_to" }}
-
-// Load{{ .Name }} loads the {{ .Name }} relationship for {{ $.Name }}
-func (r *{{ $.Name }}Repository) Load{{ .Name }}(ctx context.Context, entity *{{ $.Name }}) (*{{ .Target }}, error) {
-	query := "SELECT * FROM {{ .Target | lower }}s WHERE {{ .TargetKey }} = $1"
-	row := r.db.QueryRowContext(ctx, query, entity.{{ .ForeignKey }})
-	
-	var result {{ .Target }}
-	// Scan logic would go here
-	
-	return &result, nil
-}
-{{- end }}
-{{- end }}
-{{ end }}
+// Relationships are handled by WithXXX methods in repositories
+// No additional relationship helpers needed - see repository files for With{{ .Model.Name }} methods
 `
 
 // stormTemplate generates the Storm struct with all repositories
@@ -665,10 +612,9 @@ import (
 //
 // Batch Operations:
 //   - CreateMany(ctx, records) - Insert multiple records in transaction
-//   - UpdateMany(ctx, updates, condition) - Update multiple records with condition
-//   - BulkUpdate(ctx, records, opts) - Bulk update using CTE with VALUES
-//   - Upsert(ctx, record, opts) - Insert or update on conflict
-//   - UpsertMany(ctx, records, opts) - Batch upsert operations
+//   - BulkUpdate(ctx, records, opts) - Update multiple records with bulk operation
+//   - Upsert(ctx, record, opts) - Insert or update single record on conflict
+//   - UpsertMany(ctx, records, opts) - Insert or update multiple records on conflict
 //
 // Transaction support:
 //   err := storm.WithTransaction(ctx, func(txStorm *Storm) error {
