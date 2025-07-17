@@ -67,6 +67,7 @@ users, err := storm.Users.Query().
 - [Configuration](#configuration)
 - [Documentation](#documentation)
 - [Examples](#examples)
+- [Middleware System](#-middleware-system)
 - [Contributing](#contributing)
 
 ## Installation
@@ -761,6 +762,322 @@ Consider alternatives if you need:
 - ❌ **Dynamic schemas** that change frequently at runtime
 - ❌ **Legacy codebases** with existing ORM deeply integrated
 - ❌ **Simple CRUD apps** where basic SQL might be sufficient
+
+## 🔧 Middleware System
+
+Storm provides a powerful middleware system that allows you to intercept and modify database operations. This is essential for production applications that need features like multi-tenancy, audit logging, soft deletes, authorization, and performance monitoring.
+
+### How Middleware Works
+
+Middleware functions wrap around database operations, giving you access to:
+- **Operation context** (create, update, delete, query)
+- **Query builders** before execution
+- **Table and model information**
+- **Custom metadata** for request tracking
+- **Timing and performance data**
+
+### Basic Middleware Structure
+
+```go
+repo.AddMiddleware(func(next QueryMiddlewareFunc) QueryMiddlewareFunc {
+    return func(ctx *MiddlewareContext) error {
+        // Before operation
+        // Modify ctx.QueryBuilder, add metadata, validate, etc.
+        
+        err := next(ctx) // Execute the operation
+        
+        // After operation
+        // Log results, handle errors, etc.
+        
+        return err
+    }
+})
+```
+
+### Production-Ready Examples
+
+#### 🏢 Multi-Tenancy
+
+Automatically scope all queries to the current tenant:
+
+```go
+func AddTenancyMiddleware(repo *Repository[T], tenantID string) {
+    repo.AddMiddleware(func(next QueryMiddlewareFunc) QueryMiddlewareFunc {
+        return func(ctx *MiddlewareContext) error {
+            switch v := ctx.QueryBuilder.(type) {
+            case squirrel.SelectBuilder:
+                ctx.QueryBuilder = v.Where(squirrel.Eq{"tenant_id": tenantID})
+            case squirrel.UpdateBuilder:
+                ctx.QueryBuilder = v.Where(squirrel.Eq{"tenant_id": tenantID})
+            case squirrel.DeleteBuilder:
+                ctx.QueryBuilder = v.Where(squirrel.Eq{"tenant_id": tenantID})
+            case squirrel.InsertBuilder:
+                // Auto-add tenant_id to inserts
+                ctx.QueryBuilder = v.Columns("tenant_id").Values(tenantID)
+            }
+            return next(ctx)
+        }
+    })
+}
+
+// Usage
+AddTenancyMiddleware(storm.Users, getCurrentTenantID(request))
+users, err := storm.Users.Query().Find() // Automatically filtered by tenant
+```
+
+#### 🗑️ Soft Delete System
+
+Convert hard deletes to soft deletes and filter out deleted records:
+
+```go
+func AddSoftDeleteMiddleware(repo *Repository[T]) {
+    repo.AddMiddleware(func(next QueryMiddlewareFunc) QueryMiddlewareFunc {
+        return func(ctx *MiddlewareContext) error {
+            switch ctx.Operation {
+            case OpQuery:
+                if sb, ok := ctx.QueryBuilder.(squirrel.SelectBuilder); ok {
+                    // Automatically filter out soft-deleted records
+                    ctx.QueryBuilder = sb.Where(squirrel.Eq{"deleted_at": nil})
+                }
+            case OpDelete:
+                // Convert DELETE to UPDATE with deleted_at timestamp
+                ctx.Operation = OpUpdate
+                ctx.QueryBuilder = squirrel.Update(ctx.TableName).
+                    Set("deleted_at", time.Now()).
+                    Where(ctx.QueryBuilder.(squirrel.DeleteBuilder).WhereParts...)
+            }
+            return next(ctx)
+        }
+    })
+}
+
+// Usage
+AddSoftDeleteMiddleware(storm.Users)
+err := storm.Users.Delete(ctx, userID) // Sets deleted_at instead of removing
+users, err := storm.Users.Query().Find() // Only returns non-deleted users
+```
+
+#### 🔐 Authorization & Security
+
+Block operations based on custom authorization logic:
+
+```go
+func AddAuthorizationMiddleware(repo *Repository[T], userRole string) {
+    repo.AddMiddleware(func(next QueryMiddlewareFunc) QueryMiddlewareFunc {
+        return func(ctx *MiddlewareContext) error {
+            // Block all delete operations for non-admin users
+            if ctx.Operation == OpDelete && userRole != "admin" {
+                return fmt.Errorf("unauthorized: only admins can delete %s", ctx.TableName)
+            }
+            
+            // Restrict sensitive queries
+            if ctx.TableName == "financial_records" && userRole != "finance" {
+                return fmt.Errorf("unauthorized: access denied to %s", ctx.TableName)
+            }
+            
+            return next(ctx)
+        }
+    })
+}
+
+// Usage
+AddAuthorizationMiddleware(storm.Users, getCurrentUserRole(request))
+```
+
+#### 📊 Audit Logging
+
+Automatically log all database operations:
+
+```go
+type AuditLogger struct {
+    logger *log.Logger
+    userID string
+}
+
+func (al *AuditLogger) AddAuditMiddleware(repo *Repository[T]) {
+    repo.AddMiddleware(func(next QueryMiddlewareFunc) QueryMiddlewareFunc {
+        return func(ctx *MiddlewareContext) error {
+            // Capture start time
+            startTime := time.Now()
+            
+            // Add user context
+            ctx.Metadata["user_id"] = al.userID
+            ctx.Metadata["operation_id"] = generateOperationID()
+            
+            // Execute operation
+            err := next(ctx)
+            
+            // Log the operation
+            duration := time.Since(startTime)
+            logEntry := map[string]interface{}{
+                "table":      ctx.TableName,
+                "operation":  string(ctx.Operation),
+                "user_id":    al.userID,
+                "duration":   duration.Milliseconds(),
+                "success":    err == nil,
+                "timestamp":  time.Now().UTC(),
+            }
+            
+            if err != nil {
+                logEntry["error"] = err.Error()
+                al.logger.Error("Database operation failed", logEntry)
+            } else {
+                al.logger.Info("Database operation completed", logEntry)
+            }
+            
+            return err
+        }
+    })
+}
+
+// Usage
+auditLogger := &AuditLogger{
+    logger: myLogger,
+    userID: getCurrentUserID(request),
+}
+auditLogger.AddAuditMiddleware(storm.Users)
+```
+
+#### ⚡ Performance Monitoring
+
+Track query performance and detect slow operations:
+
+```go
+func AddPerformanceMiddleware(repo *Repository[T], slowThreshold time.Duration) {
+    repo.AddMiddleware(func(next QueryMiddlewareFunc) QueryMiddlewareFunc {
+        return func(ctx *MiddlewareContext) error {
+            startTime := time.Now()
+            
+            err := next(ctx)
+            
+            duration := time.Since(startTime)
+            if duration > slowThreshold {
+                log.Warn("Slow query detected", map[string]interface{}{
+                    "table":     ctx.TableName,
+                    "operation": string(ctx.Operation),
+                    "duration":  duration.Milliseconds(),
+                    "query":     ctx.Query,
+                })
+            }
+            
+            // Send metrics to monitoring system
+            metrics.Histogram("db.operation.duration",
+                float64(duration.Milliseconds()),
+                map[string]string{
+                    "table":     ctx.TableName,
+                    "operation": string(ctx.Operation),
+                })
+            
+            return err
+        }
+    })
+}
+
+// Usage
+AddPerformanceMiddleware(storm.Users, 100*time.Millisecond)
+```
+
+#### 🔄 Request Context Integration
+
+Pass HTTP request context through to database operations:
+
+```go
+func AddRequestContextMiddleware(repo *Repository[T]) {
+    repo.AddMiddleware(func(next QueryMiddlewareFunc) QueryMiddlewareFunc {
+        return func(ctx *MiddlewareContext) error {
+            // Extract request ID from context
+            if requestID := ctx.Context.Value("request_id"); requestID != nil {
+                ctx.Metadata["request_id"] = requestID
+            }
+            
+            // Extract user information
+            if user := ctx.Context.Value("user"); user != nil {
+                ctx.Metadata["user"] = user
+            }
+            
+            // Check for request cancellation
+            select {
+            case <-ctx.Context.Done():
+                return ctx.Context.Err()
+            default:
+            }
+            
+            return next(ctx)
+        }
+    })
+}
+
+// Usage with HTTP handler
+func UserHandler(w http.ResponseWriter, r *http.Request) {
+    ctx := context.WithValue(r.Context(), "request_id", generateRequestID())
+    ctx = context.WithValue(ctx, "user", getCurrentUser(r))
+    
+    AddRequestContextMiddleware(storm.Users)
+    users, err := storm.Users.Query().FindContext(ctx)
+    // Request context flows through middleware
+}
+```
+
+### Middleware Chaining
+
+Middleware executes in the order it's added, with each middleware wrapping the next:
+
+```go
+// Add multiple middleware - they execute in order
+repo.AddMiddleware(authMiddleware)      // Executes first
+repo.AddMiddleware(tenancyMiddleware)   // Executes second  
+repo.AddMiddleware(auditMiddleware)     // Executes third
+repo.AddMiddleware(performanceMiddleware) // Executes last
+
+// Execution flow:
+// auth -> tenancy -> audit -> performance -> actual DB operation -> performance -> audit -> tenancy -> auth
+```
+
+### Available Operation Types
+
+```go
+const (
+    OpCreate     OperationType = "create"      // Single record insert
+    OpCreateMany OperationType = "create_many" // Bulk insert
+    OpUpdate     OperationType = "update"      // Single record update
+    OpUpdateMany OperationType = "update_many" // Bulk update
+    OpDelete     OperationType = "delete"      // Delete operation
+    OpUpsert     OperationType = "upsert"      // Insert or update
+    OpUpsertMany OperationType = "upsert_many" // Bulk upsert
+    OpBulkUpdate OperationType = "bulk_update" // Bulk update with VALUES
+    OpFind       OperationType = "find"        // Single record select
+    OpQuery      OperationType = "query"       // Multi-record select
+)
+```
+
+### Advanced Patterns
+
+#### Conditional Middleware
+
+Apply middleware only for specific conditions:
+
+```go
+func ConditionalMiddleware(condition func(*MiddlewareContext) bool, middleware QueryMiddleware) QueryMiddleware {
+    return func(next QueryMiddlewareFunc) QueryMiddlewareFunc {
+        return func(ctx *MiddlewareContext) error {
+            if condition(ctx) {
+                return middleware(next)(ctx)
+            }
+            return next(ctx)
+        }
+    }
+}
+
+// Usage: Only apply tenancy to specific tables
+repo.AddMiddleware(ConditionalMiddleware(
+    func(ctx *MiddlewareContext) bool {
+        return ctx.TableName != "system_config" // Skip tenancy for system tables
+    },
+    tenancyMiddleware,
+))
+```
+
+The middleware system makes Storm production-ready by providing the hooks needed for enterprise features while maintaining type safety and performance.
 
 ## Contributing
 
