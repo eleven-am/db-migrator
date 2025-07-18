@@ -267,8 +267,8 @@ func main() {
     // Chain multiple relationships
     authorWithEverything, err := storm.Users.Query(ctx).
         Where(models.Users.ID.Eq(authorID)).
-        Include("Posts").
-        Include("Comments").
+        IncludePosts().
+        IncludeComments().
         Include("Team").
         First()
     
