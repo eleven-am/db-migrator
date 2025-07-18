@@ -71,6 +71,11 @@ func (g *CodeGenerator) DiscoverModels(packagePath string) error {
 
 	for _, tableDef := range dbModels {
 		metadata := g.convertTableDefinitionToModelMetadata(tableDef)
+		// Skip models without primary keys
+		if len(metadata.PrimaryKeys) == 0 {
+			fmt.Printf("Skipping model %s: no primary key defined\n", metadata.Name)
+			continue
+		}
 		g.models[metadata.Name] = metadata
 	}
 

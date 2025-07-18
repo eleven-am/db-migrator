@@ -67,6 +67,12 @@ func (g *StructGenerator) GenerateStructs() (string, error) {
 	}
 
 	for _, table := range sortedTables(g.schema.Tables) {
+		// Skip tables without primary keys
+		if table.PrimaryKey == nil || len(table.PrimaryKey.Columns) == 0 {
+			fmt.Printf("Skipping table %s: no primary key defined\n", table.Name)
+			continue
+		}
+
 		structCode, err := g.generateTableStruct(table)
 		if err != nil {
 			return "", fmt.Errorf("failed to generate struct for table %s: %w", table.Name, err)
