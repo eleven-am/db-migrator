@@ -291,29 +291,33 @@ func (r *{{ .Model.Name }}Repository) Query(ctx context.Context) *{{ .Model.Name
 	}
 }
 
-{{range .Model.Relationships}}
-// With{{ .Name }} includes the {{ .Name }} relationship in queries
+// Authorize returns a new Repository instance with type-safe authorization
+// The authorization function receives the type-safe query and returns a modified query
 //
 // Example:
-{{- if eq .Relationship.Type "belongs_to" }}
-//   {{ lower $.Model.Name }}WithOwner, err := repo.With{{ .Name }}(ctx).Find()
-//   // Each {{ $.Model.Name }} will have its {{ .Name }} loaded
-{{- else if eq .Relationship.Type "has_many" }}
-//   {{ lower $.Model.Name }}WithAll{{ .Name }}, err := repo.With{{ .Name }}(ctx).Find()
-//   // Each {{ $.Model.Name }} will have its {{ .Name }} slice populated
-{{- else if eq .Relationship.Type "has_one" }}
-//   {{ lower $.Model.Name }}With{{ .Name }}, err := repo.With{{ .Name }}(ctx).Find()
-//   // Each {{ $.Model.Name }} will have its {{ .Name }} loaded if it exists
-{{- else }}
-//   {{ lower $.Model.Name }}With{{ .Name }}, err := repo.With{{ .Name }}(ctx).Find()
-{{- end }}
-func (r *{{ $.Model.Name }}Repository) With{{ .Name }}(ctx context.Context) *{{ $.Model.Name }}Query {
-	return &{{ $.Model.Name }}Query{
-		Query: r.Repository.Query(ctx).Include("{{ .Name }}"),
-		repo:  r,
+//   authorizedRepo := repo.Authorize(func(ctx context.Context, query *{{ .Model.Name }}Query) *{{ .Model.Name }}Query {
+//       user := ctx.Value("user").(AuthUser)
+//       return query.Where({{ .Model.Name }}s.TeamId.Eq(user.TeamID))
+//   })
+//   users, err := authorizedRepo.Query(ctx).Find()
+func (r *{{ .Model.Name }}Repository) Authorize(fn func(ctx context.Context, query *{{ .Model.Name }}Query) *{{ .Model.Name }}Query) *{{ .Model.Name }}Repository {
+	genericFn := func(ctx context.Context, query *storm.Query[{{ .Model.Name }}]) *storm.Query[{{ .Model.Name }}] {
+		{{ lower .Model.Name }}Query := &{{ .Model.Name }}Query{
+			Query: query,
+			repo:  r,
+		}
+		result := fn(ctx, {{ lower .Model.Name }}Query)
+		return result.Query
+	}
+	
+	// Call the base Repository.Authorize with the converted function
+	baseRepo := r.Repository.Authorize(genericFn)
+	
+	// Return a new {{ .Model.Name }}Repository wrapping the authorized base repository
+	return &{{ .Model.Name }}Repository{
+		Repository: baseRepo,
 	}
 }
-{{end}}
 
 // {{ .Model.Name }}Query provides type-safe query building for {{ .Model.Name }}
 //
@@ -540,6 +544,29 @@ func (q *{{ .Model.Name }}Query) Exists() (bool, error) {
 func (q *{{ .Model.Name }}Query) Delete() (int64, error) {
 	return q.Query.Delete()
 }
+
+{{range .Model.Relationships}}
+// Include{{ .Name }} includes the {{ .Name }} relationship in the query
+// This method can be chained with other query methods
+//
+// Example:
+{{- if eq .Relationship.Type "belongs_to" }}
+//   {{ lower $.Model.Name }}s, err := repo.Query(ctx).Include{{ .Name }}().Where(condition).Find()
+//   // Each {{ $.Model.Name }} will have its {{ .Name }} loaded
+{{- else if eq .Relationship.Type "has_many" }}
+//   {{ lower $.Model.Name }}s, err := repo.Query(ctx).Include{{ .Name }}().Where(condition).Find()
+//   // Each {{ $.Model.Name }} will have its {{ .Name }} slice populated
+{{- else if eq .Relationship.Type "has_one" }}
+//   {{ lower $.Model.Name }}s, err := repo.Query(ctx).Include{{ .Name }}().Where(condition).Find()
+//   // Each {{ $.Model.Name }} will have its {{ .Name }} loaded if it exists
+{{- else }}
+//   {{ lower $.Model.Name }}s, err := repo.Query(ctx).Include{{ .Name }}().Where(condition).Find()
+{{- end }}
+func (q *{{ $.Model.Name }}Query) Include{{ .Name }}() *{{ $.Model.Name }}Query {
+	q.Query = q.Query.Include("{{ .Name }}")
+	return q
+}
+{{end}}
 
 `
 

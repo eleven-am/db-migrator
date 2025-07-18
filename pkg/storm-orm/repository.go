@@ -7,6 +7,10 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
+// AuthorizeFunc defines a callback function for applying authorization to queries
+// It receives the request context and query object, and returns a modified query
+type AuthorizeFunc[T any] func(ctx context.Context, query *Query[T]) *Query[T]
+
 // Repository provides type-safe database operations for a specific model type
 type Repository[T any] struct {
 	db       DBExecutor // Keep this accessible for internal packages
@@ -17,6 +21,9 @@ type Repository[T any] struct {
 
 	// Middleware management
 	middlewareManager *middlewareManager
+
+	// Authorization functions
+	authorizeFuncs []AuthorizeFunc[T]
 }
 
 func NewRepository[T any](db *sqlx.DB, metadata *ModelMetadata) (*Repository[T], error) {
@@ -52,8 +59,9 @@ func NewRepositoryWithExecutor[T any](executor DBExecutor, metadata *ModelMetada
 	}
 
 	repo := &Repository[T]{
-		db:       executor,
-		metadata: metadata,
+		db:             executor,
+		metadata:       metadata,
+		authorizeFuncs: make([]AuthorizeFunc[T], 0),
 	}
 
 	if err := repo.initialize(); err != nil {
@@ -123,6 +131,22 @@ func (r *Repository[T]) relationships() *relationshipManager {
 
 func (r *Repository[T]) WithRelationships(ctx context.Context) *Query[T] {
 	return r.Query(ctx)
+}
+
+// Authorize returns a new Repository instance with an additional authorization function
+// Multiple authorization functions can be chained and will be applied in order
+func (r *Repository[T]) Authorize(fn AuthorizeFunc[T]) *Repository[T] {
+	newFuncs := make([]AuthorizeFunc[T], len(r.authorizeFuncs)+1)
+	copy(newFuncs, r.authorizeFuncs)
+	newFuncs[len(r.authorizeFuncs)] = fn
+
+	return &Repository[T]{
+		db:                  r.db,
+		metadata:            r.metadata,
+		relationshipManager: r.relationshipManager,
+		middlewareManager:   r.middlewareManager,
+		authorizeFuncs:      newFuncs,
+	}
 }
 
 func (r *Repository[T]) getInsertFields(model T) (columns []string, values []interface{}) {

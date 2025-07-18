@@ -57,16 +57,13 @@ func TestQueryWithTx(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("Query with transaction", func(t *testing.T) {
-		// Begin transaction
 		mock.ExpectBegin()
 		tx, err := sqlxDB.Beginx()
 		require.NoError(t, err)
 
-		// Set up mock expectation
 		mock.ExpectQuery(`SELECT .* FROM users`).
 			WillReturnRows(sqlmock.NewRows([]string{"id", "name", "email", "is_active", "created_at", "updated_at"}))
 
-		// Execute query with transaction
 		query := repo.Query(context.Background()).WithTx(tx)
 		assert.NotNil(t, query.tx)
 

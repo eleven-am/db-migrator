@@ -153,9 +153,9 @@ func TestLoadBelongsToRelationship(t *testing.T) {
 
 		// The function tries to get foreign key values but TestUser doesn't have CompanyID
 		// The function will return early since the field doesn't exist
-		err := query.loadBelongsToRelationship(users, rel)
-		// No error expected as the function handles missing fields gracefully
-		assert.NoError(t, err)
+		err := query.loadBelongsToRelationship(users, rel, include{name: "Company"})
+		// Error expected because CompanyID field is not in metadata
+		assert.Error(t, err)
 	})
 
 	t.Run("loadBelongsToRelationship with empty records", func(t *testing.T) {
@@ -173,9 +173,9 @@ func TestLoadBelongsToRelationship(t *testing.T) {
 			},
 		}
 
-		// Should return early with no error for empty records
-		err := query.loadBelongsToRelationship(users, rel)
-		assert.NoError(t, err)
+		// Should return error because CompanyID is not in metadata
+		err := query.loadBelongsToRelationship(users, rel, include{name: "Company"})
+		assert.Error(t, err)
 	})
 }
 
@@ -217,7 +217,7 @@ func TestLoadHasOneRelationship(t *testing.T) {
 			WillReturnRows(profileRows)
 
 		// This will error because TestUser doesn't have a Profile field, but provides coverage
-		err := query.loadHasOneRelationship(users, rel)
+		err := query.loadHasOneRelationship(users, rel, include{name: "Profile"})
 		assert.Error(t, err)
 	})
 
@@ -236,7 +236,7 @@ func TestLoadHasOneRelationship(t *testing.T) {
 			},
 		}
 
-		err := query.loadHasOneRelationship(users, rel)
+		err := query.loadHasOneRelationship(users, rel, include{name: "Profile"})
 		assert.NoError(t, err)
 	})
 }
@@ -280,7 +280,7 @@ func TestLoadHasManyRelationship(t *testing.T) {
 			WillReturnRows(postRows)
 
 		// This will error because TestUser doesn't have a Posts field, but provides coverage
-		err := query.loadHasManyRelationship(users, rel)
+		err := query.loadHasManyRelationship(users, rel, include{name: "Posts"})
 		assert.Error(t, err)
 	})
 
@@ -295,7 +295,7 @@ func TestLoadHasManyRelationship(t *testing.T) {
 			ForeignKey: "user_id",
 		}
 
-		err := query.loadHasManyRelationship(users, rel)
+		err := query.loadHasManyRelationship(users, rel, include{name: "Posts"})
 		assert.NoError(t, err)
 	})
 }
@@ -352,7 +352,7 @@ func TestLoadHasManyThroughRelationship(t *testing.T) {
 			WillReturnRows(joinRows)
 
 		// This will error because TestUser doesn't have a Tags field, but provides coverage
-		err := query.loadHasManyThroughRelationship(users, rel)
+		err := query.loadHasManyThroughRelationship(users, rel, include{name: "Tags"})
 		assert.Error(t, err)
 	})
 
@@ -380,7 +380,7 @@ func TestLoadHasManyThroughRelationship(t *testing.T) {
 			WithArgs(1).
 			WillReturnRows(joinRows)
 
-		err := query.loadHasManyThroughRelationship(users, rel)
+		err := query.loadHasManyThroughRelationship(users, rel, include{name: "Tags"})
 		// Expect error because TestUser doesn't have Tags field
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "relationship field Tags not found")
@@ -401,7 +401,7 @@ func TestLoadHasManyThroughRelationship(t *testing.T) {
 			TargetFK:  "tag_id",
 		}
 
-		err := query.loadHasManyThroughRelationship(users, rel)
+		err := query.loadHasManyThroughRelationship(users, rel, include{name: "Tags"})
 		assert.NoError(t, err)
 	})
 }
@@ -436,9 +436,9 @@ func TestLoadRelationshipErrors(t *testing.T) {
 			ForeignKey: "company_id",
 		}
 
-		// This will handle missing field gracefully
-		err := query.loadBelongsToRelationship(users, rel)
-		assert.NoError(t, err)
+		// This will error because foreign key not found
+		err := query.loadBelongsToRelationship(users, rel, include{name: "Company"})
+		assert.Error(t, err)
 	})
 
 	t.Run("loadRelationship with unsupported type", func(t *testing.T) {

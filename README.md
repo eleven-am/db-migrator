@@ -43,7 +43,7 @@ type User struct {
 // 4. Use type-safe operations
 users, err := storm.Users.Query().
     Where(Users.Email.Like("%@company.com")).
-    Include("Posts").  // Eager load relationships
+    IncludePosts().  // Type-safe eager loading
     OrderBy(Users.CreatedAt.Desc()).
     Find()
 ```
@@ -164,7 +164,8 @@ This generates:
 - **Repository implementations** with full CRUD operations (Create, FindByID, Update, Delete, etc.)
 - **Type-safe query builders** with method chaining and compile-time validation
 - **Column constants** for all struct fields with appropriate column types
-- **Relationship loaders** for automatic eager/lazy loading of related data
+- **Type-safe authorization** with generated `Authorize` methods that use model-specific query types
+- **Relationship methods** like `IncludePosts()`, `IncludeComments()` on query builders for type-safe eager loading
 - **Transaction support** with automatic rollback on errors
 - **Bulk operations** for high-performance batch processing (CreateMany, BulkUpdate, etc.)
 
@@ -257,12 +258,20 @@ func main() {
     
     // === RELATIONSHIPS ===
     
-    // Eager load relationships
+    // Type-safe eager loading with generated methods
     usersWithPosts, err := storm.Users.Query().
-        Include("Posts").  // Load all posts for each user
+        IncludePosts().  // Type-safe relationship loading
         Find()
     
-    // Load specific relationship conditions
+    // Chain multiple relationships
+    authorWithEverything, err := storm.Users.Query().
+        Where(models.Users.ID.Eq(authorID)).
+        IncludePosts().
+        IncludeComments().
+        IncludeTeam().
+        First()
+    
+    // Load specific relationship conditions (still available)
     usersWithRecentPosts, err := storm.Users.Query().
         IncludeWhere("Posts", models.Posts.CreatedAt.After(time.Now().AddDate(0, 0, -7))).
         Find()
@@ -340,12 +349,26 @@ func main() {
         Limit(10).
         Find()
     
+    // === AUTHORIZATION ===
+    
+    // Create authorized repository with type-safe query filtering
+    authorizedUsers := storm.Users.Authorize(func(ctx context.Context, query *models.UserQuery) *models.UserQuery {
+        // Extract tenant from context
+        tenantID := ctx.Value("tenant_id").(string)
+        return query.Where(models.Users.TenantID.Eq(tenantID))
+    })
+    
+    // All queries through authorized repo will include tenant filter
+    tenantUsers, err := authorizedUsers.Query(ctx).
+        Where(models.Users.IsActive.Eq(true)).
+        Find() // Automatically filtered by tenant
+    
     // === JOINS & RELATIONSHIPS ===
     
-    // Get users with their posts from last month
+    // Get users with their posts using type-safe Include methods
     usersWithPosts, err := storm.Users.Query(ctx).
         Where(models.Users.CreatedAt.After(time.Now().AddDate(0, -1, 0))).
-        Include("Posts").
+        IncludePosts().  // Type-safe relationship loading
         OrderBy(models.Users.CreatedAt.Desc()).
         Find()
 }
@@ -518,8 +541,8 @@ func EventExamples(storm *models.Storm, ctx context.Context) {
             models.Events.StartTime.After(time.Now()),
             models.Events.Status.Eq("scheduled"),
         )).
-        Include("Venue").                              // Eager load venue
-        IncludeWhere("Registrations",                  // Only load confirmed registrations
+        IncludeVenue().                                // Type-safe venue loading
+        IncludeWhere("Registrations",                  // Load specific registrations
             models.Registrations.Status.Eq("confirmed"),
         ).
         OrderBy(models.Events.StartTime.Asc()).
@@ -584,15 +607,21 @@ func AnalyticsExamples(storm *models.Storm, ctx context.Context) {
             models.Orders.Status.Eq("completed"),
             models.Orders.TotalAmount.Gt(decimal.NewFromInt(1000)),
         )).
-        Include("Customer", "OrderItems.Product").
+        IncludeCustomer().                             // Type-safe customer loading
+        IncludeOrderItems().                           // Type-safe order items loading
         OrderBy(models.Orders.TotalAmount.Desc()).
         Limit(100).
         Find()
     
     // Get VIP customers with high lifetime value
     vipCustomers, err := storm.Users.Query(ctx).
-        Include("Orders").                             // Load all orders
-        IncludeWhere("Orders",                         // But only completed ones
+        IncludeOrders().                               // Type-safe order loading
+        Where(models.Users.IsActive.Eq(true)).
+        Find()
+    
+    // Filter for completed orders in memory or use IncludeWhere for conditional loading
+    vipWithCompletedOrders, err := storm.Users.Query(ctx).
+        IncludeWhere("Orders",                         // Load only completed orders
             models.Orders.Status.Eq("completed"),
         ).
         Where(models.Users.IsActive.Eq(true)).
@@ -637,14 +666,6 @@ type User struct {
 }
 
 func MultiTenantExamples(storm *models.Storm, ctx context.Context, orgID string, userID string, userRole string) {
-    // Explicitly scope queries to organization and user permissions
-    orgUsers, err := storm.Users.Query(ctx).
-        ForTenant(orgID).
-        AccessibleBy(userID, userRole).
-        Where(models.Users.IsActive.Eq(true)).
-        Include("Organization").
-        Find()
-    
     // Find active admin users for organization
     adminUsers, err := storm.Users.Query().
         Where(storm.And(
@@ -659,24 +680,27 @@ func MultiTenantExamples(storm *models.Storm, ctx context.Context, orgID string,
     
     // Tenant-specific project counts
     totalProjects, err := storm.Projects.Query(ctx).
-        ForTenant(orgID).
+        Where(models.Projects.OrgID.Eq(orgID)).
         Count()
     
     activeProjects, err := storm.Projects.Query(ctx).
-        ForTenant(orgID).
-        Where(models.Projects.Status.Eq("active")).
+        Where(storm.And(
+            models.Projects.OrgID.Eq(orgID),
+            models.Projects.Status.Eq("active"),
+        )).
         Count()
     
     // Get projects with their users
     projectsWithUsers, err := storm.Projects.Query(ctx).
-        ForTenant(orgID).
-        Include("AssignedUsers").
+        Where(models.Projects.OrgID.Eq(orgID)).
+        IncludeAssignedUsers().                        // Type-safe user loading
         Find()
     
     // Cross-tenant reporting (admin only)
     activeOrgs, err := storm.Organizations.Query(ctx).
         Where(models.Organizations.IsActive.Eq(true)).
-        Include("Users", "Projects").
+        IncludeUsers().                                // Type-safe user loading
+        IncludeProjects().                             // Type-safe project loading
         OrderBy(models.Organizations.CreatedAt.Desc()).
         Find()
     
@@ -787,60 +811,39 @@ repo.AddMiddleware(func(next QueryMiddlewareFunc) QueryMiddlewareFunc {
 
 #### 🏢 Multi-Tenancy & Authorization
 
-Storm encourages explicit, type-safe filtering for multi-tenancy and authorization through the query builder rather than hidden middleware magic:
+Storm provides type-safe authorization through generated repository methods:
 
 ```go
-// Extend your generated queries with tenant/auth methods
-type TenantQuery[T any] struct {
-    *Query[T]
-    tenantID string
-}
+// Create authorized repository with type-safe filtering
+authorizedUsers := storm.Users.Authorize(func(ctx context.Context, query *models.UserQuery) *models.UserQuery {
+    tenantID := ctx.Value("tenant_id").(string)
+    return query.Where(models.Users.TenantID.Eq(tenantID))
+})
 
-// Add tenant filtering method to your queries
-func (q *Query[T]) ForTenant(tenantID string) *Query[T] {
-    return q.Where(TenantID.Eq(tenantID))
-}
-
-// Add authorization filtering based on user role
-func (q *Query[T]) AccessibleBy(userID string, role string) *Query[T] {
-    switch role {
-    case "admin":
-        return q // Admins see everything in their tenant
-    case "manager":
-        // Managers see their department's data
-        return q.Where(storm.Or(
-            OwnerID.Eq(userID),
-            DepartmentID.In(getUserDepartments(userID)),
-        ))
-    default:
-        // Regular users only see their own data
-        return q.Where(OwnerID.Eq(userID))
-    }
-}
-
-// Usage - Explicit and type-safe:
-users, err := storm.Users.Query(ctx).
-    ForTenant(currentTenantID).
-    AccessibleBy(currentUserID, currentRole).
-    Where(Users.IsActive.Eq(true)).
-    OrderBy(Users.CreatedAt.Desc()).
-    Find()
+// All queries through authorized repo automatically include tenant filter
+users, err := authorizedUsers.Query(ctx).
+    Where(models.Users.IsActive.Eq(true)).
+    OrderBy(models.Users.CreatedAt.Desc()).
+    Find() // Automatically filtered by tenant
 
 // Complex authorization with visibility rules
-posts, err := storm.Posts.Query(ctx).
-    ForTenant(tenantID).
-    Where(storm.And(
-        Posts.Published.Eq(true),
+authorizedPosts := storm.Posts.Authorize(func(ctx context.Context, query *models.PostQuery) *models.PostQuery {
+    user := ctx.Value("user").(*User)
+    return query.Where(storm.And(
+        models.Posts.TenantID.Eq(user.TenantID),
         storm.Or(
-            Posts.Visibility.Eq("public"),
-            storm.And(
-                Posts.Visibility.Eq("team"),
-                Posts.TeamID.Eq(userTeamID),
-            ),
-            Posts.AuthorID.Eq(userID),
+            models.Posts.Visibility.Eq("public"),
+            models.Posts.TeamID.In(user.TeamIDs...),
+            models.Posts.AuthorID.Eq(user.ID),
         ),
-    )).
-    Include("Author", "Tags").
+    ))
+})
+
+// Type-safe relationship loading works with authorization
+visiblePosts, err := authorizedPosts.Query(ctx).
+    Where(models.Posts.Published.Eq(true)).
+    IncludeAuthor().
+    IncludeTags().
     Find()
 
 // For create operations, explicitly set tenant
@@ -851,10 +854,9 @@ newUser := &User{
 }
 err = storm.Users.Create(ctx, newUser)
 
-// For updates, ensure tenant scope
-rowsUpdated, err := storm.Users.Query(ctx).
-    ForTenant(currentTenantID).
-    Where(Users.Role.Eq("trial")).
+// For updates, use authorized repository
+rowsUpdated, err := authorizedUsers.Query(ctx).
+    Where(models.Users.Role.Eq("trial")).
     UpdateMany(map[string]interface{}{
         "role": "expired",
         "updated_at": time.Now(),
@@ -872,39 +874,37 @@ type AuthFilters struct {
     TeamIDs  []string
 }
 
-// Create domain-specific query extensions
-func (q *Query[Project]) VisibleTo(auth AuthFilters) *Query[Project] {
-    base := q.ForTenant(auth.TenantID)
+// Create domain-specific query functions
+func GetVisibleProjects(storm *models.Storm, ctx context.Context, auth AuthFilters) ([]Project, error) {
+    baseQuery := storm.Projects.Query(ctx).
+        Where(Projects.TenantID.Eq(auth.TenantID))
     
     switch auth.Role {
     case "admin":
-        return base // See all projects in tenant
+        // Admins see all projects in tenant
+        return baseQuery.Find()
     case "pm":
         // Project managers see their projects + public ones
-        return base.Where(storm.Or(
+        return baseQuery.Where(storm.Or(
             Projects.ManagerID.Eq(auth.UserID),
             Projects.Visibility.Eq("public"),
             Projects.TeamID.In(auth.TeamIDs...),
-        ))
+        )).Find()
     default:
         // Members only see projects they're assigned to
-        return base.Where(storm.Or(
+        return baseQuery.Where(storm.Or(
             Projects.OwnerID.Eq(auth.UserID),
             Projects.MemberIDs.Contains(auth.UserID),
             storm.And(
                 Projects.Visibility.Eq("public"),
                 Projects.TeamID.In(auth.TeamIDs...),
             ),
-        ))
+        )).Find()
     }
 }
 
 // Usage remains clean and explicit
-projects, err := storm.Projects.Query(ctx).
-    VisibleTo(authFilters).
-    Where(Projects.Status.NotEq("archived")).
-    Include("Tasks", "Members").
-    Find()
+projects, err := GetVisibleProjects(storm, ctx, authFilters)
 ```
 
 #### 🗑️ Soft Delete System
@@ -1129,9 +1129,10 @@ repo.AddMiddleware(circuitBreakerMiddleware) // Prevent cascading failures
 
 // ✅ BETTER: Make filtering explicit in queries
 users, err := storm.Users.Query(ctx).
-    ForTenant(tenantID).          // Explicit tenant scope
-    AccessibleBy(userID, role).   // Explicit authorization
-    Where(Users.IsActive.Eq(true)).
+    Where(storm.And(
+        Users.TenantID.Eq(tenantID),     // Explicit tenant scope
+        Users.IsActive.Eq(true),
+    )).
     Find()
 ```
 
@@ -1139,8 +1140,8 @@ users, err := storm.Users.Query(ctx).
 
 | Use Case | Middleware | Query Method |
 |----------|------------|---------------|
-| Multi-tenancy filtering | ❌ Hidden magic | ✅ Explicit `.ForTenant()` |
-| Authorization rules | ❌ Hard to test | ✅ Explicit `.AccessibleBy()` |
+| Multi-tenancy filtering | ❌ Hidden magic | ✅ Explicit `.Where()` |
+| Authorization rules | ❌ Hard to test | ✅ Explicit filtering |
 | Soft deletes | ✅ Transparent | ✅ Or use `.NotDeleted()` |
 | Audit logging | ✅ Cross-cutting | ❌ Too verbose |
 | Performance monitoring | ✅ Operational | ❌ Not business logic |

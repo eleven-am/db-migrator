@@ -122,7 +122,6 @@ type TestProfile struct {
 		"test_user_repository.go",
 		"test_post_repository.go",
 		"test_profile_repository.go",
-		"relationships.go",
 		"storm.go",
 	}
 
@@ -152,6 +151,54 @@ type TestProfile struct {
 	for _, expected := range expectedContent {
 		if !containsString(string(content), expected) {
 			t.Errorf("Generated columns.go missing expected content: %s", expected)
+		}
+	}
+
+	// Test that the Authorize method is generated in repository files
+	userRepoFile := filepath.Join(outputDir, "test_user_repository.go")
+	repoContent, err := os.ReadFile(userRepoFile)
+	if err != nil {
+		t.Fatalf("Failed to read test_user_repository.go: %v", err)
+	}
+
+	expectedRepoContent := []string{
+		"func (r *TestUserRepository) Authorize(",
+		"func(ctx context.Context, query *TestUserQuery) *TestUserQuery",
+		"genericFn := func(ctx context.Context, query *storm.Query[TestUser]) *storm.Query[TestUser]",
+		"testuserQuery := &TestUserQuery{",
+		"baseRepo := r.Repository.Authorize(genericFn)",
+		"return &TestUserRepository{",
+	}
+
+	for _, expected := range expectedRepoContent {
+		if !containsString(string(repoContent), expected) {
+			t.Errorf("Generated test_user_repository.go missing expected Authorize method content: %s", expected)
+		}
+	}
+
+	// Test that IncludeXXX methods are generated in the Query struct (not WithXXX on Repository)
+	expectedIncludeContent := []string{
+		"func (q *TestUserQuery) IncludePosts() *TestUserQuery {",
+		"q.Query = q.Query.Include(\"Posts\")",
+		"func (q *TestUserQuery) IncludeProfile() *TestUserQuery {",
+		"q.Query = q.Query.Include(\"Profile\")",
+	}
+
+	for _, expected := range expectedIncludeContent {
+		if !containsString(string(repoContent), expected) {
+			t.Errorf("Generated test_user_repository.go missing expected IncludeXXX method content: %s", expected)
+		}
+	}
+
+	// Test that old WithXXX methods are NOT generated (they should be removed)
+	unexpectedWithContent := []string{
+		"func (r *TestUserRepository) WithPosts(",
+		"func (r *TestUserRepository) WithProfile(",
+	}
+
+	for _, unexpected := range unexpectedWithContent {
+		if containsString(string(repoContent), unexpected) {
+			t.Errorf("Generated test_user_repository.go contains unexpected WithXXX method that should be removed: %s", unexpected)
 		}
 	}
 
