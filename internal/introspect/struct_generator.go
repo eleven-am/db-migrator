@@ -126,7 +126,7 @@ func (g *StructGenerator) generateTableStruct(table *TableSchema) (string, error
 		}
 	}
 
-	if len(tableDefParts) > 1 {
+	if len(tableDefParts) >= 1 {
 		b.WriteString(fmt.Sprintf("\t_ struct{} `storm:\"%s\"`\n", strings.Join(tableDefParts, ";")))
 		b.WriteString("\t\n")
 	}

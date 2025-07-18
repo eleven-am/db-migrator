@@ -258,7 +258,7 @@ Note: Variable substitution requires external processing.
 ### Using Environment Variables
 
 ```dockerfile
-FROM golang:1.21-alpine
+FROM golang:1.24-alpine
 
 ENV STORM_DATABASE_URL=${DATABASE_URL}
 ENV STORM_MODELS_PACKAGE=./models
@@ -313,7 +313,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
-          go-version: '1.21'
+          go-version: '1.24'
       
       - name: Install Storm
         run: go install github.com/eleven-am/storm/cmd/storm@latest

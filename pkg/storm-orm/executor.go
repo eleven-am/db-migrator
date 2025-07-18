@@ -11,22 +11,22 @@ import (
 // It can be satisfied by both *sqlx.DB and *sqlx.Tx, allowing repositories
 // to work with either regular connections or transactions.
 type DBExecutor interface {
-	// Query execution methods
+	// Query execution methods from sqlx.ExtContext
 	ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
 	QueryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error)
 	QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row
-	QueryxContext(ctx context.Context, query string, args ...interface{}) (*sqlx.Rows, error)
-	QueryRowxContext(ctx context.Context, query string, args ...interface{}) *sqlx.Row
-
-	// Get and Select for struct scanning
 	GetContext(ctx context.Context, dest interface{}, query string, args ...interface{}) error
 	SelectContext(ctx context.Context, dest interface{}, query string, args ...interface{}) error
 
+	// Additional sqlx methods
+	QueryxContext(ctx context.Context, query string, args ...interface{}) (*sqlx.Rows, error)
+	QueryRowxContext(ctx context.Context, query string, args ...interface{}) *sqlx.Row
+
 	// Named query support
 	NamedExecContext(ctx context.Context, query string, arg interface{}) (sql.Result, error)
+	BindNamed(query string, arg interface{}) (string, []interface{}, error)
 
 	// Prepared statements
-	PrepareContext(ctx context.Context, query string) (*sql.Stmt, error)
 	PreparexContext(ctx context.Context, query string) (*sqlx.Stmt, error)
 	PrepareNamedContext(ctx context.Context, query string) (*sqlx.NamedStmt, error)
 

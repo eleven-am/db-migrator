@@ -1,6 +1,6 @@
 # Schema Definition Guide
 
-Storm uses `dbdef` tags to define your database schema directly in your Go structs. This guide covers all available options.
+Storm uses `storm` tags to define your database schema directly in your Go structs. This guide covers all available options.
 
 ## Table of Contents
 
@@ -13,21 +13,21 @@ Storm uses `dbdef` tags to define your database schema directly in your Go struc
 - [Defaults](#defaults)
 - [Check Constraints](#check-constraints)
 - [Complete Reference](#complete-reference)
+- [Relationships](#relationships)
 
 ## Basic Structure
 
-Every model struct can have two types of tags:
-- `dbdef` - Defines the database schema
-- `db` - Maps struct fields to database columns
-- `orm` - Defines relationships (covered in [Relationships Guide](relationships.md))
+Every model struct currently uses two types of tags:
+- `db` - Maps struct fields to database columns (for column naming)
+- `storm` - Defines the database schema, constraints, and relationships
 
 ```go
 type Model struct {
     // Table-level configuration
-    _ struct{} `dbdef:"table:table_name;option1;option2"`
+    _ struct{} `storm:"table:table_name;option1;option2"`
     
     // Field definitions
-    FieldName Type `db:"column_name" dbdef:"type:db_type;constraint1;constraint2"`
+    FieldName Type `db:"column_name" storm:"type:db_type;constraint1;constraint2"`
 }
 ```
 
@@ -37,7 +37,7 @@ Table configuration is defined on an anonymous struct field:
 
 ```go
 type User struct {
-    _ struct{} `dbdef:"table:users;comment:User accounts table"`
+    _ struct{} `storm:"table:users;comment:User accounts table"`
     // fields...
 }
 ```
@@ -55,7 +55,7 @@ type User struct {
 ### Multiple Indexes Example
 
 ```go
-_ struct{} `dbdef:"table:products;index:idx_category,category_id;index:idx_sku,sku;unique:uk_sku,sku"`
+_ struct{} `storm:"table:products;index:idx_category,category_id;index:idx_sku,sku;unique:uk_sku,sku"`
 ```
 
 ## Field Types
@@ -66,97 +66,97 @@ Storm supports all PostgreSQL data types:
 
 ```go
 // Integers
-SmallInt  int16   `db:"small_int" dbdef:"type:smallint"`
-Integer   int32   `db:"integer" dbdef:"type:integer"`
-BigInt    int64   `db:"big_int" dbdef:"type:bigint"`
+SmallInt  int16   `db:"small_int" storm:"type:smallint"`
+Integer   int32   `db:"integer" storm:"type:integer"`
+BigInt    int64   `db:"big_int" storm:"type:bigint"`
 
 // Serial (auto-increment)
-ID        int64   `db:"id" dbdef:"type:bigserial;primary_key"`
+ID        int64   `db:"id" storm:"type:bigserial;primary_key"`
 
 // Floating point
-Real      float32 `db:"real" dbdef:"type:real"`
-Double    float64 `db:"double" dbdef:"type:double precision"`
+Real      float32 `db:"real" storm:"type:real"`
+Double    float64 `db:"double" storm:"type:double precision"`
 
 // Precise numeric
-Decimal   string  `db:"price" dbdef:"type:decimal(10,2)"`
-Numeric   string  `db:"amount" dbdef:"type:numeric(15,4)"`
+Decimal   string  `db:"price" storm:"type:decimal(10,2)"`
+Numeric   string  `db:"amount" storm:"type:numeric(15,4)"`
 ```
 
 ### Text Types
 
 ```go
 // Variable length
-Name      string  `db:"name" dbdef:"type:varchar(100)"`
-Email     string  `db:"email" dbdef:"type:varchar(255)"`
+Name      string  `db:"name" storm:"type:varchar(100)"`
+Email     string  `db:"email" storm:"type:varchar(255)"`
 
 // Fixed length
-Code      string  `db:"code" dbdef:"type:char(10)"`
+Code      string  `db:"code" storm:"type:char(10)"`
 
 // Unlimited length
-Content   string  `db:"content" dbdef:"type:text"`
+Content   string  `db:"content" storm:"type:text"`
 
 // PostgreSQL specific
-Tsvector  string  `db:"search_vector" dbdef:"type:tsvector"`
+Tsvector  string  `db:"search_vector" storm:"type:tsvector"`
 ```
 
 ### Date/Time Types
 
 ```go
 // Time types
-Date      time.Time `db:"date" dbdef:"type:date"`
-Time      time.Time `db:"time" dbdef:"type:time"`
-Timestamp time.Time `db:"timestamp" dbdef:"type:timestamp"`
-Timestamptz time.Time `db:"created_at" dbdef:"type:timestamptz"`
+Date      time.Time `db:"date" storm:"type:date"`
+Time      time.Time `db:"time" storm:"type:time"`
+Timestamp time.Time `db:"timestamp" storm:"type:timestamp"`
+Timestamptz time.Time `db:"created_at" storm:"type:timestamptz"`
 
 // Intervals
-Duration  string   `db:"duration" dbdef:"type:interval"`
+Duration  string   `db:"duration" storm:"type:interval"`
 ```
 
 ### Boolean Type
 
 ```go
-IsActive  bool     `db:"is_active" dbdef:"type:boolean;not_null;default:true"`
+IsActive  bool     `db:"is_active" storm:"type:boolean;not_null;default:true"`
 ```
 
 ### UUID Type
 
 ```go
-ID        string   `db:"id" dbdef:"type:uuid;primary_key;default:gen_random_uuid()"`
+ID        string   `db:"id" storm:"type:uuid;primary_key;default:gen_random_uuid()"`
 ```
 
 ### JSON Types
 
 ```go
 // JSON (text-based)
-Metadata  string   `db:"metadata" dbdef:"type:json"`
+Metadata  string   `db:"metadata" storm:"type:json"`
 
 // JSONB (binary, preferred)
-Settings  string   `db:"settings" dbdef:"type:jsonb"`
+Settings  string   `db:"settings" storm:"type:jsonb"`
 
 // With Go types
-Data      MyStruct `db:"data" dbdef:"type:jsonb"`
+Data      MyStruct `db:"data" storm:"type:jsonb"`
 ```
 
 ### Array Types
 
 ```go
-Tags      []string `db:"tags" dbdef:"type:text[]"`
-Numbers   []int    `db:"numbers" dbdef:"type:integer[]"`
+Tags      []string `db:"tags" storm:"type:text[]"`
+Numbers   []int    `db:"numbers" storm:"type:integer[]"`
 ```
 
 ### Special Types
 
 ```go
 // Network addresses
-IPAddress string   `db:"ip_address" dbdef:"type:inet"`
-MacAddr   string   `db:"mac_address" dbdef:"type:macaddr"`
+IPAddress string   `db:"ip_address" storm:"type:inet"`
+MacAddr   string   `db:"mac_address" storm:"type:macaddr"`
 
 // Geometric types
-Point     string   `db:"location" dbdef:"type:point"`
-Box       string   `db:"area" dbdef:"type:box"`
+Point     string   `db:"location" storm:"type:point"`
+Box       string   `db:"area" storm:"type:box"`
 
 // Money
-Price     string   `db:"price" dbdef:"type:money"`
+Price     string   `db:"price" storm:"type:money"`
 ```
 
 ## Constraints
@@ -164,40 +164,40 @@ Price     string   `db:"price" dbdef:"type:money"`
 ### Primary Key
 
 ```go
-ID int64 `db:"id" dbdef:"type:bigserial;primary_key"`
+ID int64 `db:"id" storm:"type:bigserial;primary_key"`
 
 // Composite primary key
 type UserRole struct {
-    _ struct{} `dbdef:"table:user_roles"`
-    UserID string `db:"user_id" dbdef:"type:uuid;primary_key"`
-    RoleID string `db:"role_id" dbdef:"type:uuid;primary_key"`
+    _ struct{} `storm:"table:user_roles"`
+    UserID string `db:"user_id" storm:"type:uuid;primary_key"`
+    RoleID string `db:"role_id" storm:"type:uuid;primary_key"`
 }
 ```
 
 ### Not Null
 
 ```go
-Email string `db:"email" dbdef:"type:varchar(255);not_null"`
+Email string `db:"email" storm:"type:varchar(255);not_null"`
 ```
 
 ### Unique
 
 ```go
 // Field-level unique
-Email string `db:"email" dbdef:"type:varchar(255);unique"`
+Email string `db:"email" storm:"type:varchar(255);unique"`
 
 // Table-level unique (composite)
-_ struct{} `dbdef:"table:users;unique:uk_email_tenant,email,tenant_id"`
+_ struct{} `storm:"table:users;unique:uk_email_tenant,email,tenant_id"`
 ```
 
 ### Check Constraints
 
 ```go
 // Field-level check
-Age int `db:"age" dbdef:"type:integer;check:age >= 0"`
+Age int `db:"age" storm:"type:integer;check:age >= 0"`
 
 // Table-level check
-_ struct{} `dbdef:"table:orders;check:ck_valid_dates,start_date < end_date"`
+_ struct{} `storm:"table:orders;check:ck_valid_dates,start_date < end_date"`
 ```
 
 ## Indexes
@@ -205,32 +205,32 @@ _ struct{} `dbdef:"table:orders;check:ck_valid_dates,start_date < end_date"`
 ### Simple Index
 
 ```go
-_ struct{} `dbdef:"table:users;index:idx_email,email"`
+_ struct{} `storm:"table:users;index:idx_email,email"`
 ```
 
 ### Composite Index
 
 ```go
-_ struct{} `dbdef:"table:posts;index:idx_user_created,user_id,created_at"`
+_ struct{} `storm:"table:posts;index:idx_user_created,user_id,created_at"`
 ```
 
 ### Multiple Indexes
 
 ```go
-_ struct{} `dbdef:"table:products;index:idx_category,category_id;index:idx_price,price"`
+_ struct{} `storm:"table:products;index:idx_category,category_id;index:idx_price,price"`
 ```
 
 ### Index Types (PostgreSQL Specific)
 
 ```go
 // B-tree (default)
-_ struct{} `dbdef:"table:users;index:idx_email,email"`
+_ struct{} `storm:"table:users;index:idx_email,email"`
 
 // For full-text search
-_ struct{} `dbdef:"table:posts;index:idx_search,search_vector USING gin"`
+_ struct{} `storm:"table:posts;index:idx_search,search_vector USING gin"`
 
 // For JSONB
-_ struct{} `dbdef:"table:events;index:idx_metadata,metadata USING gin"`
+_ struct{} `storm:"table:events;index:idx_metadata,metadata USING gin"`
 ```
 
 ## Foreign Keys
@@ -238,32 +238,32 @@ _ struct{} `dbdef:"table:events;index:idx_metadata,metadata USING gin"`
 ### Basic Foreign Key
 
 ```go
-UserID string `db:"user_id" dbdef:"type:uuid;not_null;foreign_key:users.id"`
+UserID string `db:"user_id" storm:"type:uuid;not_null;foreign_key:users.id"`
 ```
 
 ### With Cascade Options
 
 ```go
 // Cascade delete
-UserID string `db:"user_id" dbdef:"type:uuid;foreign_key:users.id;on_delete:CASCADE"`
+UserID string `db:"user_id" storm:"type:uuid;foreign_key:users.id;on_delete:CASCADE"`
 
 // Set null on delete
-CategoryID *string `db:"category_id" dbdef:"type:uuid;foreign_key:categories.id;on_delete:SET NULL"`
+CategoryID *string `db:"category_id" storm:"type:uuid;foreign_key:categories.id;on_delete:SET NULL"`
 
 // Restrict (default)
-UserID string `db:"user_id" dbdef:"type:uuid;foreign_key:users.id;on_delete:RESTRICT"`
+UserID string `db:"user_id" storm:"type:uuid;foreign_key:users.id;on_delete:RESTRICT"`
 
 // Update cascade
-UserID string `db:"user_id" dbdef:"type:uuid;foreign_key:users.id;on_update:CASCADE"`
+UserID string `db:"user_id" storm:"type:uuid;foreign_key:users.id;on_update:CASCADE"`
 ```
 
 ### Composite Foreign Keys
 
 ```go
 type OrderItem struct {
-    _ struct{} `dbdef:"table:order_items;foreign_key:fk_order,order_id,order_number REFERENCES orders(id,number)"`
-    OrderID     string `db:"order_id" dbdef:"type:uuid"`
-    OrderNumber int    `db:"order_number" dbdef:"type:integer"`
+    _ struct{} `storm:"table:order_items;foreign_key:fk_order,order_id,order_number REFERENCES orders(id,number)"`
+    OrderID     string `db:"order_id" storm:"type:uuid"`
+    OrderNumber int    `db:"order_number" storm:"type:integer"`
 }
 ```
 
@@ -272,27 +272,27 @@ type OrderItem struct {
 ### Static Defaults
 
 ```go
-IsActive bool      `db:"is_active" dbdef:"type:boolean;default:true"`
-Status   string    `db:"status" dbdef:"type:varchar(20);default:'pending'"`
-Priority int       `db:"priority" dbdef:"type:integer;default:0"`
+IsActive bool      `db:"is_active" storm:"type:boolean;default:true"`
+Status   string    `db:"status" storm:"type:varchar(20);default:'pending'"`
+Priority int       `db:"priority" storm:"type:integer;default:0"`
 ```
 
 ### Function Defaults
 
 ```go
-ID        string    `db:"id" dbdef:"type:uuid;default:gen_random_uuid()"`
-CreatedAt time.Time `db:"created_at" dbdef:"type:timestamptz;default:now()"`
-UpdatedAt time.Time `db:"updated_at" dbdef:"type:timestamptz;default:current_timestamp"`
+ID        string    `db:"id" storm:"type:uuid;default:gen_random_uuid()"`
+CreatedAt time.Time `db:"created_at" storm:"type:timestamptz;default:now()"`
+UpdatedAt time.Time `db:"updated_at" storm:"type:timestamptz;default:current_timestamp"`
 ```
 
 ### Complex Defaults
 
 ```go
 // With timezone
-CreatedAt time.Time `db:"created_at" dbdef:"type:timestamptz;default:now() at time zone 'utc'"`
+CreatedAt time.Time `db:"created_at" storm:"type:timestamptz;default:now() at time zone 'utc'"`
 
 // Calculated default
-Code string `db:"code" dbdef:"type:varchar(20);default:upper(substring(name from 1 for 3))"`
+Code string `db:"code" storm:"type:varchar(20);default:upper(substring(name from 1 for 3))"`
 ```
 
 ## Complete Reference
@@ -330,14 +330,14 @@ Code string `db:"code" dbdef:"type:varchar(20);default:upper(substring(name from
 ```go
 // Bad - using string for everything
 type Product struct {
-    Price    string `db:"price" dbdef:"type:text"`
-    Quantity string `db:"quantity" dbdef:"type:text"`
+    Price    string `db:"price" storm:"type:text"`
+    Quantity string `db:"quantity" storm:"type:text"`
 }
 
 // Good - using appropriate types
 type Product struct {
-    Price    string `db:"price" dbdef:"type:decimal(10,2)"`
-    Quantity int    `db:"quantity" dbdef:"type:integer"`
+    Price    string `db:"price" storm:"type:decimal(10,2)"`
+    Quantity int    `db:"quantity" storm:"type:integer"`
 }
 ```
 
@@ -346,12 +346,12 @@ type Product struct {
 ```go
 // Bad - no constraints
 type User struct {
-    Email string `db:"email" dbdef:"type:varchar(255)"`
+    Email string `db:"email" storm:"type:varchar(255)"`
 }
 
 // Good - proper constraints
 type User struct {
-    Email string `db:"email" dbdef:"type:varchar(255);not_null;unique"`
+    Email string `db:"email" storm:"type:varchar(255);not_null;unique"`
 }
 ```
 
@@ -359,8 +359,8 @@ type User struct {
 
 ```go
 type Post struct {
-    _ struct{} `dbdef:"table:posts;index:idx_user,user_id"`
-    UserID string `db:"user_id" dbdef:"type:uuid;not_null;foreign_key:users.id"`
+    _ struct{} `storm:"table:posts;index:idx_user,user_id"`
+    UserID string `db:"user_id" storm:"type:uuid;not_null;foreign_key:users.id"`
 }
 ```
 
@@ -368,8 +368,8 @@ type Post struct {
 
 ```go
 type BaseModel struct {
-    CreatedAt time.Time  `db:"created_at" dbdef:"type:timestamptz;not_null;default:now()"`
-    UpdatedAt time.Time  `db:"updated_at" dbdef:"type:timestamptz;not_null;default:now()"`
+    CreatedAt time.Time  `db:"created_at" storm:"type:timestamptz;not_null;default:now()"`
+    UpdatedAt time.Time  `db:"updated_at" storm:"type:timestamptz;not_null;default:now()"`
 }
 ```
 
@@ -377,10 +377,10 @@ type BaseModel struct {
 
 ```go
 type User struct {
-    _ struct{} `dbdef:"table:users;comment:User accounts for the application"`
+    _ struct{} `storm:"table:users;comment:User accounts for the application"`
     
-    ID    string `db:"id" dbdef:"type:uuid;primary_key;default:gen_random_uuid();comment:Unique user identifier"`
-    Email string `db:"email" dbdef:"type:varchar(255);not_null;unique;comment:User email address for login"`
+    ID    string `db:"id" storm:"type:uuid;primary_key;default:gen_random_uuid();comment:Unique user identifier"`
+    Email string `db:"email" storm:"type:varchar(255);not_null;unique;comment:User email address for login"`
 }
 ```
 
@@ -390,9 +390,9 @@ type User struct {
 
 ```go
 type TenantModel struct {
-    _ struct{} `dbdef:"table:posts;unique:uk_tenant_slug,tenant_id,slug"`
+    _ struct{} `storm:"table:posts;unique:uk_tenant_slug,tenant_id,slug"`
     
-    TenantID string `db:"tenant_id" dbdef:"type:uuid;not_null"`
+    TenantID string `db:"tenant_id" storm:"type:uuid;not_null"`
     // ... other fields
 }
 ```
@@ -401,12 +401,12 @@ type TenantModel struct {
 
 ```go
 type AuditModel struct {
-    CreatedBy string     `db:"created_by" dbdef:"type:uuid;not_null;foreign_key:users.id"`
-    CreatedAt time.Time  `db:"created_at" dbdef:"type:timestamptz;not_null;default:now()"`
-    UpdatedBy string     `db:"updated_by" dbdef:"type:uuid;not_null;foreign_key:users.id"`
-    UpdatedAt time.Time  `db:"updated_at" dbdef:"type:timestamptz;not_null;default:now()"`
-    DeletedBy *string    `db:"deleted_by" dbdef:"type:uuid;foreign_key:users.id"`
-    DeletedAt *time.Time `db:"deleted_at" dbdef:"type:timestamptz"`
+    CreatedBy string     `db:"created_by" storm:"type:uuid;not_null;foreign_key:users.id"`
+    CreatedAt time.Time  `db:"created_at" storm:"type:timestamptz;not_null;default:now()"`
+    UpdatedBy string     `db:"updated_by" storm:"type:uuid;not_null;foreign_key:users.id"`
+    UpdatedAt time.Time  `db:"updated_at" storm:"type:timestamptz;not_null;default:now()"`
+    DeletedBy *string    `db:"deleted_by" storm:"type:uuid;foreign_key:users.id"`
+    DeletedAt *time.Time `db:"deleted_at" storm:"type:timestamptz"`
 }
 ```
 
@@ -414,16 +414,89 @@ type AuditModel struct {
 
 ```go
 type Booking struct {
-    _ struct{} `dbdef:"table:bookings;check:ck_valid_dates,check_in < check_out;check:ck_positive_price,total_price > 0"`
+    _ struct{} `storm:"table:bookings;check:ck_valid_dates,check_in < check_out;check:ck_positive_price,total_price > 0"`
     
-    CheckIn    time.Time `db:"check_in" dbdef:"type:date;not_null"`
-    CheckOut   time.Time `db:"check_out" dbdef:"type:date;not_null"`
-    TotalPrice string    `db:"total_price" dbdef:"type:decimal(10,2);not_null"`
+    CheckIn    time.Time `db:"check_in" storm:"type:date;not_null"`
+    CheckOut   time.Time `db:"check_out" storm:"type:date;not_null"`
+    TotalPrice string    `db:"total_price" storm:"type:decimal(10,2);not_null"`
 }
 ```
 
+## Relationships
+
+Storm supports defining relationships directly in your struct tags using the `relation:` prefix:
+
+### Belongs To
+
+```go
+type Post struct {
+    _ struct{} `storm:"table:posts"`
+    
+    ID     string `db:"id" storm:"type:uuid;primary_key;default:gen_random_uuid()"`
+    UserID string `db:"user_id" storm:"type:uuid;not_null;foreign_key:users.id"`
+    Title  string `db:"title" storm:"type:varchar(255);not_null"`
+    
+    // Relationship
+    User *User `storm:"relation:belongs_to:User;foreign_key:user_id"`
+}
+```
+
+### Has One
+
+```go
+type User struct {
+    _ struct{} `storm:"table:users"`
+    
+    ID    string `db:"id" storm:"type:uuid;primary_key;default:gen_random_uuid()"`
+    Email string `db:"email" storm:"type:varchar(255);not_null;unique"`
+    
+    // Relationship
+    Profile *Profile `storm:"relation:has_one:Profile;foreign_key:user_id"`
+}
+```
+
+### Has Many
+
+```go
+type User struct {
+    _ struct{} `storm:"table:users"`
+    
+    ID    string `db:"id" storm:"type:uuid;primary_key;default:gen_random_uuid()"`
+    Email string `db:"email" storm:"type:varchar(255);not_null;unique"`
+    
+    // Relationship
+    Posts []Post `storm:"relation:has_many:Post;foreign_key:user_id"`
+}
+```
+
+### Many to Many
+
+```go
+type User struct {
+    _ struct{} `storm:"table:users"`
+    
+    ID    string `db:"id" storm:"type:uuid;primary_key;default:gen_random_uuid()"`
+    Email string `db:"email" storm:"type:varchar(255);not_null;unique"`
+    
+    // Relationship
+    Tags []Tag `storm:"relation:has_many_through:Tag;join_table:user_tags;source_fk:user_id;target_fk:tag_id"`
+}
+```
+
+### Relationship Options
+
+| Option | Description | Example |
+|--------|-------------|---------|
+| `relation` | Relationship type | `relation:belongs_to:User` |
+| `foreign_key` | Foreign key field | `foreign_key:user_id` |
+| `source_key` | Source key field | `source_key:id` |
+| `target_key` | Target key field | `target_key:id` |
+| `join_table` | Join table name | `join_table:user_tags` |
+| `source_fk` | Source foreign key | `source_fk:user_id` |
+| `target_fk` | Target foreign key | `target_fk:tag_id` |
+
 ## Next Steps
 
-- [ORM Guide](orm-guide.md) - Learn about the ORM tags
-- [Migrations Guide](migrations.md) - Managing schema changes
-- [Relationships](relationships.md) - Defining relationships between models
+- [ORM Guide](orm-guide.md) - Learn about using the generated ORM
+- [Query Builder](query-builder.md) - Building complex queries
+- [Configuration Guide](configuration.md) - Configuration options

@@ -16,9 +16,6 @@ type Repository[T any] struct {
 	db       DBExecutor // Keep this accessible for internal packages
 	metadata *ModelMetadata
 
-	// Relationship management
-	relationshipManager *relationshipManager
-
 	// Middleware management
 	middlewareManager *middlewareManager
 
@@ -84,26 +81,6 @@ func (r *Repository[T]) initialize() error {
 		return ErrNoPrimaryKey
 	}
 
-	r.relationshipManager = newRelationshipManager(r.metadata.TableName)
-
-	if r.metadata.Relationships != nil {
-		for name, relMeta := range r.metadata.Relationships {
-			r.relationshipManager.relationships[name] = relationshipDef{
-				FieldName:  name,
-				Type:       relMeta.Type,
-				Target:     relMeta.Target,
-				ForeignKey: relMeta.ForeignKey,
-				SourceKey:  relMeta.SourceKey,
-				TargetKey:  relMeta.TargetKey,
-				JoinTable:  relMeta.Through,
-				SourceFK:   relMeta.ThroughFK,
-				TargetFK:   relMeta.ThroughTK,
-				SetValue:   relMeta.SetValue,
-				IsSlice:    relMeta.IsSlice,
-			}
-		}
-	}
-
 	r.middlewareManager = newMiddlewareManager()
 
 	return nil
@@ -125,8 +102,12 @@ func (r *Repository[T]) Columns() []string {
 	return columns
 }
 
-func (r *Repository[T]) relationships() *relationshipManager {
-	return r.relationshipManager
+// getRelationship returns the relationship metadata for the given relationship name
+func (r *Repository[T]) getRelationship(name string) *RelationshipMetadata {
+	if r.metadata.Relationships == nil {
+		return nil
+	}
+	return r.metadata.Relationships[name]
 }
 
 func (r *Repository[T]) WithRelationships(ctx context.Context) *Query[T] {
@@ -141,11 +122,10 @@ func (r *Repository[T]) Authorize(fn AuthorizeFunc[T]) *Repository[T] {
 	newFuncs[len(r.authorizeFuncs)] = fn
 
 	return &Repository[T]{
-		db:                  r.db,
-		metadata:            r.metadata,
-		relationshipManager: r.relationshipManager,
-		middlewareManager:   r.middlewareManager,
-		authorizeFuncs:      newFuncs,
+		db:                r.db,
+		metadata:          r.metadata,
+		middlewareManager: r.middlewareManager,
+		authorizeFuncs:    newFuncs,
 	}
 }
 

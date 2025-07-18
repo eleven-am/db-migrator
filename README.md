@@ -1,6 +1,6 @@
 # Storm - Type-Safe PostgreSQL ORM and Migration Tool for Go
 
-[![Go Version](https://img.shields.io/badge/go-1.23+-blue.svg)](https://golang.org)
+[![Go Version](https://img.shields.io/badge/go-1.24+-blue.svg)](https://golang.org)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Documentation](https://img.shields.io/badge/docs-complete-brightgreen.svg)](docs/)
 
@@ -24,7 +24,7 @@
 
 Storm follows a simple workflow:
 
-1. **Define your models** in Go structs with `dbdef` tags
+1. **Define your models** in Go structs with `db` and `storm` tags
 2. **Generate migrations** by comparing structs with your database
 3. **Generate ORM code** with type-safe repositories and query builders
 4. **Use the generated code** with full compile-time validation
@@ -41,9 +41,9 @@ type User struct {
 // 3. storm orm      (generates ORM code)
 
 // 4. Use type-safe operations
-users, err := storm.Users.Query().
+users, err := storm.Users.Query(ctx).
     Where(Users.Email.Like("%@company.com")).
-    IncludePosts().  // Type-safe eager loading
+    Include("Posts").  // Type-safe eager loading
     OrderBy(Users.CreatedAt.Desc()).
     Find()
 ```
@@ -66,7 +66,8 @@ users, err := storm.Users.Query().
 - [Core Concepts](#core-concepts)
 - [Configuration](#configuration)
 - [Documentation](#documentation)
-- [Examples](#examples)
+- [Examples](#-comprehensive-examples)
+- [Why Storm?](#why-storm)
 - [Middleware System](#-middleware-system)
 - [Contributing](#contributing)
 
@@ -95,7 +96,7 @@ storm introspect --database="postgres://user:pass@localhost/mydb" --output=./mod
 # Use the generated ORM immediately
 # import "./models"
 # storm := models.NewStorm(db)
-# users, err := storm.Users.Query().Find()
+# users, err := storm.Users.Query(ctx).Find()
 ```
 
 ### Starting from Go Structs (Code-First)
@@ -165,7 +166,7 @@ This generates:
 - **Type-safe query builders** with method chaining and compile-time validation
 - **Column constants** for all struct fields with appropriate column types
 - **Type-safe authorization** with generated `Authorize` methods that use model-specific query types
-- **Relationship methods** like `IncludePosts()`, `IncludeComments()` on query builders for type-safe eager loading
+- **Relationship methods** like `Include("Posts")`, `Include("Comments")` on query builders for type-safe eager loading
 - **Transaction support** with automatic rollback on errors
 - **Bulk operations** for high-performance batch processing (CreateMany, BulkUpdate, etc.)
 
@@ -217,14 +218,14 @@ func main() {
     // === TYPE-SAFE QUERIES ===
     
     // Simple queries with type-safe column references
-    users, err := storm.Users.Query().
+    users, err := storm.Users.Query(ctx).
         Where(models.Users.Email.Like("%@company.com")).
         OrderBy(models.Users.CreatedAt.Desc()).
         Limit(10).
         Find()
     
     // Complex conditions with And/Or/Not helpers
-    activePosts, err := storm.Posts.Query().
+    activePosts, err := storm.Posts.Query(ctx).
         Where(storm.And(
             models.Posts.Published.Eq(true),
             models.Posts.CreatedAt.After(time.Now().AddDate(0, -1, 0)),
@@ -233,7 +234,7 @@ func main() {
         Find()
     
     // Advanced filtering with multiple logical operators
-    searchResults, err := storm.Posts.Query().
+    searchResults, err := storm.Posts.Query(ctx).
         Where(storm.And(
             storm.Or(
                 models.Posts.Title.Like("%Go%"),
@@ -245,7 +246,7 @@ func main() {
         Find()
     
     // Complex user filtering example
-    targetUsers, err := storm.Users.Query().
+    targetUsers, err := storm.Users.Query(ctx).
         Where(storm.And(
             models.Users.IsActive.Eq(true),
             storm.Or(
@@ -259,20 +260,20 @@ func main() {
     // === RELATIONSHIPS ===
     
     // Type-safe eager loading with generated methods
-    usersWithPosts, err := storm.Users.Query().
-        IncludePosts().  // Type-safe relationship loading
+    usersWithPosts, err := storm.Users.Query(ctx).
+        Include("Posts").  // Type-safe relationship loading
         Find()
     
     // Chain multiple relationships
-    authorWithEverything, err := storm.Users.Query().
+    authorWithEverything, err := storm.Users.Query(ctx).
         Where(models.Users.ID.Eq(authorID)).
-        IncludePosts().
-        IncludeComments().
-        IncludeTeam().
+        Include("Posts").
+        Include("Comments").
+        Include("Team").
         First()
     
     // Load specific relationship conditions (still available)
-    usersWithRecentPosts, err := storm.Users.Query().
+    usersWithRecentPosts, err := storm.Users.Query(ctx).
         IncludeWhere("Posts", models.Posts.CreatedAt.After(time.Now().AddDate(0, 0, -7))).
         Find()
     
@@ -287,7 +288,7 @@ func main() {
     err = storm.Users.CreateMany(ctx, newUsers)
     
     // Bulk update with conditions
-    rowsUpdated, err := storm.Posts.Query().
+    rowsUpdated, err := storm.Posts.Query(ctx).
         Where(models.Posts.Published.Eq(false)).
         UpdateMany(ctx, map[string]interface{}{
             "published": true,
@@ -325,25 +326,25 @@ func main() {
     // === ADVANCED QUERIES ===
     
     // Aggregations and counting
-    totalUsers, err := storm.Users.Query().Count()
+    totalUsers, err := storm.Users.Query(ctx).Count()
     
-    activeUserCount, err := storm.Users.Query().
+    activeUserCount, err := storm.Users.Query(ctx).
         Where(models.Users.IsActive.Eq(true)).
         Count()
     
     // Check existence
-    hasAdminUser, err := storm.Users.Query().
+    hasAdminUser, err := storm.Users.Query(ctx).
         Where(models.Users.Email.Eq("admin@company.com")).
         Exists()
     
     // Time-based queries
-    recentPosts, err := storm.Posts.Query().
+    recentPosts, err := storm.Posts.Query(ctx).
         Where(models.Posts.CreatedAt.After(time.Now().AddDate(0, 0, -7))).
         OrderBy(models.Posts.CreatedAt.Desc()).
         Find()
     
     // Pagination
-    page2Users, err := storm.Users.Query().
+    page2Users, err := storm.Users.Query(ctx).
         OrderBy(models.Users.CreatedAt.Desc()).
         Offset(20).
         Limit(10).
@@ -368,7 +369,7 @@ func main() {
     // Get users with their posts using type-safe Include methods
     usersWithPosts, err := storm.Users.Query(ctx).
         Where(models.Users.CreatedAt.After(time.Now().AddDate(0, -1, 0))).
-        IncludePosts().  // Type-safe relationship loading
+        Include("Posts").  // Type-safe relationship loading
         OrderBy(models.Users.CreatedAt.Desc()).
         Find()
 }
@@ -406,12 +407,12 @@ The ORM generator produces production-ready code:
 Every database operation is type-safe:
 ```go
 // ✅ Compile-time error if column doesn't exist
-users, _ := storm.Users.Query().
+users, _ := storm.Users.Query(ctx).
     Where(models.Users.InvalidColumn.Eq("value")). // Compiler error!
     Find()
 
 // ✅ Type mismatch caught at compile time
-users, _ := storm.Users.Query().
+users, _ := storm.Users.Query(ctx).
     Where(models.Users.Age.Eq("not a number")). // Compiler error!
     Find()
 ```
@@ -431,11 +432,11 @@ See [Configuration Guide](docs/configuration.md) for details.
 
 - 📘 **[Getting Started Guide](docs/getting-started.md)** - Step-by-step tutorial
 - 🏷️ **[Schema Definition (storm tags)](docs/schema-definition.md)** - Complete tag reference
-- 🔄 **[Migrations Guide](docs/migrations.md)** - Managing database changes
+- 🔄 **[Migrations Guide](docs/migrations.md)** - Managing database changes (Coming Soon)
 - 📊 **[ORM Guide](docs/orm-guide.md)** - Using the generated ORM
 - 🔍 **[Query Builder](docs/query-builder.md)** - Building complex queries
-- 🔌 **[Relationships](docs/relationships.md)** - Defining and using relationships
-- ⚡ **[Performance Guide](docs/performance.md)** - Optimization tips
+- 🔌 **[Relationships](docs/relationships.md)** - Defining and using relationships (Coming Soon)
+- ⚡ **[Performance Guide](docs/performance.md)** - Optimization tips (Coming Soon)
 - 🔧 **[CLI Reference](docs/cli-reference.md)** - All commands and options
 
 ## 📚 Comprehensive Examples
@@ -469,7 +470,7 @@ type Product struct {
 // Advanced product queries
 func ProductExamples(storm *models.Storm, ctx context.Context) {
     // Find products in stock within price range
-    inStockProducts, err := storm.Products.Query().
+    inStockProducts, err := storm.Products.Query(ctx).
         Where(storm.And(
             models.Products.Stock.Gt(0),
             models.Products.Price.Between(decimal.NewFromFloat(10.0), decimal.NewFromFloat(100.0)),
@@ -480,7 +481,7 @@ func ProductExamples(storm *models.Storm, ctx context.Context) {
         Find()
     
     // Search products by name or description with complex logic
-    searchResults, err := storm.Products.Query().
+    searchResults, err := storm.Products.Query(ctx).
         Where(storm.And(
             storm.Or(
                 models.Products.Name.Like("%laptop%"),
@@ -492,7 +493,7 @@ func ProductExamples(storm *models.Storm, ctx context.Context) {
         Find()
     
     // Bulk update prices with 10% discount
-    discountedRows, err := storm.Products.Query().
+    discountedRows, err := storm.Products.Query(ctx).
         Where(models.Products.CategoryID.Eq("electronics-category-id")).
         UpdateMany(ctx, map[string]interface{}{
             "price": squirrel.Expr("price * 0.9"),
@@ -541,7 +542,7 @@ func EventExamples(storm *models.Storm, ctx context.Context) {
             models.Events.StartTime.After(time.Now()),
             models.Events.Status.Eq("scheduled"),
         )).
-        IncludeVenue().                                // Type-safe venue loading
+        Include("Venue").                                // Type-safe venue loading
         IncludeWhere("Registrations",                  // Load specific registrations
             models.Registrations.Status.Eq("confirmed"),
         ).
@@ -557,7 +558,7 @@ func EventExamples(storm *models.Storm, ctx context.Context) {
         }
         
         // Check capacity with complex conditions
-        currentRegistrations, err := tx.Registrations.Query().
+        currentRegistrations, err := tx.Registrations.Query(ctx).
             Where(storm.And(
                 models.Registrations.EventID.Eq(event.ID),
                 models.Registrations.Status.Eq("confirmed"),
@@ -607,15 +608,15 @@ func AnalyticsExamples(storm *models.Storm, ctx context.Context) {
             models.Orders.Status.Eq("completed"),
             models.Orders.TotalAmount.Gt(decimal.NewFromInt(1000)),
         )).
-        IncludeCustomer().                             // Type-safe customer loading
-        IncludeOrderItems().                           // Type-safe order items loading
+        Include("Customer").                             // Type-safe customer loading
+        Include("OrderItems").                           // Type-safe order items loading
         OrderBy(models.Orders.TotalAmount.Desc()).
         Limit(100).
         Find()
     
     // Get VIP customers with high lifetime value
     vipCustomers, err := storm.Users.Query(ctx).
-        IncludeOrders().                               // Type-safe order loading
+        Include("Orders").                               // Type-safe order loading
         Where(models.Users.IsActive.Eq(true)).
         Find()
     
@@ -667,7 +668,7 @@ type User struct {
 
 func MultiTenantExamples(storm *models.Storm, ctx context.Context, orgID string, userID string, userRole string) {
     // Find active admin users for organization
-    adminUsers, err := storm.Users.Query().
+    adminUsers, err := storm.Users.Query(ctx).
         Where(storm.And(
             models.Users.OrgID.Eq(orgID),
             storm.Or(
@@ -693,14 +694,14 @@ func MultiTenantExamples(storm *models.Storm, ctx context.Context, orgID string,
     // Get projects with their users
     projectsWithUsers, err := storm.Projects.Query(ctx).
         Where(models.Projects.OrgID.Eq(orgID)).
-        IncludeAssignedUsers().                        // Type-safe user loading
+        Include("AssignedUsers").                        // Type-safe user loading
         Find()
     
     // Cross-tenant reporting (admin only)
     activeOrgs, err := storm.Organizations.Query(ctx).
         Where(models.Organizations.IsActive.Eq(true)).
-        IncludeUsers().                                // Type-safe user loading
-        IncludeProjects().                             // Type-safe project loading
+        Include("Users").                                // Type-safe user loading
+        Include("Projects").                             // Type-safe project loading
         OrderBy(models.Organizations.CreatedAt.Desc()).
         Find()
     
@@ -735,13 +736,15 @@ func MultiTenantExamples(storm *models.Storm, ctx context.Context, orgID string,
 
 ### Example Projects
 
-Check out the [examples](examples/) directory for complete applications:
+Complete example applications are coming soon! We're working on:
 
-- **[Todo Application](examples/todo/)** - Full CRUD operations with relationships, user management, and categories
-- **[Blog System](examples/blog/)** - Multi-author blogging platform with comments, tags, and SEO features  
-- **[E-commerce Platform](examples/ecommerce/)** - Complete online store with products, orders, inventory, and payment processing
-- **[Event Management](examples/events/)** - Event scheduling, registration, and venue management system
-- **[Multi-tenant SaaS](examples/saas/)** - Organization-scoped data with user roles and subscription management
+- **Todo Application** - Full CRUD operations with relationships, user management, and categories
+- **Blog System** - Multi-author blogging platform with comments, tags, and SEO features  
+- **E-commerce Platform** - Complete online store with products, orders, inventory, and payment processing
+- **Event Management** - Event scheduling, registration, and venue management system
+- **Multi-tenant SaaS** - Organization-scoped data with user roles and subscription management
+
+For now, refer to the comprehensive examples in the sections above and the [Getting Started Guide](docs/getting-started.md).
 
 ## Why Storm?
 
@@ -842,8 +845,8 @@ authorizedPosts := storm.Posts.Authorize(func(ctx context.Context, query *models
 // Type-safe relationship loading works with authorization
 visiblePosts, err := authorizedPosts.Query(ctx).
     Where(models.Posts.Published.Eq(true)).
-    IncludeAuthor().
-    IncludeTags().
+    Include("Author").
+    Include("Tags").
     Find()
 
 // For create operations, explicitly set tenant
@@ -936,7 +939,7 @@ func AddSoftDeleteMiddleware(repo *Repository[T]) {
 // Usage
 AddSoftDeleteMiddleware(storm.Users)
 err := storm.Users.Delete(ctx, userID) // Sets deleted_at instead of removing
-users, err := storm.Users.Query().Find() // Only returns non-deleted users
+users, err := storm.Users.Query(ctx).Find() // Only returns non-deleted users
 ```
 
 #### 🔍 Query Tracing & Debugging
@@ -1106,7 +1109,7 @@ func UserHandler(w http.ResponseWriter, r *http.Request) {
     ctx = context.WithValue(ctx, "user", getCurrentUser(r))
     
     AddRequestContextMiddleware(storm.Users)
-    users, err := storm.Users.Query().FindContext(ctx)
+    users, err := storm.Users.Query(ctx).Find()
     // Request context flows through middleware
 }
 ```
@@ -1196,7 +1199,7 @@ The middleware system makes Storm production-ready by providing the hooks needed
 
 ## Contributing
 
-We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+We welcome contributions! Contribution guidelines are coming soon.
 
 ## License
 
@@ -1205,8 +1208,8 @@ Storm is released under the MIT License. See [LICENSE](LICENSE) for details.
 ## Support
 
 - 📖 [Documentation](docs/)
-- 💬 [GitHub Discussions](https://github.com/eleven-am/storm/discussions)
-- 🐛 [Issue Tracker](https://github.com/eleven-am/storm/issues)
+- 💬 [GitHub Discussions](https://github.com/eleven-am/storm/discussions) (Coming Soon)
+- 🐛 [Issue Tracker](https://github.com/eleven-am/storm/issues) (Coming Soon)
 
 ---
 

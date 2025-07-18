@@ -136,54 +136,45 @@ storm orm --hooks=false
 
 ### storm create
 
-Create various Storm-related files.
+Create empty migration files.
 
 ```bash
-storm create <type> <name> [flags]
+storm create <name> [flags]
 ```
-
-**Types:**
-- `model` - Create a new model file
-- `migration` - Create an empty migration file
-
-**Flags:**
-| Flag | Description | Default |
-|------|-------------|---------|
-| `--package` | Package name | From config |
-| `--output` | Output directory | From config |
 
 **Examples:**
 ```bash
-# Create a new model
-storm create model user
-
 # Create a migration file
-storm create migration add_user_roles
+storm create add_user_roles
 
-# Create in specific package
-storm create model product --package ./internal/models
+# Create with timestamp
+storm create update_user_schema
 ```
 
 ### storm generate
 
-Generate specific code components.
+Generate initial SQL schema from Go structs.
 
 ```bash
-storm generate <component> [flags]
+storm generate [flags]
 ```
 
-**Components:**
-- `schema` - Generate SQL schema from models
-- `docs` - Generate documentation
-- `types` - Generate TypeScript types from models
+**Flags:**
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--package` | Path to package containing models | `./models` |
+| `--output` | Output file for schema SQL | `schema.sql` |
 
 **Examples:**
 ```bash
-# Generate SQL schema
-storm generate schema > schema.sql
+# Generate SQL schema to file
+storm generate
 
-# Generate TypeScript types
-storm generate types --output ./frontend/types
+# Generate from specific package
+storm generate --package ./internal/models
+
+# Generate to specific output file
+storm generate --output ./db/schema.sql
 ```
 
 ### storm verify
@@ -260,7 +251,7 @@ storm introspect --database="postgres://user:pass@localhost/mydb" \
 # Then in your code:
 # import "./models"
 # storm := models.NewStorm(db)
-# users, err := storm.Users.Query().Find()
+# users, err := storm.Users.Query(ctx).Find()
 ```
 
 ### storm version
@@ -344,8 +335,8 @@ storm orm
 ### Adding a New Model
 
 ```bash
-# 1. Create model file
-storm create model product
+# 1. Create model file manually
+# ... create product.go in models directory ...
 
 # 2. Edit the model file
 # ... add fields ...

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/Masterminds/squirrel"
 	"github.com/jmoiron/sqlx"
-	"reflect"
 )
 
 // Query provides a fluent interface for building database queries with all features integrated
@@ -31,7 +30,7 @@ type Query[T any] struct {
 }
 
 func (r *Repository[T]) Query(ctx context.Context) *Query[T] {
-	return &Query[T]{
+	query := &Query[T]{
 		repo: r,
 		builder: squirrel.Select(r.Columns()...).
 			From(r.metadata.TableName).
@@ -41,6 +40,12 @@ func (r *Repository[T]) Query(ctx context.Context) *Query[T] {
 		joins:       make([]join, 0),
 		includes:    make([]include, 0),
 	}
+
+	for _, authFunc := range r.authorizeFuncs {
+		query = authFunc(ctx, query)
+	}
+
+	return query
 }
 
 func (q *Query[T]) WithTx(tx *sqlx.Tx) *Query[T] {
@@ -465,357 +470,255 @@ func (q *Query[T]) loadRelationship(records []T, include include) error {
 		return nil
 	}
 
-	relationship := q.repo.relationshipManager.getRelationship(include.name)
+	relationship := q.repo.getRelationship(include.name)
 	if relationship == nil {
 		return fmt.Errorf("relationship %s not found", include.name)
 	}
 
-	if relationship.SetValue == nil {
-		return fmt.Errorf("relationship %s does not have SetValue function", include.name)
+	if relationship.ScanToModel == nil {
+		return fmt.Errorf("relationship %s does not have ScanToModel function", include.name)
 	}
 
+	// One atomic operation per record
+	for i := range records {
+		// Build query for this specific record
+		recordQuery, recordArgs, err := q.buildSingleRecordQuery(relationship, records[i], include)
+		if err != nil {
+			return err
+		}
+
+		if recordQuery != "" { // Only scan if there's a query to execute
+			if err := q.executeSingleRelationshipQuery(relationship, recordQuery, recordArgs, &records[i]); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func (q *Query[T]) executeSingleRelationshipQuery(relationship *RelationshipMetadata, query string, args []interface{}, record *T) error {
+	// Use middleware system with proper transaction support
+	return q.repo.executeQueryMiddleware(OpQuery, q.ctx, record, query, func(middlewareCtx *MiddlewareContext) error {
+		// Get the appropriate database executor (transaction-aware)
+		var executor DBExecutor
+		if q.tx != nil {
+			executor = q.tx
+		} else {
+			executor = q.repo.db
+		}
+
+		// Execute the ScanToModel function with proper context
+		if err := relationship.ScanToModel(q.ctx, executor, query, args, record); err != nil {
+			return &Error{
+				Op:    "load_relationship",
+				Table: relationship.Target,
+				Err:   fmt.Errorf("failed to load relationship %s: %w", relationship.Name, err),
+			}
+		}
+
+		return nil
+	})
+}
+
+func (q *Query[T]) buildSingleRecordQuery(relationship *RelationshipMetadata, record T, include include) (string, []interface{}, error) {
 	switch relationship.Type {
 	case "belongs_to":
-		return q.loadBelongsToRelationship(records, relationship)
+		return q.buildBelongsToSingleQuery(relationship, record, include)
 	case "has_one":
-		return q.loadHasOneRelationship(records, relationship)
+		return q.buildHasOneSingleQuery(relationship, record, include)
 	case "has_many":
-		return q.loadHasManyRelationship(records, relationship)
+		return q.buildHasManySingleQuery(relationship, record, include)
 	case "has_many_through":
-		return q.loadHasManyThroughRelationship(records, relationship)
+		return q.buildHasManyThroughSingleQuery(relationship, record, include)
 	default:
-		return fmt.Errorf("unsupported relationship type: %s", relationship.Type)
+		return "", nil, fmt.Errorf("unsupported relationship type: %s", relationship.Type)
 	}
 }
 
-func (q *Query[T]) loadBelongsToRelationship(records []T, relationship *relationshipDef) error {
-
-	foreignKeys := make([]interface{}, 0, len(records))
-	keyToRecordIndices := make(map[interface{}][]int)
-
-	for i, record := range records {
-		recordValue := reflect.ValueOf(record)
-		fkField := recordValue.FieldByName(relationship.ForeignKey)
-		if !fkField.IsValid() || fkField.IsZero() {
-			continue
-		}
-
-		fkValue := fkField.Interface()
-		if _, exists := keyToRecordIndices[fkValue]; !exists {
-			foreignKeys = append(foreignKeys, fkValue)
-		}
-		keyToRecordIndices[fkValue] = append(keyToRecordIndices[fkValue], i)
-	}
-
-	if len(foreignKeys) == 0 {
-		return nil
-	}
-
-	relatedQuery := fmt.Sprintf("SELECT * FROM %s WHERE %s = ANY($1)", relationship.Target, relationship.TargetKey)
-
-	var zero T
-	zeroValue := reflect.ValueOf(zero)
-	relField := zeroValue.FieldByName(relationship.FieldName)
-	if !relField.IsValid() {
-		return fmt.Errorf("relationship field %s not found", relationship.FieldName)
-	}
-
-	fieldType := relField.Type()
-	if fieldType.Kind() == reflect.Ptr {
-		fieldType = fieldType.Elem()
-	}
-
-	sliceType := reflect.SliceOf(fieldType)
-	relatedRecords := reflect.New(sliceType).Elem()
-
-	var err error
-	if q.tx != nil {
-		err = q.tx.SelectContext(q.ctx, relatedRecords.Addr().Interface(), relatedQuery, foreignKeys)
-	} else {
-		err = q.repo.db.SelectContext(q.ctx, relatedRecords.Addr().Interface(), relatedQuery, foreignKeys)
-	}
-
-	if err != nil {
-		return fmt.Errorf("failed to load belongs_to relationship %s: %w", relationship.FieldName, err)
-	}
-
-	relatedMap := make(map[interface{}]reflect.Value)
-	for i := 0; i < relatedRecords.Len(); i++ {
-		relatedRecord := relatedRecords.Index(i)
-		pkField := relatedRecord.FieldByName(relationship.TargetKey)
-		if pkField.IsValid() {
-			relatedMap[pkField.Interface()] = relatedRecord
+func (q *Query[T]) buildBelongsToSingleQuery(relationship *RelationshipMetadata, record T, include include) (string, []interface{}, error) {
+	// Get the column metadata for the foreign key field
+	fkFieldName, ok := q.repo.metadata.ReverseMap[relationship.ForeignKey]
+	if !ok {
+		fkFieldName = relationship.ForeignKey
+		if _, exists := q.repo.metadata.Columns[fkFieldName]; !exists {
+			return "", nil, fmt.Errorf("foreign key %s not found", relationship.ForeignKey)
 		}
 	}
 
-	for fkValue, recordIndices := range keyToRecordIndices {
-		if relatedRecord, exists := relatedMap[fkValue]; exists {
-			for _, idx := range recordIndices {
-				relationship.SetValue(&records[idx], relatedRecord.Interface())
-			}
-		}
+	fkColumn := q.repo.metadata.Columns[fkFieldName]
+	if fkColumn == nil {
+		return "", nil, fmt.Errorf("foreign key column %s not found", fkFieldName)
 	}
 
-	return nil
+	fkValue := fkColumn.GetValue(record)
+	if fkValue == nil || isZeroValue(fkValue) {
+		return "", nil, nil // No query needed for this record
+	}
+
+	// Build query with squirrel
+	query := squirrel.Select("*").
+		From(relationship.Target).
+		Where(squirrel.Eq{relationship.TargetKey: fkValue}).
+		PlaceholderFormat(squirrel.Dollar)
+
+	// Apply conditions from IncludeWhere
+	for _, condition := range include.conditions {
+		query = query.Where(condition.ToSqlizer())
+	}
+
+	return query.ToSql()
 }
 
-func (q *Query[T]) loadHasOneRelationship(records []T, relationship *relationshipDef) error {
-
-	sourceKeys := make([]interface{}, 0, len(records))
-	keyToRecordIndex := make(map[interface{}]int)
-
-	for i, record := range records {
-		recordValue := reflect.ValueOf(record)
-		sourceField := recordValue.FieldByName(relationship.SourceKey)
-		if !sourceField.IsValid() || sourceField.IsZero() {
-			continue
-		}
-
-		sourceValue := sourceField.Interface()
-		sourceKeys = append(sourceKeys, sourceValue)
-		keyToRecordIndex[sourceValue] = i
+func (q *Query[T]) buildHasOneSingleQuery(relationship *RelationshipMetadata, record T, include include) (string, []interface{}, error) {
+	// Default source key to primary key if not specified
+	sourceKey := relationship.SourceKey
+	if sourceKey == "" {
+		sourceKey = "id"
 	}
 
-	if len(sourceKeys) == 0 {
-		return nil
-	}
-
-	relatedQuery := fmt.Sprintf("SELECT * FROM %s WHERE %s = ANY($1)", relationship.Target, relationship.ForeignKey)
-
-	var zero T
-	zeroValue := reflect.ValueOf(zero)
-	relField := zeroValue.FieldByName(relationship.FieldName)
-	if !relField.IsValid() {
-		return fmt.Errorf("relationship field %s not found", relationship.FieldName)
-	}
-
-	fieldType := relField.Type()
-	if fieldType.Kind() == reflect.Ptr {
-		fieldType = fieldType.Elem()
-	}
-
-	sliceType := reflect.SliceOf(fieldType)
-	relatedRecords := reflect.New(sliceType).Elem()
-
-	var err error
-	if q.tx != nil {
-		err = q.tx.SelectContext(q.ctx, relatedRecords.Addr().Interface(), relatedQuery, sourceKeys)
-	} else {
-		err = q.repo.db.SelectContext(q.ctx, relatedRecords.Addr().Interface(), relatedQuery, sourceKeys)
-	}
-
-	if err != nil {
-		return fmt.Errorf("failed to load has_one relationship %s: %w", relationship.FieldName, err)
-	}
-
-	for i := 0; i < relatedRecords.Len(); i++ {
-		relatedRecord := relatedRecords.Index(i)
-		fkField := relatedRecord.FieldByName(relationship.ForeignKey)
-		if fkField.IsValid() {
-			fkValue := fkField.Interface()
-			if recordIdx, exists := keyToRecordIndex[fkValue]; exists {
-				relationship.SetValue(&records[recordIdx], relatedRecord.Interface())
-			}
+	// Get the column metadata for the source key field
+	sourceFieldName, ok := q.repo.metadata.ReverseMap[sourceKey]
+	if !ok {
+		sourceFieldName = sourceKey
+		if _, exists := q.repo.metadata.Columns[sourceFieldName]; !exists {
+			return "", nil, fmt.Errorf("source key %s not found", sourceKey)
 		}
 	}
 
-	return nil
+	sourceColumn := q.repo.metadata.Columns[sourceFieldName]
+	if sourceColumn == nil {
+		return "", nil, fmt.Errorf("source key column %s not found", sourceFieldName)
+	}
+
+	sourceValue := sourceColumn.GetValue(record)
+	if sourceValue == nil || isZeroValue(sourceValue) {
+		return "", nil, nil // No query needed for this record
+	}
+
+	// Build query with squirrel
+	query := squirrel.Select("*").
+		From(relationship.Target).
+		Where(squirrel.Eq{relationship.ForeignKey: sourceValue}).
+		PlaceholderFormat(squirrel.Dollar)
+
+	// Apply conditions from IncludeWhere
+	for _, condition := range include.conditions {
+		query = query.Where(condition.ToSqlizer())
+	}
+
+	return query.ToSql()
 }
 
-func (q *Query[T]) loadHasManyRelationship(records []T, relationship *relationshipDef) error {
-
-	sourceKeys := make([]interface{}, 0, len(records))
-	keyToRecordIndices := make(map[interface{}][]int)
-
-	for i, record := range records {
-		recordValue := reflect.ValueOf(record)
-		sourceField := recordValue.FieldByName(relationship.SourceKey)
-		if !sourceField.IsValid() || sourceField.IsZero() {
-			continue
-		}
-
-		sourceValue := sourceField.Interface()
-		if _, exists := keyToRecordIndices[sourceValue]; !exists {
-			sourceKeys = append(sourceKeys, sourceValue)
-		}
-		keyToRecordIndices[sourceValue] = append(keyToRecordIndices[sourceValue], i)
+func (q *Query[T]) buildHasManySingleQuery(relationship *RelationshipMetadata, record T, include include) (string, []interface{}, error) {
+	// Default source key to primary key if not specified
+	sourceKey := relationship.SourceKey
+	if sourceKey == "" {
+		sourceKey = "id"
 	}
 
-	if len(sourceKeys) == 0 {
-		return nil
-	}
-
-	relatedQuery := fmt.Sprintf("SELECT * FROM %s WHERE %s = ANY($1)", relationship.Target, relationship.ForeignKey)
-
-	var zero T
-	zeroValue := reflect.ValueOf(zero)
-	relField := zeroValue.FieldByName(relationship.FieldName)
-	if !relField.IsValid() {
-		return fmt.Errorf("relationship field %s not found", relationship.FieldName)
-	}
-
-	fieldType := relField.Type()
-	if fieldType.Kind() == reflect.Slice {
-		fieldType = fieldType.Elem()
-	}
-
-	sliceType := reflect.SliceOf(fieldType)
-	relatedRecords := reflect.New(sliceType).Elem()
-
-	var err error
-	if q.tx != nil {
-		err = q.tx.SelectContext(q.ctx, relatedRecords.Addr().Interface(), relatedQuery, sourceKeys)
-	} else {
-		err = q.repo.db.SelectContext(q.ctx, relatedRecords.Addr().Interface(), relatedQuery, sourceKeys)
-	}
-
-	if err != nil {
-		return fmt.Errorf("failed to load has_many relationship %s: %w", relationship.FieldName, err)
-	}
-
-	relatedGroups := make(map[interface{}][]reflect.Value)
-	for i := 0; i < relatedRecords.Len(); i++ {
-		relatedRecord := relatedRecords.Index(i)
-		fkField := relatedRecord.FieldByName(relationship.ForeignKey)
-		if fkField.IsValid() {
-			fkValue := fkField.Interface()
-			relatedGroups[fkValue] = append(relatedGroups[fkValue], relatedRecord)
+	// Get the column metadata for the source key field
+	sourceFieldName, ok := q.repo.metadata.ReverseMap[sourceKey]
+	if !ok {
+		sourceFieldName = sourceKey
+		if _, exists := q.repo.metadata.Columns[sourceFieldName]; !exists {
+			return "", nil, fmt.Errorf("source key %s not found", sourceKey)
 		}
 	}
 
-	for sourceValue, recordIndices := range keyToRecordIndices {
-		if relatedGroup, exists := relatedGroups[sourceValue]; exists {
-
-			sliceValue := reflect.MakeSlice(relField.Type(), len(relatedGroup), len(relatedGroup))
-			for i, relatedRecord := range relatedGroup {
-				sliceValue.Index(i).Set(relatedRecord)
-			}
-
-			for _, idx := range recordIndices {
-				relationship.SetValue(&records[idx], sliceValue.Interface())
-			}
-		}
+	sourceColumn := q.repo.metadata.Columns[sourceFieldName]
+	if sourceColumn == nil {
+		return "", nil, fmt.Errorf("source key column %s not found", sourceFieldName)
 	}
 
-	return nil
+	sourceValue := sourceColumn.GetValue(record)
+	if sourceValue == nil || isZeroValue(sourceValue) {
+		return "", nil, nil // No query needed for this record
+	}
+
+	// Build query with squirrel
+	query := squirrel.Select("*").
+		From(relationship.Target).
+		Where(squirrel.Eq{relationship.ForeignKey: sourceValue}).
+		PlaceholderFormat(squirrel.Dollar)
+
+	// Apply conditions from IncludeWhere
+	for _, condition := range include.conditions {
+		query = query.Where(condition.ToSqlizer())
+	}
+
+	return query.ToSql()
 }
 
-func (q *Query[T]) loadHasManyThroughRelationship(records []T, relationship *relationshipDef) error {
-
-	sourceKeys := make([]interface{}, 0, len(records))
-	keyToRecordIndices := make(map[interface{}][]int)
-
-	for i, record := range records {
-		recordValue := reflect.ValueOf(record)
-		sourceField := recordValue.FieldByName(relationship.SourceKey)
-		if !sourceField.IsValid() || sourceField.IsZero() {
-			continue
-		}
-
-		sourceValue := sourceField.Interface()
-		if _, exists := keyToRecordIndices[sourceValue]; !exists {
-			sourceKeys = append(sourceKeys, sourceValue)
-		}
-		keyToRecordIndices[sourceValue] = append(keyToRecordIndices[sourceValue], i)
+func (q *Query[T]) buildHasManyThroughSingleQuery(relationship *RelationshipMetadata, record T, include include) (string, []interface{}, error) {
+	// Default source key to primary key if not specified
+	sourceKey := relationship.SourceKey
+	if sourceKey == "" {
+		sourceKey = "id"
 	}
 
-	if len(sourceKeys) == 0 {
-		return nil
-	}
-
-	relatedQuery := fmt.Sprintf(`
-		SELECT t.* FROM %s t
-		INNER JOIN %s jt ON t.%s = jt.%s
-		WHERE jt.%s = ANY($1)
-	`, relationship.Target, relationship.JoinTable,
-		relationship.TargetKey, relationship.TargetFK,
-		relationship.SourceFK)
-
-	var zero T
-	zeroValue := reflect.ValueOf(zero)
-	relField := zeroValue.FieldByName(relationship.FieldName)
-	if !relField.IsValid() {
-		return fmt.Errorf("relationship field %s not found", relationship.FieldName)
-	}
-
-	fieldType := relField.Type()
-	if fieldType.Kind() == reflect.Slice {
-		fieldType = fieldType.Elem()
-	}
-
-	sliceType := reflect.SliceOf(fieldType)
-	relatedRecords := reflect.New(sliceType).Elem()
-
-	var err error
-	if q.tx != nil {
-		err = q.tx.SelectContext(q.ctx, relatedRecords.Addr().Interface(), relatedQuery, sourceKeys)
-	} else {
-		err = q.repo.db.SelectContext(q.ctx, relatedRecords.Addr().Interface(), relatedQuery, sourceKeys)
-	}
-
-	if err != nil {
-		return fmt.Errorf("failed to load has_many_through relationship %s: %w", relationship.FieldName, err)
-	}
-
-	junctionQuery := fmt.Sprintf("SELECT %s, %s FROM %s WHERE %s = ANY($1)",
-		relationship.SourceFK, relationship.TargetFK,
-		relationship.JoinTable, relationship.SourceFK)
-
-	type junctionRecord struct {
-		SourceKey interface{}
-		TargetKey interface{}
-	}
-
-	var junctionRecords []junctionRecord
-	if q.tx != nil {
-		err = q.tx.SelectContext(q.ctx, &junctionRecords, junctionQuery, sourceKeys)
-	} else {
-		err = q.repo.db.SelectContext(q.ctx, &junctionRecords, junctionQuery, sourceKeys)
-	}
-
-	if err != nil {
-		return fmt.Errorf("failed to load junction table for has_many_through relationship %s: %w", relationship.FieldName, err)
-	}
-
-	sourceToTargets := make(map[interface{}][]interface{})
-	for _, junction := range junctionRecords {
-		sourceToTargets[junction.SourceKey] = append(sourceToTargets[junction.SourceKey], junction.TargetKey)
-	}
-
-	targetToRecord := make(map[interface{}]reflect.Value)
-	for i := 0; i < relatedRecords.Len(); i++ {
-		relatedRecord := relatedRecords.Index(i)
-		targetField := relatedRecord.FieldByName(relationship.TargetKey)
-		if targetField.IsValid() {
-			targetToRecord[targetField.Interface()] = relatedRecord
+	// Get the column metadata for the source key field
+	sourceFieldName, ok := q.repo.metadata.ReverseMap[sourceKey]
+	if !ok {
+		sourceFieldName = sourceKey
+		if _, exists := q.repo.metadata.Columns[sourceFieldName]; !exists {
+			return "", nil, fmt.Errorf("source key %s not found", sourceKey)
 		}
 	}
 
-	for sourceValue, recordIndices := range keyToRecordIndices {
-		if targetKeys, exists := sourceToTargets[sourceValue]; exists {
-
-			var relatedGroup []reflect.Value
-			for _, targetKey := range targetKeys {
-				if relatedRecord, exists := targetToRecord[targetKey]; exists {
-					relatedGroup = append(relatedGroup, relatedRecord)
-				}
-			}
-
-			if len(relatedGroup) > 0 {
-
-				sliceValue := reflect.MakeSlice(relField.Type(), len(relatedGroup), len(relatedGroup))
-				for i, relatedRecord := range relatedGroup {
-					sliceValue.Index(i).Set(relatedRecord)
-				}
-
-				for _, idx := range recordIndices {
-					relationship.SetValue(&records[idx], sliceValue.Interface())
-				}
-			}
-		}
+	sourceColumn := q.repo.metadata.Columns[sourceFieldName]
+	if sourceColumn == nil {
+		return "", nil, fmt.Errorf("source key column %s not found", sourceFieldName)
 	}
 
-	return nil
+	sourceValue := sourceColumn.GetValue(record)
+	if sourceValue == nil || isZeroValue(sourceValue) {
+		return "", nil, nil // No query needed for this record
+	}
+
+	// Build query with squirrel - joining through the junction table
+	query := squirrel.Select("t.*").
+		From(relationship.Target + " t").
+		InnerJoin(fmt.Sprintf("%s jt ON t.%s = jt.%s",
+			relationship.Through,
+			relationship.TargetKey,
+			relationship.ThroughTK)).
+		Where(squirrel.Eq{"jt." + relationship.ThroughFK: sourceValue}).
+		PlaceholderFormat(squirrel.Dollar)
+
+	// Apply conditions from IncludeWhere
+	for _, condition := range include.conditions {
+		query = query.Where(condition.ToSqlizer())
+	}
+
+	return query.ToSql()
+}
+
+// isZeroValue checks if a value is the zero value for its type
+func isZeroValue(v interface{}) bool {
+	if v == nil {
+		return true
+	}
+	switch val := v.(type) {
+	case string:
+		return val == ""
+	case int:
+		return val == 0
+	case int64:
+		return val == 0
+	case int32:
+		return val == 0
+	case float64:
+		return val == 0
+	case float32:
+		return val == 0
+	case bool:
+		return !val
+	default:
+		// For other types, we can't easily determine zero value without reflection
+		// This should cover most common database field types
+		return false
+	}
 }
 
 func (q *Query[T]) ExecuteRaw(query string, args ...interface{}) ([]T, error) {

@@ -9,7 +9,7 @@ import (
 const (
 	Version      = "1.0.0-alpha"
 	APIVersion   = "v1"
-	MinGoVersion = "1.21"
+	MinGoVersion = "1.24"
 )
 
 // BuildInfo contains build information

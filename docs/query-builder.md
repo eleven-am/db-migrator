@@ -650,6 +650,6 @@ err := storm.Raw(`
 
 ## Next Steps
 
-- [Relationships Guide](relationships.md) - Learn about relationship queries
-- [Performance Guide](performance.md) - Query optimization techniques
+- [Schema Definition](schema-definition.md) - Learn about relationships and schema
 - [ORM Guide](orm-guide.md) - Full ORM features
+- [Configuration Guide](configuration.md) - Configuration options

@@ -9,18 +9,18 @@ This document outlines the design for unifying Storm ORM's multiple tags (`db`, 
 ### Current Multi-Tag System
 ```go
 type User struct {
-    _ struct{} `dbdef:"table:users;index:idx_users_email,email;unique:uk_users_email,email"`
+    _ struct{} `storm:"table:users;index:idx_users_email,email;unique:uk_users_email,email"`
     
-    ID        string    `db:"id" dbdef:"type:uuid;primary_key;default:gen_random_uuid()"`
-    Email     string    `db:"email" dbdef:"type:varchar(255);not_null;unique"`
-    Password  string    `db:"password_hash" dbdef:"type:varchar(255);not_null"`
-    IsActive  bool      `db:"is_active" dbdef:"type:boolean;not_null;default:true"`
-    CreatedAt time.Time `db:"created_at" dbdef:"type:timestamptz;not_null;default:now()"`
+    ID        string    `db:"id" storm:"type:uuid;primary_key;default:gen_random_uuid()"`
+    Email     string    `db:"email" storm:"type:varchar(255);not_null;unique"`
+    Password  string    `db:"password_hash" storm:"type:varchar(255);not_null"`
+    IsActive  bool      `db:"is_active" storm:"type:boolean;not_null;default:true"`
+    CreatedAt time.Time `db:"created_at" storm:"type:timestamptz;not_null;default:now()"`
     
     // Relationships
-    Todos      []Todo     `db:"-" orm:"has_many:Todo,foreign_key:user_id"`
-    Categories []Category `db:"-" orm:"has_many:Category,foreign_key:user_id"`
-    Tags       []Tag      `db:"-" orm:"has_many_through:Tag,join_table:user_tags,source_fk:user_id,target_fk:tag_id"`
+    Todos      []Todo     `storm:"relation:has_many:Todo;foreign_key:user_id"`
+    Categories []Category `storm:"relation:has_many:Category;foreign_key:user_id"`
+    Tags       []Tag      `storm:"relation:has_many_through:Tag;join_table:user_tags;source_fk:user_id;target_fk:tag_id"`
 }
 ```
 

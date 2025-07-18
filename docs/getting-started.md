@@ -4,7 +4,7 @@ This guide will walk you through setting up Storm in a new Go project from scrat
 
 ## Prerequisites
 
-- Go 1.21 or higher
+- Go 1.24 or higher
 - PostgreSQL 12 or higher
 - Basic knowledge of Go and SQL
 
@@ -70,16 +70,16 @@ import (
 
 type User struct {
     // Table configuration
-    _ struct{} `dbdef:"table:users;index:idx_users_email,email"`
+    _ struct{} `storm:"table:users;index:idx_users_email,email"`
     
-    // Fields
-    ID        string    `db:"id" dbdef:"type:uuid;primary_key;default:gen_random_uuid()"`
-    Email     string    `db:"email" dbdef:"type:varchar(255);not_null;unique"`
-    Username  string    `db:"username" dbdef:"type:varchar(50);not_null;unique"`
-    Password  string    `db:"password_hash" dbdef:"type:varchar(255);not_null"`
-    IsActive  bool      `db:"is_active" dbdef:"type:boolean;not_null;default:true"`
-    CreatedAt time.Time `db:"created_at" dbdef:"type:timestamptz;not_null;default:now()"`
-    UpdatedAt time.Time `db:"updated_at" dbdef:"type:timestamptz;not_null;default:now()"`
+    // Fields - note the dual tag system: db for column names, storm for schema
+    ID        string    `db:"id" storm:"type:uuid;primary_key;default:gen_random_uuid()"`
+    Email     string    `db:"email" storm:"type:varchar(255);not_null;unique"`
+    Username  string    `db:"username" storm:"type:varchar(50);not_null;unique"`
+    Password  string    `db:"password_hash" storm:"type:varchar(255);not_null"`
+    IsActive  bool      `db:"is_active" storm:"type:boolean;not_null;default:true"`
+    CreatedAt time.Time `db:"created_at" storm:"type:timestamptz;not_null;default:now()"`
+    UpdatedAt time.Time `db:"updated_at" storm:"type:timestamptz;not_null;default:now()"`
 }
 ```
 
@@ -207,20 +207,20 @@ import (
 )
 
 type Post struct {
-    _ struct{} `dbdef:"table:posts;index:idx_posts_user,user_id;index:idx_posts_published,published,created_at"`
+    _ struct{} `storm:"table:posts;index:idx_posts_user,user_id;index:idx_posts_published,published,created_at"`
     
-    ID          string    `db:"id" dbdef:"type:uuid;primary_key;default:gen_random_uuid()"`
-    UserID      string    `db:"user_id" dbdef:"type:uuid;not_null;foreign_key:users.id;on_delete:CASCADE"`
-    Title       string    `db:"title" dbdef:"type:varchar(255);not_null"`
-    Slug        string    `db:"slug" dbdef:"type:varchar(255);not_null;unique"`
-    Content     string    `db:"content" dbdef:"type:text"`
-    Published   bool      `db:"published" dbdef:"type:boolean;not_null;default:false"`
-    PublishedAt *time.Time `db:"published_at" dbdef:"type:timestamptz"`
-    CreatedAt   time.Time `db:"created_at" dbdef:"type:timestamptz;not_null;default:now()"`
-    UpdatedAt   time.Time `db:"updated_at" dbdef:"type:timestamptz;not_null;default:now()"`
+    ID          string     `db:"id" storm:"type:uuid;primary_key;default:gen_random_uuid()"`
+    UserID      string     `db:"user_id" storm:"type:uuid;not_null;foreign_key:users.id;on_delete:CASCADE"`
+    Title       string     `db:"title" storm:"type:varchar(255);not_null"`
+    Slug        string     `db:"slug" storm:"type:varchar(255);not_null;unique"`
+    Content     string     `db:"content" storm:"type:text"`
+    Published   bool       `db:"published" storm:"type:boolean;not_null;default:false"`
+    PublishedAt *time.Time `db:"published_at" storm:"type:timestamptz"`
+    CreatedAt   time.Time  `db:"created_at" storm:"type:timestamptz;not_null;default:now()"`
+    UpdatedAt   time.Time  `db:"updated_at" storm:"type:timestamptz;not_null;default:now()"`
     
     // Relationships
-    User *User `db:"-" orm:"belongs_to:User,foreign_key:user_id"`
+    User *User `storm:"relation:belongs_to:User;foreign_key:user_id"`
 }
 ```
 
@@ -228,7 +228,7 @@ Update the User model to include the relationship:
 
 ```go
 // Add to User struct
-Posts []Post `db:"-" orm:"has_many:Post,foreign_key:user_id"`
+Posts []Post `storm:"relation:has_many:Post;foreign_key:user_id"`
 ```
 
 Generate a new migration:
@@ -309,11 +309,11 @@ err = storm.WithTransaction(ctx, func(tx *models.Storm) error {
 
 Now that you have a basic understanding of Storm, explore:
 
-- [Schema Definition Guide](schema-definition.md) - All dbdef tag options
+- [Schema Definition Guide](schema-definition.md) - All db and storm tag options
 - [ORM Guide](orm-guide.md) - Advanced ORM features
 - [Query Builder](query-builder.md) - Complex queries
-- [Relationships](relationships.md) - All relationship types
-- [Migrations Guide](migrations.md) - Migration strategies
+- [Configuration Guide](configuration.md) - Configuration options
+- [CLI Reference](cli-reference.md) - All commands and options
 
 ## Common Patterns
 
@@ -323,8 +323,8 @@ Add timestamps to all your models:
 
 ```go
 type BaseModel struct {
-    CreatedAt time.Time `db:"created_at" dbdef:"type:timestamptz;not_null;default:now()"`
-    UpdatedAt time.Time `db:"updated_at" dbdef:"type:timestamptz;not_null;default:now()"`
+    CreatedAt time.Time `db:"created_at" storm:"type:timestamptz;not_null;default:now()"`
+    UpdatedAt time.Time `db:"updated_at" storm:"type:timestamptz;not_null;default:now()"`
 }
 
 type User struct {
@@ -339,7 +339,7 @@ Implement soft deletes:
 
 ```go
 type SoftDelete struct {
-    DeletedAt *time.Time `db:"deleted_at" dbdef:"type:timestamptz;index"`
+    DeletedAt *time.Time `db:"deleted_at" storm:"type:timestamptz;index"`
 }
 
 // Query only non-deleted records
@@ -354,10 +354,10 @@ Storm supports both patterns:
 
 ```go
 // UUID (recommended)
-ID string `db:"id" dbdef:"type:uuid;primary_key;default:gen_random_uuid()"`
+ID string `db:"id" storm:"type:uuid;primary_key;default:gen_random_uuid()"`
 
 // Auto-increment
-ID int64 `db:"id" dbdef:"type:bigserial;primary_key"`
+ID int64 `db:"id" storm:"type:bigserial;primary_key"`
 ```
 
 ## Troubleshooting
@@ -399,4 +399,4 @@ You've learned how to:
 - ✅ Work with relationships
 - ✅ Use transactions
 
-Continue to the next guide to learn about schema definition in detail.
+Continue to the [Schema Definition Guide](schema-definition.md) to learn about all available storm tag options.

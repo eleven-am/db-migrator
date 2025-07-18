@@ -87,12 +87,8 @@ func (jb *joinBuilder) Build() []join {
 
 func (q *Query[T]) JoinRelationship(relationshipName string, joinType JoinType) *Query[T] {
 	repo := q.repo
-	if repo.relationshipManager == nil {
-		q.err = fmt.Errorf("no relationship manager available")
-		return q
-	}
 
-	rel := repo.relationshipManager.getRelationship(relationshipName)
+	rel := repo.getRelationship(relationshipName)
 	if rel == nil {
 		q.err = fmt.Errorf("relationship %s not found", relationshipName)
 		return q
@@ -114,11 +110,11 @@ func (q *Query[T]) JoinRelationship(relationshipName string, joinType JoinType) 
 	case "has_many_through":
 		condition1 := fmt.Sprintf("%s.%s = %s.%s",
 			repo.metadata.TableName, rel.SourceKey,
-			rel.JoinTable, rel.SourceFK)
-		q.Join(InnerJoin, rel.JoinTable, condition1)
+			rel.Through, rel.ThroughFK)
+		q.Join(InnerJoin, rel.Through, condition1)
 
 		condition2 := fmt.Sprintf("%s.%s = %s.%s",
-			rel.JoinTable, rel.TargetFK,
+			rel.Through, rel.ThroughTK,
 			rel.Target, rel.TargetKey)
 		q.Join(InnerJoin, rel.Target, condition2)
 

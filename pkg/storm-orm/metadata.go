@@ -1,5 +1,9 @@
 package orm
 
+import (
+	"context"
+)
+
 // ModelMetadata contains all the metadata needed for ORM operations
 // This will be generated at compile time instead of parsed at runtime
 type ModelMetadata struct {
@@ -60,7 +64,7 @@ type RelationshipMetadata struct {
 	ThroughFK  string // Through foreign key
 	ThroughTK  string // Through target key
 
-	// Generated accessor functions for relationships
-	SetValue func(model interface{}, value interface{}) // Set relationship value
-	IsSlice  bool                                       // Whether this is a slice relationship
+	// Generated function - zero reflection, atomic operation
+	// Scans database results directly into the model's relationship field
+	ScanToModel func(ctx context.Context, exec DBExecutor, query string, args []interface{}, model interface{}) error
 }

@@ -22,6 +22,9 @@ const metadataTemplate = `//go:build !exclude_generated
 package {{ .Package }}
 
 import (
+	{{- if .Model.Relationships }}
+	"context"
+	{{- end }}
 	storm "github.com/eleven-am/storm/pkg/storm-orm"
 )
 
@@ -104,15 +107,29 @@ var {{ .Model.Name }}Metadata = &storm.ModelMetadata{
 			ThroughTK: "{{ .Relationship.TargetFK }}",
 			{{- end }}
 			
-			// Generated accessor functions for relationships
-			SetValue: func(model interface{}, value interface{}) {
-				{{- if .IsArray }}
-				model.(*{{ $.Model.Name }}).{{ .Name }} = value.([]{{ .Relationship.Target }})
+			// Zero-reflection relationship scanning - directly scan and set on model
+			ScanToModel: func(ctx context.Context, exec storm.DBExecutor, query string, args []interface{}, model interface{}) error {
+				{{- if or (eq .Relationship.Type "has_many") (eq .Relationship.Type "has_many_through") }}
+				var {{ lower .Name }} []{{ .Relationship.Target }}
+				err := exec.SelectContext(ctx, &{{ lower .Name }}, query, args...)
+				if err != nil {
+					return err
+				}
+				model.(*{{ $.Model.Name }}).{{ .Name }} = {{ lower .Name }}
+				{{- else if or (eq .Relationship.Type "has_one") (eq .Relationship.Type "belongs_to") }}
+				var {{ lower .Name }} {{ .Relationship.Target }}
+				err := exec.GetContext(ctx, &{{ lower .Name }}, query, args...)
+				if err != nil {
+					return err
+				}
+				{{- if .IsPointer }}
+				model.(*{{ $.Model.Name }}).{{ .Name }} = &{{ lower .Name }}
 				{{- else }}
-				model.(*{{ $.Model.Name }}).{{ .Name }} = value.(*{{ .Relationship.Target }})
+				model.(*{{ $.Model.Name }}).{{ .Name }} = {{ lower .Name }}
 				{{- end }}
+				{{- end }}
+				return nil
 			},
-			IsSlice: {{ .IsArray }},
 		},
 		{{- end }}
 	},

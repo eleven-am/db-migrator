@@ -578,5 +578,5 @@ users, _ := storm.Users.Query().
 ## Next Steps
 
 - [Query Builder](query-builder.md) - Deep dive into queries
-- [Relationships](relationships.md) - All about relationships
-- [Performance Guide](performance.md) - Optimization tips
+- [Schema Definition](schema-definition.md) - All about schema and relationships
+- [Configuration Guide](configuration.md) - Configuration options
