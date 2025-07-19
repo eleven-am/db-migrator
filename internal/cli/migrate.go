@@ -10,7 +10,7 @@ import (
 	"github.com/eleven-am/storm/internal/migrator"
 	"github.com/eleven-am/storm/pkg/storm"
 	_ "github.com/lib/pq"
-	
+	"github.com/spf13/cobra"
 )
 
 var (

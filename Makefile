@@ -60,7 +60,6 @@ release-patch:
 		echo "Error: Tag $$new_version already exists"; \
 		exit 1; \
 	fi; \
-	sed -i.bak 's/Version[[:space:]]*=[[:space:]]*"[^"]*"/Version   = "'$${new_version#v}'"/' cmd/version.go && rm cmd/version.go.bak; \
 	git add cmd/version.go; \
 	git commit -m "Bump version to $$new_version"; \
 	git tag $$new_version; \
@@ -77,7 +76,6 @@ release-minor:
 		echo "Error: Tag $$new_version already exists"; \
 		exit 1; \
 	fi; \
-	sed -i.bak 's/Version[[:space:]]*=[[:space:]]*"[^"]*"/Version   = "'$${new_version#v}'"/' cmd/version.go && rm cmd/version.go.bak; \
 	git add cmd/version.go; \
 	git commit -m "Bump version to $$new_version"; \
 	git tag $$new_version; \
@@ -94,7 +92,6 @@ release-major:
 		echo "Error: Tag $$new_version already exists"; \
 		exit 1; \
 	fi; \
-	sed -i.bak 's/Version[[:space:]]*=[[:space:]]*"[^"]*"/Version   = "'$${new_version#v}'"/' cmd/version.go && rm cmd/version.go.bak; \
 	git add cmd/version.go; \
 	git commit -m "Bump version to $$new_version"; \
 	git tag $$new_version; \
