@@ -9,6 +9,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var verifyPackagePath string
+
 var verifyCmd = &cobra.Command{
 	Use:   "verify",
 	Short: "Verify database schema matches models",
@@ -41,7 +43,7 @@ func runVerify(cmd *cobra.Command, args []string) error {
 
 	config := storm.NewConfig()
 	config.DatabaseURL = dsn
-	config.ModelsPackage = packagePath
+	config.ModelsPackage = verifyPackagePath
 	config.Debug = debug
 
 	stormClient, err := storm.NewWithConfig(config)
@@ -79,5 +81,5 @@ func init() {
 	verifyCmd.Flags().StringVar(&dbPassword, "password", "", "Database password")
 	verifyCmd.Flags().StringVar(&dbName, "dbname", "", "Database name")
 	verifyCmd.Flags().StringVar(&dbSSLMode, "sslmode", "disable", "SSL mode")
-	verifyCmd.Flags().StringVar(&packagePath, "package", "./models", "Path to package containing models")
+	verifyCmd.Flags().StringVar(&verifyPackagePath, "package", "./models", "Path to package containing models")
 }

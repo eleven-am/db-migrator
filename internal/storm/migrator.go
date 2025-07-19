@@ -37,7 +37,16 @@ func (m *MigratorImpl) Generate(ctx context.Context, opts storm.MigrateOptions) 
 		return nil, fmt.Errorf("failed to create migrations directory: %w", err)
 	}
 
-	currentSchema, err := m.getCurrentSchema(ctx)
+	var currentSchema *storm.Schema
+	var err error
+
+	// If CreateDBIfNotExists is true and database doesn't exist, use empty schema
+	if opts.CreateDBIfNotExists {
+		currentSchema, err = m.getCurrentSchemaOrEmpty(ctx)
+	} else {
+		currentSchema, err = m.getCurrentSchema(ctx)
+	}
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to get current schema: %w", err)
 	}
@@ -47,16 +56,12 @@ func (m *MigratorImpl) Generate(ctx context.Context, opts storm.MigrateOptions) 
 		return nil, fmt.Errorf("failed to get desired schema: %w", err)
 	}
 
-	migration, err := m.generateMigration(currentSchema, desiredSchema)
+	migration, err := m.generateMigration(currentSchema, desiredSchema, opts.CreateDBIfNotExists)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate migration: %w", err)
 	}
 
-	if !opts.DryRun {
-		if err := m.saveMigration(migration, opts.OutputDir); err != nil {
-			return nil, fmt.Errorf("failed to save migration: %w", err)
-		}
-	}
+	// Migration files are already saved by AtlasMigrator, no need to save again
 
 	return migration, nil
 }
@@ -229,7 +234,13 @@ func (m *MigratorImpl) getAppliedMigrations(ctx context.Context) ([]string, erro
 }
 
 func (m *MigratorImpl) getPendingMigrations(ctx context.Context) ([]*storm.Migration, error) {
-	files, err := filepath.Glob(filepath.Join(m.config.MigrationsDir, "*.sql"))
+	// Ensure migrations table exists
+	if err := m.createMigrationsTable(ctx); err != nil {
+		return nil, fmt.Errorf("failed to create migrations table: %w", err)
+	}
+
+	// Only look for .up.sql files for pending migrations
+	files, err := filepath.Glob(filepath.Join(m.config.MigrationsDir, "*.up.sql"))
 	if err != nil {
 		return nil, fmt.Errorf("failed to glob migration files: %w", err)
 	}
@@ -247,7 +258,7 @@ func (m *MigratorImpl) getPendingMigrations(ctx context.Context) ([]*storm.Migra
 	var pending []*storm.Migration
 	for _, file := range files {
 		name := filepath.Base(file)
-		name = strings.TrimSuffix(name, ".sql")
+		name = strings.TrimSuffix(name, ".up.sql")
 
 		if !appliedMap[name] {
 			migration, err := m.loadMigration(file)
@@ -261,30 +272,29 @@ func (m *MigratorImpl) getPendingMigrations(ctx context.Context) ([]*storm.Migra
 	return pending, nil
 }
 
-func (m *MigratorImpl) loadMigration(filename string) (*storm.Migration, error) {
-	content, err := os.ReadFile(filename)
+func (m *MigratorImpl) loadMigration(upFile string) (*storm.Migration, error) {
+	// Read UP migration
+	upContent, err := os.ReadFile(upFile)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read migration file: %w", err)
+		return nil, fmt.Errorf("failed to read up migration file: %w", err)
 	}
 
-	name := filepath.Base(filename)
-	name = strings.TrimSuffix(name, ".sql")
+	// Extract base name without .up.sql suffix
+	name := filepath.Base(upFile)
+	name = strings.TrimSuffix(name, ".up.sql")
 
-	parts := strings.Split(string(content), "-- +migrate Down")
-	up := strings.TrimSpace(parts[0])
-	down := ""
-	if len(parts) > 1 {
-		down = strings.TrimSpace(parts[1])
+	// Try to read corresponding DOWN migration
+	downFile := strings.TrimSuffix(upFile, ".up.sql") + ".down.sql"
+	downContent := ""
+	if downBytes, err := os.ReadFile(downFile); err == nil {
+		downContent = string(downBytes)
 	}
-
-	up = strings.TrimPrefix(up, "-- +migrate Up")
-	up = strings.TrimSpace(up)
 
 	return &storm.Migration{
 		Name:      name,
-		UpSQL:     up,
-		DownSQL:   down,
-		Checksum:  m.calculateChecksum(up),
+		UpSQL:     string(upContent),
+		DownSQL:   downContent,
+		Checksum:  m.calculateChecksum(string(upContent)),
 		CreatedAt: time.Now(),
 	}, nil
 }
@@ -294,10 +304,17 @@ func (m *MigratorImpl) executeMigration(ctx context.Context, tx *sqlx.Tx, migrat
 		return nil
 	}
 
-	statements := strings.Split(migration.UpSQL, ";")
+	statements := m.splitSQLStatements(migration.UpSQL)
 	for _, stmt := range statements {
 		stmt = strings.TrimSpace(stmt)
 		if stmt == "" {
+			continue
+		}
+
+		// Skip CREATE DATABASE statements when applying migrations
+		// These are only for push mode or manual execution
+		if strings.Contains(strings.ToUpper(stmt), "CREATE DATABASE") {
+			m.logger.Info("Skipping CREATE DATABASE statement in migration apply")
 			continue
 		}
 
@@ -307,6 +324,77 @@ func (m *MigratorImpl) executeMigration(ctx context.Context, tx *sqlx.Tx, migrat
 	}
 
 	return nil
+}
+
+// splitSQLStatements properly splits PostgreSQL statements, handling dollar-quoted strings
+func (m *MigratorImpl) splitSQLStatements(sql string) []string {
+	var statements []string
+	var current strings.Builder
+	inDollarQuote := false
+
+	runes := []rune(sql)
+	i := 0
+
+	for i < len(runes) {
+		char := runes[i]
+
+		// Check for dollar quotes
+		if char == '$' && i+1 < len(runes) && runes[i+1] == '$' {
+			if !inDollarQuote {
+				// Starting dollar quote
+				inDollarQuote = true
+				current.WriteRune(char)
+				current.WriteRune(runes[i+1])
+				i += 2
+				continue
+			} else {
+				// Ending dollar quote
+				inDollarQuote = false
+				current.WriteRune(char)
+				current.WriteRune(runes[i+1])
+				i += 2
+				continue
+			}
+		}
+
+		// Check for statement terminator
+		if !inDollarQuote && char == ';' {
+			current.WriteRune(char)
+			stmt := strings.TrimSpace(current.String())
+			// Only add non-empty statements that aren't just comments
+			if stmt != "" && !isOnlyComments(stmt) {
+				statements = append(statements, stmt)
+			}
+			current.Reset()
+			i++
+			continue
+		}
+
+		current.WriteRune(char)
+		i++
+	}
+
+	// Add any remaining content
+	if current.Len() > 0 {
+		stmt := strings.TrimSpace(current.String())
+		if stmt != "" && !isOnlyComments(stmt) {
+			statements = append(statements, stmt)
+		}
+	}
+
+	return statements
+}
+
+// isOnlyComments checks if a statement contains only comments and whitespace
+func isOnlyComments(stmt string) bool {
+	lines := strings.Split(stmt, "\n")
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed != "" && !strings.HasPrefix(trimmed, "--") {
+			return false
+		}
+	}
+	return true
 }
 
 func (m *MigratorImpl) executeRollback(ctx context.Context, tx *sqlx.Tx, migration *storm.Migration) error {
@@ -353,6 +441,22 @@ func (m *MigratorImpl) getCurrentSchema(ctx context.Context) (*storm.Schema, err
 	return schemaInspector.Inspect(ctx)
 }
 
+func (m *MigratorImpl) getCurrentSchemaOrEmpty(ctx context.Context) (*storm.Schema, error) {
+	// Try to get current schema, but if database doesn't exist, return empty schema
+	currentSchema, err := m.getCurrentSchema(ctx)
+	if err != nil {
+		// Check if the error is due to database not existing
+		if strings.Contains(err.Error(), "does not exist") {
+			m.logger.Info("Database does not exist, using empty schema for migration generation")
+			return &storm.Schema{
+				Tables: make(map[string]*storm.Table),
+			}, nil
+		}
+		return nil, err
+	}
+	return currentSchema, nil
+}
+
 func (m *MigratorImpl) getDesiredSchema(packagePath string) (*storm.Schema, error) {
 	structParser := NewStructParser()
 	models, err := structParser.ParseDirectory(packagePath)
@@ -369,15 +473,16 @@ func (m *MigratorImpl) getDesiredSchema(packagePath string) (*storm.Schema, erro
 	return m.convertGeneratorSchemaToStorm(schema), nil
 }
 
-func (m *MigratorImpl) generateMigration(current, desired *storm.Schema) (*storm.Migration, error) {
+func (m *MigratorImpl) generateMigration(current, desired *storm.Schema, createDBIfNotExists bool) (*storm.Migration, error) {
 	atlasMigrator := NewAtlasMigrator(m.config.DatabaseURL)
 
 	opts := MigrationOptions{
-		PackagePath:      m.config.ModelsPackage,
-		OutputDir:        m.config.MigrationsDir,
-		DryRun:           false,
-		AllowDestructive: false,
-		PushToDB:         false,
+		PackagePath:         m.config.ModelsPackage,
+		OutputDir:           m.config.MigrationsDir,
+		DryRun:              false,
+		AllowDestructive:    false,
+		PushToDB:            false,
+		CreateDBIfNotExists: createDBIfNotExists,
 	}
 
 	ctx := context.Background()
@@ -398,12 +503,7 @@ func (m *MigratorImpl) generateMigration(current, desired *storm.Schema) (*storm
 	}, nil
 }
 
-func (m *MigratorImpl) saveMigration(migration *storm.Migration, outputDir string) error {
-	filename := filepath.Join(outputDir, migration.Name+".sql")
-	content := fmt.Sprintf("-- +migrate Up\n%s\n\n-- +migrate Down\n%s\n", migration.UpSQL, migration.DownSQL)
-
-	return os.WriteFile(filename, []byte(content), 0644)
-}
+// saveMigration removed - migration files are saved by AtlasMigrator
 
 func (m *MigratorImpl) calculateChecksum(content string) string {
 	return fmt.Sprintf("%x", len(content))

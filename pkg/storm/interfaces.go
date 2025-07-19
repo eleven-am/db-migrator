@@ -9,19 +9,19 @@ import (
 type Migrator interface {
 	// Generate creates a new migration by comparing models with database
 	Generate(ctx context.Context, opts MigrateOptions) (*Migration, error)
-	
+
 	// Apply executes a migration
 	Apply(ctx context.Context, migration *Migration) error
-	
+
 	// Rollback reverses a migration
 	Rollback(ctx context.Context, migration *Migration) error
-	
+
 	// Status returns the current migration status
 	Status(ctx context.Context) (*MigrationStatus, error)
-	
+
 	// History returns all applied migrations
 	History(ctx context.Context) ([]*MigrationRecord, error)
-	
+
 	// Pending returns all pending migrations
 	Pending(ctx context.Context) ([]*Migration, error)
 }
@@ -30,13 +30,13 @@ type Migrator interface {
 type SchemaInspector interface {
 	// Inspect returns the current database schema
 	Inspect(ctx context.Context) (*Schema, error)
-	
+
 	// Compare compares two schemas
 	Compare(ctx context.Context, from, to *Schema) (*SchemaDiff, error)
-	
+
 	// ExportSQL exports schema as SQL
 	ExportSQL(ctx context.Context) (string, error)
-	
+
 	// ExportGo exports schema as Go structs
 	ExportGo(ctx context.Context) (string, error)
 }
@@ -203,12 +203,13 @@ type Enum struct {
 
 // MigrateOptions configures migration generation
 type MigrateOptions struct {
-	Name             string
-	PackagePath      string
-	OutputDir        string
-	DryRun           bool
-	AllowDestructive bool
-	SkipPrompt       bool
+	Name                string
+	PackagePath         string
+	OutputDir           string
+	DryRun              bool
+	AllowDestructive    bool
+	SkipPrompt          bool
+	CreateDBIfNotExists bool
 }
 
 // GenerateOptions configures ORM code generation

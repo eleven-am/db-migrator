@@ -19,7 +19,15 @@ func NewTempDBManager(baseConfig *DBConfig) *TempDBManager {
 }
 
 func (tm *TempDBManager) CreateTempDB(ctx context.Context, tempDBName string) (*sql.DB, func(), error) {
-	adminDB, err := tm.baseConfig.Connect(ctx)
+	// Connect to the 'postgres' database instead of the target database for admin operations
+	adminConfig := &DBConfig{
+		URL:             tm.buildAdminDBURL(),
+		ConnMaxLifetime: tm.baseConfig.ConnMaxLifetime,
+		MaxOpenConns:    tm.baseConfig.MaxOpenConns,
+		MaxIdleConns:    tm.baseConfig.MaxIdleConns,
+	}
+
+	adminDB, err := adminConfig.Connect(ctx)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to connect to admin database: %w", err)
 	}
@@ -52,6 +60,17 @@ func (tm *TempDBManager) CreateTempDB(ctx context.Context, tempDBName string) (*
 	}
 
 	return tempDB, cleanup, nil
+}
+
+func (tm *TempDBManager) buildAdminDBURL() string {
+	baseURL := tm.baseConfig.URL
+	if idx := strings.LastIndex(baseURL, "/"); idx != -1 {
+		if queryIdx := strings.Index(baseURL[idx:], "?"); queryIdx != -1 {
+			return baseURL[:idx+1] + "postgres" + baseURL[idx+queryIdx:]
+		}
+		return baseURL[:idx+1] + "postgres"
+	}
+	return baseURL
 }
 
 func (tm *TempDBManager) buildTempDBURL(tempDBName string) string {

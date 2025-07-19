@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	"ariga.io/atlas/sql/migrate"
@@ -42,16 +43,30 @@ func NewSimplifiedAtlasMigrator(config *DBConfig) *SimplifiedAtlasMigrator {
 	}
 }
 
-func (m *SimplifiedAtlasMigrator) GenerateMigrationSimple(ctx context.Context, sourceDB *sql.DB, targetDDL string) (upSQL []string, changes []schema.Change, err error) {
+func (m *SimplifiedAtlasMigrator) GenerateMigrationSimple(ctx context.Context, sourceDB *sql.DB, targetDDL string, createDBIfNotExists bool) (upSQL []string, changes []schema.Change, err error) {
 
-	sourceDriver, err := postgres.Open(sourceDB)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create source driver: %w", err)
-	}
+	var currentRealm *schema.Realm
 
-	currentRealm, err := sourceDriver.InspectRealm(ctx, nil)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to inspect current schema: %w", err)
+	// If CreateDBIfNotExists is true, assume empty database, skip inspection
+	if createDBIfNotExists {
+		currentRealm = &schema.Realm{
+			Schemas: []*schema.Schema{
+				{
+					Name:   "public",
+					Tables: []*schema.Table{},
+				},
+			},
+		}
+	} else {
+		sourceDriver, err := postgres.Open(sourceDB)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to create source driver: %w", err)
+		}
+
+		currentRealm, err = sourceDriver.InspectRealm(ctx, nil)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to inspect current schema: %w", err)
+		}
 	}
 
 	tempDBName := fmt.Sprintf("temp_atlas_%d", time.Now().Unix())
@@ -75,7 +90,18 @@ func (m *SimplifiedAtlasMigrator) GenerateMigrationSimple(ctx context.Context, s
 		return nil, nil, fmt.Errorf("failed to inspect target schema: %w", err)
 	}
 
-	changes, err = sourceDriver.RealmDiff(currentRealm, targetRealm)
+	// Use target driver for diff calculation when createDBIfNotExists is true
+	var diffDriver migrate.Driver = targetDriver
+	if !createDBIfNotExists {
+		// For normal cases, we need to create a source driver for diff calculation
+		sourceDriver, err := postgres.Open(sourceDB)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to create source driver for diff: %w", err)
+		}
+		diffDriver = sourceDriver
+	}
+
+	changes, err = diffDriver.RealmDiff(currentRealm, targetRealm)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to calculate diff: %w", err)
 	}
@@ -84,7 +110,7 @@ func (m *SimplifiedAtlasMigrator) GenerateMigrationSimple(ctx context.Context, s
 		return []string{}, changes, nil
 	}
 
-	upSQL, err = GenerateAtlasSQL(ctx, sourceDriver, changes)
+	upSQL, err = GenerateAtlasSQL(ctx, diffDriver, changes)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to generate SQL: %w", err)
 	}
@@ -143,4 +169,14 @@ func CountDestructiveChanges(changes []schema.Change) (count int, descriptions [
 		}
 	}
 	return count, descriptions
+}
+
+// isDBNotExistError checks if the error is due to database not existing
+func isDBNotExistError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errStr := strings.ToLower(err.Error())
+	return strings.Contains(errStr, "does not exist") ||
+		strings.Contains(errStr, "database") && strings.Contains(errStr, "not exist")
 }

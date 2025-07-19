@@ -201,7 +201,9 @@ func (s *Storm) Migrate(ctx context.Context, opts ...MigrateOptions) error {
 		return nil
 	}
 
-	return s.migrator.Apply(ctx, migration)
+	// Migration files have been generated, but not applied
+	// User should run 'storm migrate apply' to apply them
+	return nil
 }
 
 // Generate creates ORM code from models
