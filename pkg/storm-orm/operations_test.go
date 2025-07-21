@@ -416,51 +416,47 @@ func TestQueryUpdate(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("Query Update with WHERE condition", func(t *testing.T) {
-		updates := map[string]interface{}{
-			"name":      "Updated Name",
-			"is_active": false,
-		}
-
 		// Set up mock expectations
 		mock.ExpectExec(`UPDATE users SET`).
 			WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).
 			WillReturnResult(sqlmock.NewResult(0, 2))
 
-		// Execute Query Update
+		// Execute Query Update with Actions
 		nameCol := StringColumn{Column: Column[string]{Name: "name", Table: "users"}}
+		isActiveCol := Column[bool]{Name: "is_active", Table: "users"}
 		condition := nameCol.Like("test%")
-		rowsAffected, err := repo.Query(context.Background()).Where(condition).Update(updates)
+		rowsAffected, err := repo.Query(context.Background()).Where(condition).Update(
+			nameCol.Set("Updated Name"),
+			isActiveCol.Set(false),
+		)
 		require.NoError(t, err)
 		assert.Equal(t, int64(2), rowsAffected)
 
 		require.NoError(t, mock.ExpectationsWereMet())
 	})
 
-	t.Run("Query Update with empty updates", func(t *testing.T) {
-		updates := map[string]interface{}{}
-
-		// Execute Query Update - should return error
-		rowsAffected, err := repo.Query(context.Background()).Update(updates)
+	t.Run("Query Update with no actions", func(t *testing.T) {
+		// Execute Query Update with no actions - should return error
+		rowsAffected, err := repo.Query(context.Background()).Update()
 		assert.Error(t, err)
 		assert.Equal(t, int64(0), rowsAffected)
-		assert.Contains(t, err.Error(), "no updates provided")
+		assert.Contains(t, err.Error(), "no actions provided")
 
 		// No SQL should be executed
 		require.NoError(t, mock.ExpectationsWereMet())
 	})
 
 	t.Run("Query Update without WHERE clause", func(t *testing.T) {
-		updates := map[string]interface{}{
-			"is_active": false,
-		}
-
 		// Set up mock expectations - update all records
-		mock.ExpectExec(`UPDATE users SET is_active = \$1`).
+		mock.ExpectExec(`UPDATE users SET users\.is_active = \$1`).
 			WithArgs(false).
 			WillReturnResult(sqlmock.NewResult(0, 10))
 
-		// Execute Query Update without WHERE clause
-		rowsAffected, err := repo.Query(context.Background()).Update(updates)
+		// Execute Query Update without WHERE clause using Actions
+		isActiveCol := Column[bool]{Name: "is_active", Table: "users"}
+		rowsAffected, err := repo.Query(context.Background()).Update(
+			isActiveCol.Set(false),
+		)
 		require.NoError(t, err)
 		assert.Equal(t, int64(10), rowsAffected)
 
@@ -468,23 +464,21 @@ func TestQueryUpdate(t *testing.T) {
 	})
 
 	t.Run("Query Update with multiple conditions", func(t *testing.T) {
-		updates := map[string]interface{}{
-			"is_active": false,
-			"name":      "Deactivated",
-		}
-
 		// Set up mock expectations
-		mock.ExpectExec(`UPDATE users SET .* WHERE .*is_active.*name`).
+		mock.ExpectExec(`UPDATE users SET users\.is_active = \$1, users\.name = \$2 WHERE .*`).
 			WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).
 			WillReturnResult(sqlmock.NewResult(0, 3))
 
-		// Execute Query Update with multiple conditions
+		// Execute Query Update with multiple conditions using Actions
 		activeCol := Column[bool]{Name: "is_active", Table: "users"}
 		nameCol := StringColumn{Column: Column[string]{Name: "name", Table: "users"}}
 
 		rowsAffected, err := repo.Query(context.Background()).
 			Where(activeCol.Eq(true).And(nameCol.Like("test%"))).
-			Update(updates)
+			Update(
+				activeCol.Set(false),
+				nameCol.Set("Deactivated"),
+			)
 		require.NoError(t, err)
 		assert.Equal(t, int64(3), rowsAffected)
 
@@ -492,20 +486,19 @@ func TestQueryUpdate(t *testing.T) {
 	})
 
 	t.Run("Query Update with no matching records", func(t *testing.T) {
-		updates := map[string]interface{}{
-			"name": "Updated",
-		}
-
 		// Set up mock expectations - no rows affected
-		mock.ExpectExec(`UPDATE users SET`).
+		mock.ExpectExec(`UPDATE users SET users\.name = \$1 WHERE .*`).
 			WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg()).
 			WillReturnResult(sqlmock.NewResult(0, 0))
 
-		// Execute Query Update
+		// Execute Query Update using Actions
 		idCol := Column[int]{Name: "id", Table: "users"}
+		nameCol := StringColumn{Column: Column[string]{Name: "name", Table: "users"}}
 		rowsAffected, err := repo.Query(context.Background()).
 			Where(idCol.Eq(999)).
-			Update(updates)
+			Update(
+				nameCol.Set("Updated"),
+			)
 		require.NoError(t, err)
 		assert.Equal(t, int64(0), rowsAffected)
 

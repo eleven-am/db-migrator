@@ -16,6 +16,8 @@
 
 **🎯 Advanced Query Builder** - Chainable, type-safe queries with support for complex conditions, joins, and PostgreSQL-specific features.
 
+**⚡ Type-Safe Actions** - Revolutionary update system with compile-time validation, specialized operations for every data type, and native PostgreSQL features.
+
 **📊 Rich Relationship Support** - Define relationships in Go and get automatic eager/lazy loading with type safety.
 
 **🛡️ Production Ready** - Built-in transaction support, connection pooling, and comprehensive error handling.
@@ -59,8 +61,171 @@ users, err := storm.Users.Query(ctx).
 - **📊 Rich ORM Features** - CRUD operations, relationships, transactions, bulk operations
 - **🔍 Database Introspection** - Generate complete ORM from existing PostgreSQL databases
 
+## ✨ Type-Safe Action System
+
+Storm 2.0 introduces a revolutionary **Action system** for database updates that brings the same type safety you love from queries to update operations.
+
+### Type-Safe Update Operations
+
+```go
+// Type-safe, compile-time validated updates
+rowsUpdated, err := storm.Users.Query(ctx).
+    Where(Users.IsActive.Eq(true)).
+    Update(
+        Users.Name.Upper(),                          // Type-safe string operation
+        Users.Age.Increment(1),                      // Type-safe numeric operation
+        Users.UpdatedAt.SetNow(),                    // Built-in timestamp function
+        Users.ViewCount.Increment(1),                // Compile-time column validation
+        Users.Tags.Append("verified"),               // PostgreSQL array operation
+        Users.Metadata.SetPath("lastSeen", time.Now()), // JSONB operations
+    )
+```
+
+### Comprehensive Action Types
+
+Storm's Action system provides specialized operations for every PostgreSQL data type:
+
+#### 🔤 String Operations
+```go
+Users.Name.Set("John Doe")           // Basic assignment
+Users.Name.Upper()                   // Convert to uppercase  
+Users.Name.Lower()                   // Convert to lowercase
+Users.Email.Concat("@company.com")   // Append string
+Users.Title.Prepend("Dr. ")          // Prepend string
+```
+
+#### 🔢 Numeric Operations
+```go
+Users.Age.Set(25)                    // Direct assignment
+Users.Age.Increment(1)               // Add to current value
+Users.Age.Decrement(5)               // Subtract from current value
+Users.Balance.Multiply(1.1)          // Multiply by factor
+```
+
+#### ⏰ Time & Date Operations
+```go
+Users.UpdatedAt.SetNow()             // Current timestamp
+Users.CreatedAt.SetCurrentTimestamp() // Alternative timestamp
+Users.LoginAt.Set(time.Now())        // Explicit time value
+```
+
+#### 📊 Array Operations (PostgreSQL)
+```go
+Users.Tags.Append("premium")         // Add single element
+Users.Tags.Prepend("vip")           // Add to beginning
+Users.Tags.Remove("trial")          // Remove specific element
+Users.Tags.Concat([]string{"a","b"}) // Merge arrays
+```
+
+#### 🗂️ JSONB Operations (PostgreSQL)
+```go
+Users.Metadata.Set(jsonData)                    // Replace entire JSON
+Users.Metadata.SetPath("profile.name", "John")  // Set nested path
+Users.Metadata.RemovePath("temp_data")          // Remove key
+Users.Metadata.Merge(additionalData)            // Merge JSON objects
+```
+
+#### ⚙️ Special Operations
+```go
+Users.Status.SetNull()               // Set to NULL
+Users.ViewCount.SetDefault()         // Use column default value
+```
+
+### Real-World Action Examples
+
+#### 📊 Analytics & Counters
+```go
+// Increment view counts and update last seen
+rowsUpdated, err := storm.Posts.Query(ctx).
+    Where(Posts.ID.In(viewedPostIDs...)).
+    Update(
+        Posts.ViewCount.Increment(1),
+        Posts.LastViewedAt.SetNow(),
+        Posts.Metadata.SetPath("analytics.lastIP", clientIP),
+    )
+```
+
+#### 🛒 E-commerce Operations
+```go
+// Process order: update inventory, add to order history
+err = storm.WithTransaction(ctx, func(tx *Storm) error {
+    // Decrease product stock
+    _, err := tx.Products.Query(ctx).
+        Where(Products.ID.Eq(productID)).
+        Update(
+            Products.Stock.Decrement(quantity),
+            Products.UpdatedAt.SetNow(),
+            Products.OrderHistory.Append(orderID),
+        )
+    return err
+})
+```
+
+#### 👥 User Management
+```go
+// Activate trial users and set expiration
+rowsUpdated, err := storm.Users.Query(ctx).
+    Where(Users.Status.Eq("pending")).
+    Update(
+        Users.Status.Set("trial"),
+        Users.TrialExpiresAt.Set(time.Now().AddDate(0, 0, 30)),
+        Users.Permissions.Append("basic_access"),
+        Users.Metadata.SetPath("trial.startedAt", time.Now()),
+    )
+```
+
+#### 🏷️ Content Management
+```go
+// Publish posts with SEO optimization
+rowsUpdated, err := storm.Posts.Query(ctx).
+    Where(Posts.Status.Eq("draft")).
+    Update(
+        Posts.Status.Set("published"),
+        Posts.PublishedAt.SetNow(),
+        Posts.Slug.Lower(),                           // SEO-friendly URLs
+        Posts.Tags.Remove("draft"),                   // Clean up draft tags
+        Posts.Tags.Append("published"),              // Add published tag
+        Posts.Metadata.SetPath("seo.publishedAt", time.Now()),
+    )
+```
+
+### Benefits Over Traditional Updates
+
+| Traditional `map[string]interface{}` | Type-Safe Actions |
+|--------------------------------------|-------------------|
+| ❌ Runtime type errors | ✅ Compile-time validation |
+| ❌ No IDE autocomplete | ✅ Full IDE support |
+| ❌ Typos in column names | ✅ Column name validation |
+| ❌ Raw SQL strings | ✅ Type-safe operations |
+| ❌ No PostgreSQL features | ✅ Native array/JSON support |
+| ❌ Hard to refactor | ✅ Safe refactoring |
+| ❌ Poor readability | ✅ Self-documenting code |
+
+### Migration from Traditional Updates
+
+If you're upgrading from a version that used `map[string]interface{}` updates, the migration is straightforward:
+
+```go
+// Before: map-based updates (no longer supported)
+// rowsUpdated, err := storm.Users.Query(ctx).
+//     Update(map[string]interface{}{
+//         "name": "John",
+//         "age": 25,
+//     })
+
+// After: Action-based updates (current API)
+rowsUpdated, err := storm.Users.Query(ctx).
+    Update(
+        Users.Name.Set("John"),
+        Users.Age.Set(25),
+    )
+```
+
+The Action system provides better type safety, IDE support, and prevents common runtime errors.
+
 ## 📋 Table of Contents
 
+- [✨ Type-Safe Action System](#-type-safe-action-system)
 - [Installation](#installation)
 - [Quick Start](#quick-start)
 - [Core Concepts](#core-concepts)
@@ -287,13 +452,14 @@ func main() {
     }
     err = storm.Users.CreateMany(ctx, newUsers)
     
-    // Bulk update with conditions
+    // Type-safe bulk updates with Actions
     rowsUpdated, err := storm.Posts.Query(ctx).
         Where(models.Posts.Published.Eq(false)).
-        UpdateMany(ctx, map[string]interface{}{
-            "published": true,
-            "updated_at": time.Now(),
-        })
+        Update(
+            models.Posts.Published.Set(true),
+            models.Posts.UpdatedAt.SetNow(),
+            models.Posts.ViewCount.Increment(1),
+        )
     
     // Upsert (insert or update on conflict)
     err = storm.Users.Upsert(ctx, &models.User{
@@ -492,13 +658,15 @@ func ProductExamples(storm *models.Storm, ctx context.Context) {
         )).
         Find()
     
-    // Bulk update prices with 10% discount
+    // Type-safe bulk price updates with native operations
     discountedRows, err := storm.Products.Query(ctx).
         Where(models.Products.CategoryID.Eq("electronics-category-id")).
-        UpdateMany(ctx, map[string]interface{}{
-            "price": squirrel.Expr("price * 0.9"),
-            "updated_at": time.Now(),
-        })
+        Update(
+            models.Products.Price.Multiply(0.9),        // Type-safe multiplication
+            models.Products.UpdatedAt.SetNow(),         // Automatic timestamp
+            models.Products.Name.Upper(),               // String operations
+            models.Products.Tags.Append("discounted"),  // Array operations
+        )
     
     // Popular products with low stock alert
     lowStockProducts, err := storm.Products.Query(ctx).

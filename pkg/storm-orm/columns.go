@@ -311,3 +311,180 @@ func (c Condition) Not() Condition {
 func (c Condition) ToSqlizer() squirrel.Sqlizer {
 	return c.condition
 }
+
+// Action represents a type-safe database update operation
+type Action struct {
+	column     string
+	expression string
+	value      interface{}
+}
+
+func (a Action) Column() string {
+	return a.column
+}
+
+func (a Action) Expression() string {
+	return a.expression
+}
+
+func (a Action) Value() interface{} {
+	return a.value
+}
+
+// Column action methods
+func (c Column[T]) Set(value T) Action {
+	return Action{
+		column:     c.String(),
+		expression: c.String() + " = ?",
+		value:      value,
+	}
+}
+
+func (c Column[T]) SetNull() Action {
+	return Action{
+		column:     c.String(),
+		expression: c.String() + " = NULL",
+		value:      nil,
+	}
+}
+
+func (c Column[T]) SetDefault() Action {
+	return Action{
+		column:     c.String(),
+		expression: c.String() + " = DEFAULT",
+		value:      nil,
+	}
+}
+
+// NumericColumn action methods
+func (c NumericColumn[T]) Increment(amount T) Action {
+	return Action{
+		column:     c.String(),
+		expression: c.String() + " = " + c.String() + " + ?",
+		value:      amount,
+	}
+}
+
+func (c NumericColumn[T]) Decrement(amount T) Action {
+	return Action{
+		column:     c.String(),
+		expression: c.String() + " = " + c.String() + " - ?",
+		value:      amount,
+	}
+}
+
+func (c NumericColumn[T]) Multiply(factor T) Action {
+	return Action{
+		column:     c.String(),
+		expression: c.String() + " = " + c.String() + " * ?",
+		value:      factor,
+	}
+}
+
+// TimeColumn action methods
+func (c TimeColumn) SetNow() Action {
+	return Action{
+		column:     c.String(),
+		expression: c.String() + " = NOW()",
+		value:      nil,
+	}
+}
+
+func (c TimeColumn) SetCurrentTimestamp() Action {
+	return Action{
+		column:     c.String(),
+		expression: c.String() + " = CURRENT_TIMESTAMP",
+		value:      nil,
+	}
+}
+
+// StringColumn action methods
+func (c StringColumn) Concat(suffix string) Action {
+	return Action{
+		column:     c.String(),
+		expression: c.String() + " = " + c.String() + " || ?",
+		value:      suffix,
+	}
+}
+
+func (c StringColumn) Prepend(prefix string) Action {
+	return Action{
+		column:     c.String(),
+		expression: c.String() + " = ? || " + c.String(),
+		value:      prefix,
+	}
+}
+
+func (c StringColumn) Upper() Action {
+	return Action{
+		column:     c.String(),
+		expression: c.String() + " = UPPER(" + c.String() + ")",
+		value:      nil,
+	}
+}
+
+func (c StringColumn) Lower() Action {
+	return Action{
+		column:     c.String(),
+		expression: c.String() + " = LOWER(" + c.String() + ")",
+		value:      nil,
+	}
+}
+
+// ArrayColumn action methods
+func (c ArrayColumn[T]) Append(value T) Action {
+	return Action{
+		column:     c.String(),
+		expression: c.String() + " = array_append(" + c.String() + ", ?)",
+		value:      value,
+	}
+}
+
+func (c ArrayColumn[T]) Prepend(value T) Action {
+	return Action{
+		column:     c.String(),
+		expression: c.String() + " = array_prepend(?, " + c.String() + ")",
+		value:      value,
+	}
+}
+
+func (c ArrayColumn[T]) Remove(value T) Action {
+	return Action{
+		column:     c.String(),
+		expression: c.String() + " = array_remove(" + c.String() + ", ?)",
+		value:      value,
+	}
+}
+
+func (c ArrayColumn[T]) Concat(values []T) Action {
+	return Action{
+		column:     c.String(),
+		expression: c.String() + " = " + c.String() + " || ?",
+		value:      values,
+	}
+}
+
+// JSONBColumn action methods
+func (c JSONBColumn) SetPath(path string, value interface{}) Action {
+	return Action{
+		column:     c.String(),
+		expression: c.String() + " = jsonb_set(" + c.String() + ", ?, ?)",
+		value:      []interface{}{"{" + path + "}", value},
+	}
+}
+
+func (c JSONBColumn) RemovePath(path string) Action {
+	return Action{
+		column:     c.String(),
+		expression: c.String() + " = " + c.String() + " - ?",
+		value:      path,
+	}
+}
+
+func (c JSONBColumn) Merge(jsonValue interface{}) Action {
+	return Action{
+		column:     c.String(),
+		expression: c.String() + " = " + c.String() + " || ?",
+		value:      jsonValue,
+	}
+}

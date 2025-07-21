@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/Masterminds/squirrel"
 	"github.com/jmoiron/sqlx"
+	"strings"
 )
 
 // Query provides a fluent interface for building database queries with all features integrated
@@ -380,47 +381,87 @@ func (q *Query[T]) Delete() (int64, error) {
 	return rowsAffected, err
 }
 
-func (q *Query[T]) Update(updates map[string]interface{}) (int64, error) {
-	if len(updates) == 0 {
+// Update updates records using type-safe Action operations
+func (q *Query[T]) Update(actions ...Action) (int64, error) {
+	if len(actions) == 0 {
 		return 0, &Error{
 			Op:    "update",
 			Table: q.repo.metadata.TableName,
-			Err:   fmt.Errorf("no updates provided"),
+			Err:   fmt.Errorf("no actions provided"),
 		}
 	}
 
-	updateBuilder := squirrel.Update(q.repo.metadata.TableName).
-		PlaceholderFormat(squirrel.Dollar)
+	// Build the update query with custom expressions
+	var setParts []string
+	var args []interface{}
+	argIndex := 1
 
-	for column, value := range updates {
-		updateBuilder = updateBuilder.Set(column, value)
+	for _, action := range actions {
+		expression := action.Expression()
+		value := action.Value()
+
+		if value != nil {
+			// Handle special case where value is a slice (for JSONB operations)
+			if valueSlice, ok := value.([]interface{}); ok {
+				for _, v := range valueSlice {
+					expression = strings.Replace(expression, "?", fmt.Sprintf("$%d", argIndex), 1)
+					args = append(args, v)
+					argIndex++
+				}
+			} else {
+				// Replace ? with actual placeholder numbers
+				for strings.Contains(expression, "?") {
+					expression = strings.Replace(expression, "?", fmt.Sprintf("$%d", argIndex), 1)
+					args = append(args, value)
+					argIndex++
+				}
+			}
+		}
+		setParts = append(setParts, expression)
 	}
 
+	// Build raw SQL since squirrel doesn't handle custom expressions well
+	baseSQL := fmt.Sprintf("UPDATE %s SET %s", q.repo.metadata.TableName, strings.Join(setParts, ", "))
+
+	// Add WHERE clause if present
 	if len(q.whereClause) > 0 {
-		updateBuilder = updateBuilder.Where(q.whereClause)
-	}
-
-	var rowsAffected int64
-	err := q.repo.executeQueryMiddleware(OpUpdateMany, q.ctx, updates, updateBuilder, func(middlewareCtx *MiddlewareContext) error {
-		finalQuery := middlewareCtx.QueryBuilder.(squirrel.UpdateBuilder)
-
-		sqlQuery, args, err := finalQuery.ToSql()
+		whereBuilder := squirrel.Select("1").Where(q.whereClause).PlaceholderFormat(squirrel.Dollar)
+		_, whereArgs, err := whereBuilder.ToSql()
 		if err != nil {
-			return &Error{
+			return 0, &Error{
 				Op:    "update",
 				Table: q.repo.metadata.TableName,
-				Err:   fmt.Errorf("failed to build update query: %w", err),
+				Err:   fmt.Errorf("failed to build where clause: %w", err),
 			}
 		}
 
-		middlewareCtx.Query = sqlQuery
+		// Extract just the WHERE part from the dummy SELECT
+		dummySQL, _, _ := whereBuilder.ToSql()
+		whereStart := strings.Index(dummySQL, "WHERE")
+		if whereStart != -1 {
+			whereClause := dummySQL[whereStart:]
+			// Update placeholder numbers to continue from our current argIndex
+			for i := range whereArgs {
+				placeholder := fmt.Sprintf("$%d", i+1)
+				newPlaceholder := fmt.Sprintf("$%d", argIndex+i)
+				whereClause = strings.Replace(whereClause, placeholder, newPlaceholder, -1)
+			}
+			baseSQL += " " + whereClause
+			args = append(args, whereArgs...)
+		}
+	}
+
+	var rowsAffected int64
+	err := q.repo.executeQueryMiddleware(OpUpdateMany, q.ctx, actions, baseSQL, func(middlewareCtx *MiddlewareContext) error {
+		middlewareCtx.Query = baseSQL
 		middlewareCtx.Args = args
 
 		var result sql.Result
+		var err error
 		if q.tx != nil {
-			result, err = q.tx.ExecContext(q.ctx, sqlQuery, args...)
+			result, err = q.tx.ExecContext(q.ctx, baseSQL, args...)
 		} else {
-			result, err = q.repo.db.ExecContext(q.ctx, sqlQuery, args...)
+			result, err = q.repo.db.ExecContext(q.ctx, baseSQL, args...)
 		}
 
 		if err != nil {
