@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/eleven-am/storm/internal/logger"
 	"github.com/eleven-am/storm/internal/migrator"
 	"github.com/eleven-am/storm/pkg/storm"
 	_ "github.com/lib/pq"
@@ -86,20 +87,19 @@ func runMigrate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("database connection required: use --url flag, individual connection flags, or specify in storm.yaml")
 	}
 
-	if verbose {
-		cmd.Printf("Using database URL: %s\n", dsn)
-		cmd.Printf("Models package: %s\n", migratePackagePath)
-		cmd.Printf("Output directory: %s\n", outputDir)
-	}
+	logger.CLI().Debug("Using database URL: %s", dsn)
+	logger.CLI().Debug("Models package: %s", migratePackagePath)
+	logger.CLI().Debug("Output directory: %s", outputDir)
 
 	// Handle database creation if needed before initializing Storm
 	if createDBIfNotExists {
+		logger.CLI().Info("Checking if database exists...")
 		if err := ensureDatabaseExistsFromURL(ctx, dsn); err != nil {
 			return fmt.Errorf("failed to ensure database exists: %w", err)
 		}
 	}
 
-	fmt.Println("Initializing Storm migration engine...")
+	logger.CLI().Info("Initializing Storm migration engine...")
 
 	config := storm.NewConfig()
 	config.DatabaseURL = dsn
@@ -115,12 +115,14 @@ func runMigrate(cmd *cobra.Command, args []string) error {
 
 	// Don't ping if create-if-not-exists is set, as the database may not exist yet
 	if !createDBIfNotExists {
+		logger.CLI().Debug("Pinging database to verify connection...")
 		if err := stormClient.Ping(ctx); err != nil {
 			return fmt.Errorf("failed to ping database: %w", err)
 		}
+		logger.CLI().Debug("Database connection verified")
 	}
 
-	fmt.Println("Generating migration...")
+	logger.CLI().Info("Generating migration...")
 
 	opts := storm.MigrateOptions{
 		PackagePath:         migratePackagePath,
@@ -134,20 +136,20 @@ func runMigrate(cmd *cobra.Command, args []string) error {
 		pendingMigrations, err := stormClient.Migrator().Pending(ctx)
 		if err == nil && len(pendingMigrations) > 0 {
 			// Apply existing migrations
-			fmt.Printf("Found %d pending migration(s) to apply\n", len(pendingMigrations))
+			logger.CLI().Info("Found %d pending migration(s) to apply", len(pendingMigrations))
 			for _, migration := range pendingMigrations {
-				fmt.Printf("Applying migration: %s\n", migration.Name)
+				logger.CLI().Info("Applying migration: %s", migration.Name)
 				if err := stormClient.Migrator().Apply(ctx, migration); err != nil {
 					return fmt.Errorf("failed to apply migration %s: %w", migration.Name, err)
 				}
-				fmt.Printf("Successfully applied: %s\n", migration.Name)
+				logger.CLI().Info("Successfully applied: %s", migration.Name)
 			}
-			fmt.Println("All migrations applied successfully!")
+			logger.CLI().Info("All migrations applied successfully!")
 			return nil
 		}
 
 		// No existing migrations, do direct push
-		fmt.Println("No existing migrations found. Generating and applying directly...")
+		logger.CLI().Info("No existing migrations found. Generating and applying directly...")
 		return executePushMigration(ctx, config, createDBIfNotExists, migratePackagePath)
 	}
 
@@ -157,10 +159,10 @@ func runMigrate(cmd *cobra.Command, args []string) error {
 	}
 
 	if dryRun {
-		fmt.Println("Migration generated (dry run)")
+		logger.CLI().Info("Migration generated (dry run)")
 	} else {
-		fmt.Println("Migration files generated successfully")
-		fmt.Println("Run 'storm migrate --push' to apply the migrations")
+		logger.CLI().Info("Migration files generated successfully")
+		logger.CLI().Info("Run 'storm migrate --push' to apply the migrations")
 	}
 
 	return nil
@@ -198,13 +200,13 @@ func ensureDatabaseExistsFromURL(ctx context.Context, databaseURL string) error 
 	if !exists {
 		// Create the database
 		createSQL := fmt.Sprintf("CREATE DATABASE %s", quoteIdentifierCLI(dbName))
-		fmt.Printf("Creating database: %s\n", dbName)
+		logger.DB().Info("Creating database: %s", dbName)
 
 		if _, err := adminDB.ExecContext(ctx, createSQL); err != nil {
 			return fmt.Errorf("failed to create database %s: %w", dbName, err)
 		}
 	} else {
-		fmt.Printf("Database %s already exists\n", dbName)
+		logger.DB().Info("Database %s already exists", dbName)
 	}
 
 	return nil
@@ -251,7 +253,7 @@ func quoteIdentifierCLI(name string) string {
 
 // executePushMigration executes migration directly using Atlas migrator
 func executePushMigration(ctx context.Context, config *storm.Config, createDBIfNotExists bool, packagePath string) error {
-	fmt.Println("Executing push migration...")
+	logger.CLI().Info("Executing push migration...")
 
 	// Create database connection
 	db, err := sql.Open("postgres", config.DatabaseURL)
@@ -285,7 +287,7 @@ func executePushMigration(ctx context.Context, config *storm.Config, createDBIfN
 	}
 
 	if len(result.Changes) == 0 {
-		fmt.Println("No schema changes detected! Database is up to date.")
+		logger.CLI().Info("No schema changes detected! Database is up to date.")
 	}
 
 	return nil

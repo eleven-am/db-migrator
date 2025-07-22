@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/eleven-am/storm/internal/logger"
 	parser2 "github.com/eleven-am/storm/internal/parser"
 )
 
@@ -259,7 +260,7 @@ func (g *SchemaGenerator) mapGoTypeToPostgreSQL(goType string, dbDef map[string]
 	case "cuid.CUID", "CUID":
 		return "CHAR(25)", nil
 	default:
-		fmt.Printf("Warning: unknown Go type '%s', defaulting to TEXT\n", goType)
+		logger.Schema().Warn("Unknown Go type '%s', defaulting to TEXT", goType)
 		return "TEXT", nil
 	}
 }
@@ -290,51 +291,81 @@ func (g *SchemaGenerator) processTableLevel(tableLevelDef map[string]string, tab
 			}
 			table.Indexes = append(table.Indexes, indexes...)
 		case "unique":
-			if strings.Contains(value, "where:") || strings.Contains(value, "WHERE:") {
-				parts := strings.Split(value, ",")
-				if len(parts) < 2 {
-					return fmt.Errorf("unique constraint must have name and columns: %s", value)
+			// Split multiple unique constraints that are separated by semicolons
+			uniqueDefs := strings.Split(value, ";")
+			
+			for _, uniqueDef := range uniqueDefs {
+				uniqueDef = strings.TrimSpace(uniqueDef)
+				if uniqueDef == "" {
+					continue
 				}
+				
+				logger.Schema().Debug("Processing unique constraint definition: %s", uniqueDef)
+				
+				if strings.Contains(uniqueDef, "where:") || strings.Contains(uniqueDef, "WHERE:") {
+					parts := strings.Split(uniqueDef, ",")
+					if len(parts) < 2 {
+						return fmt.Errorf("unique constraint must have name and columns: %s", uniqueDef)
+					}
 
-				indexName := strings.TrimSpace(parts[0])
-				var columns []string
-				var whereClause string
+					indexName := strings.TrimSpace(parts[0])
+					var columns []string
+					var whereClause string
 
-				for i := 1; i < len(parts); i++ {
-					col := strings.TrimSpace(parts[i])
-					if strings.Contains(col, " where:") || strings.Contains(col, " WHERE:") {
-						subParts := strings.SplitN(col, " where:", 2)
-						if len(subParts) == 2 {
-							columns = append(columns, strings.TrimSpace(subParts[0]))
-							whereClause = strings.TrimSpace(subParts[1])
-						} else {
-							subParts = strings.SplitN(col, " WHERE:", 2)
+					for i := 1; i < len(parts); i++ {
+						col := strings.TrimSpace(parts[i])
+						if strings.Contains(col, " where:") || strings.Contains(col, " WHERE:") {
+							subParts := strings.SplitN(col, " where:", 2)
 							if len(subParts) == 2 {
 								columns = append(columns, strings.TrimSpace(subParts[0]))
 								whereClause = strings.TrimSpace(subParts[1])
+							} else {
+								subParts = strings.SplitN(col, " WHERE:", 2)
+								if len(subParts) == 2 {
+									columns = append(columns, strings.TrimSpace(subParts[0]))
+									whereClause = strings.TrimSpace(subParts[1])
+								}
+							}
+						} else if strings.HasPrefix(col, "where:") || strings.HasPrefix(col, "WHERE:") {
+							whereClause = strings.TrimPrefix(strings.TrimPrefix(col, "where:"), "WHERE:")
+						} else if col != "" {
+							columns = append(columns, col)
+						}
+					}
+
+					index := SchemaIndex{
+						Name:     indexName,
+						Columns:  columns,
+						IsUnique: true,
+						Where:    whereClause,
+					}
+					table.Indexes = append(table.Indexes, index)
+				} else {
+					constraint, err := g.parseUniqueConstraint(uniqueDef, table.Name)
+					if err != nil {
+						logger.Schema().Warn("Failed to parse unique constraint: %v", err)
+						continue
+					}
+					
+					// Skip table-level constraint if it's for a single column that already has unique
+					if len(constraint.Columns) == 1 {
+						columnName := constraint.Columns[0]
+						skipConstraint := false
+						for _, col := range table.Columns {
+							if col.Name == columnName && col.IsUnique {
+								logger.Schema().Debug("Skipping duplicate unique constraint %s for column %s (column already has UNIQUE)", constraint.Name, columnName)
+								skipConstraint = true
+								break
 							}
 						}
-					} else if strings.HasPrefix(col, "where:") || strings.HasPrefix(col, "WHERE:") {
-						whereClause = strings.TrimPrefix(strings.TrimPrefix(col, "where:"), "WHERE:")
-					} else if col != "" {
-						columns = append(columns, col)
+						if skipConstraint {
+							continue
+						}
 					}
+					
+					logger.Schema().Debug("Parsed unique constraint: Name=%s, Columns=%v", constraint.Name, constraint.Columns)
+					table.Constraints = append(table.Constraints, constraint)
 				}
-
-				index := SchemaIndex{
-					Name:     indexName,
-					Columns:  columns,
-					IsUnique: true,
-					Where:    whereClause,
-				}
-				table.Indexes = append(table.Indexes, index)
-			} else {
-				constraint, err := g.parseUniqueConstraint(value, table.Name)
-				if err != nil {
-					fmt.Printf("Warning: failed to parse unique constraint: %v\n", err)
-					continue
-				}
-				table.Constraints = append(table.Constraints, constraint)
 			}
 		case "check":
 			constraint, err := g.parseCheckConstraint(value, table.Name)
@@ -343,7 +374,7 @@ func (g *SchemaGenerator) processTableLevel(tableLevelDef map[string]string, tab
 			}
 			table.Constraints = append(table.Constraints, constraint)
 		default:
-			fmt.Printf("Warning: unknown table-level attribute '%s'\n", key)
+			logger.Schema().Warn("Unknown table-level attribute '%s'", key)
 		}
 	}
 
@@ -476,13 +507,24 @@ func (g *SchemaGenerator) addImplicitConstraints(table *SchemaTable) {
 		}
 
 		if column.IsUnique && !column.IsPrimaryKey {
-			constraintName := fmt.Sprintf("%s_%s_key", table.Name, column.Name)
-			constraint := SchemaConstraint{
-				Name:    constraintName,
-				Type:    "UNIQUE",
-				Columns: []string{column.Name},
+			// Check if a unique constraint already exists for this column
+			hasExistingConstraint := false
+			for _, existingConstraint := range table.Constraints {
+				if existingConstraint.Type == "UNIQUE" && len(existingConstraint.Columns) == 1 && existingConstraint.Columns[0] == column.Name {
+					hasExistingConstraint = true
+					break
+				}
 			}
-			table.Constraints = append(table.Constraints, constraint)
+			
+			if !hasExistingConstraint {
+				constraintName := fmt.Sprintf("%s_%s_key", table.Name, column.Name)
+				constraint := SchemaConstraint{
+					Name:    constraintName,
+					Type:    "UNIQUE",
+					Columns: []string{column.Name},
+				}
+				table.Constraints = append(table.Constraints, constraint)
+			}
 		}
 
 		if column.ForeignKey != nil {

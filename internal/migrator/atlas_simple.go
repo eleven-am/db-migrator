@@ -10,7 +10,15 @@ import (
 	"ariga.io/atlas/sql/migrate"
 	"ariga.io/atlas/sql/postgres"
 	"ariga.io/atlas/sql/schema"
+	"github.com/eleven-am/storm/internal/logger"
 )
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
 
 func GenerateAtlasSQL(ctx context.Context, driver migrate.Driver, changes []schema.Change) ([]string, error) {
 
@@ -76,9 +84,27 @@ func (m *SimplifiedAtlasMigrator) GenerateMigrationSimple(ctx context.Context, s
 	}
 	defer cleanup()
 
+	// Check if DDL uses CUID functions and create them in temp DB if needed
+	if strings.Contains(targetDDL, "gen_cuid()") {
+		logger.Atlas().Debug("DDL uses CUID functions, creating them in temp database")
+		cuidSQL := generateCUIDFunctions()
+		if _, err = tempDB.ExecContext(ctx, cuidSQL); err != nil {
+			logger.Atlas().Error("Failed to create CUID functions: %v", err)
+			return nil, nil, fmt.Errorf("failed to create CUID functions in temp database: %w", err)
+		}
+		logger.Atlas().Debug("CUID functions created successfully")
+	}
+
+	logger.Atlas().Debug("Executing DDL in temp database, DDL length: %d", len(targetDDL))
+	logger.Atlas().Debug("DDL first 1000 chars: %s", targetDDL[:min(1000, len(targetDDL))])
+
 	if _, err = tempDB.ExecContext(ctx, targetDDL); err != nil {
+		logger.Atlas().Error("Failed to execute DDL: %v", err)
+		logger.Atlas().Debug("Full DDL that failed:\n%s", targetDDL)
 		return nil, nil, fmt.Errorf("failed to execute DDL in temp database: %w", err)
 	}
+
+	logger.Atlas().Debug("DDL executed successfully")
 
 	targetDriver, err := postgres.Open(tempDB)
 	if err != nil {
