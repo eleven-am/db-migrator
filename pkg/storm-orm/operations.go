@@ -421,7 +421,11 @@ func (r *Repository[T]) CreateMany(ctx context.Context, records []T) error {
 				Err:   fmt.Errorf("failed to begin transaction: %w", err),
 			}
 		}
-		rollback = func() { tx.Rollback() }
+		rollback = func() {
+			if rbErr := tx.Rollback(); rbErr != nil && rbErr.Error() != "sql: transaction has already been committed or rolled back" {
+				// Silently ignore "tx closed" errors
+			}
+		}
 		executor = tx
 		needsCommit = true
 	}
@@ -604,7 +608,11 @@ func (r *Repository[T]) UpsertMany(ctx context.Context, records []T, opts Upsert
 				Err:   fmt.Errorf("failed to begin transaction: %w", err),
 			}
 		}
-		rollback = func() { tx.Rollback() }
+		rollback = func() {
+			if rbErr := tx.Rollback(); rbErr != nil && rbErr.Error() != "sql: transaction has already been committed or rolled back" {
+				// Silently ignore "tx closed" errors
+			}
+		}
 		executor = tx
 		needsCommit = true
 	}

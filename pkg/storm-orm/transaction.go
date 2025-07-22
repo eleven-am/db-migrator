@@ -59,24 +59,30 @@ func (tm *TransactionManager) WithTransactionOptions(ctx context.Context, opts *
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
 
+	committed := false
 	defer func() {
 		if p := recover(); p != nil {
-			tx.Rollback()
+			if !committed {
+				tx.Rollback()
+			}
 			panic(p)
+		}
+		if !committed {
+			if rbErr := tx.Rollback(); rbErr != nil && rbErr.Error() != "sql: transaction has already been committed or rolled back" {
+				// Silently ignore "tx closed" errors
+			}
 		}
 	}()
 
 	err = fn(tx)
 	if err != nil {
-		if rbErr := tx.Rollback(); rbErr != nil {
-			return fmt.Errorf("rollback failed: %v (original error: %w)", rbErr, err)
-		}
 		return err
 	}
 
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("failed to commit: %w", err)
 	}
+	committed = true
 
 	return nil
 }

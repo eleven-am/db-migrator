@@ -57,17 +57,24 @@ func (s *Storm) WithTransaction(ctx context.Context, fn func(*Storm) error) erro
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
 
+	committed := false
+	defer func() {
+		if !committed {
+			if rbErr := tx.Rollback(); rbErr != nil && rbErr.Error() != "sql: transaction has already been committed or rolled back" {
+				// Only log non-"tx closed" errors
+			}
+		}
+	}()
+
 	txStorm := newStormWithExecutor(db, tx)
 	if err := fn(txStorm); err != nil {
-		if rbErr := tx.Rollback(); rbErr != nil {
-			return fmt.Errorf("failed to rollback transaction: %v (original error: %w)", rbErr, err)
-		}
 		return err
 	}
 
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
+	committed = true
 
 	return nil
 }
@@ -89,17 +96,24 @@ func (s *Storm) WithTransactionOptions(ctx context.Context, opts *TransactionOpt
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
 
+	committed := false
+	defer func() {
+		if !committed {
+			if rbErr := tx.Rollback(); rbErr != nil && rbErr.Error() != "sql: transaction has already been committed or rolled back" {
+				// Only log non-"tx closed" errors
+			}
+		}
+	}()
+
 	txStorm := newStormWithExecutor(db, tx)
 	if err := fn(txStorm); err != nil {
-		if rbErr := tx.Rollback(); rbErr != nil {
-			return fmt.Errorf("failed to rollback transaction: %v (original error: %w)", rbErr, err)
-		}
 		return err
 	}
 
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
+	committed = true
 
 	return nil
 }
