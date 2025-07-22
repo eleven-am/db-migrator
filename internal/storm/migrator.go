@@ -87,7 +87,12 @@ func (m *MigratorImpl) Apply(ctx context.Context, migration *storm.Migration) er
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback()
+	var rollback = func() { tx.Rollback() }
+	defer func() {
+		if rollback != nil {
+			rollback()
+		}
+	}()
 
 	if err := m.executeMigration(ctx, tx, migration); err != nil {
 		return fmt.Errorf("failed to execute migration: %w", err)
@@ -100,6 +105,7 @@ func (m *MigratorImpl) Apply(ctx context.Context, migration *storm.Migration) er
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("failed to commit migration: %w", err)
 	}
+	rollback = nil
 
 	m.logger.Info("Migration applied successfully", "name", migration.Name)
 	return nil
@@ -122,7 +128,12 @@ func (m *MigratorImpl) Rollback(ctx context.Context, migration *storm.Migration)
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback()
+	var rollback = func() { tx.Rollback() }
+	defer func() {
+		if rollback != nil {
+			rollback()
+		}
+	}()
 
 	if err := m.executeRollback(ctx, tx, migration); err != nil {
 		return fmt.Errorf("failed to execute rollback: %w", err)
@@ -135,6 +146,7 @@ func (m *MigratorImpl) Rollback(ctx context.Context, migration *storm.Migration)
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("failed to commit rollback: %w", err)
 	}
+	rollback = nil
 
 	m.logger.Info("Migration rolled back successfully", "name", migration.Name)
 	return nil

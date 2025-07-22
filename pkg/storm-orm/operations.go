@@ -407,6 +407,7 @@ func (r *Repository[T]) CreateMany(ctx context.Context, records []T) error {
 
 	var executor DBExecutor
 	needsCommit := false
+	var rollback func()
 
 	if _, isTransaction := r.db.(*sqlx.Tx); isTransaction {
 		executor = r.db
@@ -420,10 +421,16 @@ func (r *Repository[T]) CreateMany(ctx context.Context, records []T) error {
 				Err:   fmt.Errorf("failed to begin transaction: %w", err),
 			}
 		}
-		defer tx.Rollback()
+		rollback = func() { tx.Rollback() }
 		executor = tx
 		needsCommit = true
 	}
+
+	defer func() {
+		if rollback != nil {
+			rollback()
+		}
+	}()
 
 	var columns []string
 	if len(records) > 0 {
@@ -472,6 +479,7 @@ func (r *Repository[T]) CreateMany(ctx context.Context, records []T) error {
 					Err:   fmt.Errorf("failed to commit transaction: %w", err),
 				}
 			}
+			rollback = nil
 		}
 
 		return nil
@@ -582,6 +590,7 @@ func (r *Repository[T]) UpsertMany(ctx context.Context, records []T, opts Upsert
 
 	var executor DBExecutor
 	needsCommit := false
+	var rollback func()
 
 	if _, isTransaction := r.db.(*sqlx.Tx); isTransaction {
 		executor = r.db
@@ -595,10 +604,16 @@ func (r *Repository[T]) UpsertMany(ctx context.Context, records []T, opts Upsert
 				Err:   fmt.Errorf("failed to begin transaction: %w", err),
 			}
 		}
-		defer tx.Rollback()
+		rollback = func() { tx.Rollback() }
 		executor = tx
 		needsCommit = true
 	}
+
+	defer func() {
+		if rollback != nil {
+			rollback()
+		}
+	}()
 
 	var columns []string
 	if len(records) > 0 {
@@ -680,6 +695,7 @@ func (r *Repository[T]) UpsertMany(ctx context.Context, records []T, opts Upsert
 					Err:   fmt.Errorf("failed to commit transaction: %w", err),
 				}
 			}
+			rollback = nil
 		}
 
 		return nil
