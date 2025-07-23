@@ -2,27 +2,52 @@ package orm
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"github.com/Masterminds/squirrel"
 
+
 	"github.com/jmoiron/sqlx"
 )
+
+// QueryLogger defines the interface for logging SQL queries
+type QueryLogger interface {
+	LogQuery(query string, args []interface{}, duration time.Duration, err error)
+}
+
+// SimpleQueryLogger is a basic implementation of QueryLogger that logs to stdout
+type SimpleQueryLogger struct{}
+
+func (s *SimpleQueryLogger) LogQuery(query string, args []interface{}, duration time.Duration, err error) {
+	status := "SUCCESS"
+	if err != nil {
+		status = fmt.Sprintf("ERROR: %v", err)
+	}
+	fmt.Printf("[SQL] [%v] [%s] %s %v\n", duration, status, query, args)
+}
 
 // Storm is the main entry point for all ORM operations
 // It holds all repositories and manages database connections
 type Storm struct {
 	db       DBExecutor
-	executor DBExecutor // Current executor (DB or TX)
+	executor DBExecutor  // Current executor (DB or TX)
+	logger   QueryLogger // Optional query logger
 
 	// Repository registry - will be populated by code generation
 	repositories map[string]interface{}
 }
 
-func NewStorm(db *sqlx.DB) *Storm {
+func NewStorm(db *sqlx.DB, logger ...QueryLogger) *Storm {
 	storm := &Storm{
 		db:           db,
-		executor:     db,
 		repositories: make(map[string]interface{}),
+	}
+
+	if len(logger) > 0 {
+		storm.logger = logger[0]
+		storm.executor = &loggingExecutor{executor: db, logger: logger[0]}
+	} else {
+		storm.executor = db
 	}
 
 	storm.initializeRepositories()
@@ -30,20 +55,131 @@ func NewStorm(db *sqlx.DB) *Storm {
 	return storm
 }
 
-func newStormWithExecutor(db *sqlx.DB, executor DBExecutor) *Storm {
+func newStormWithExecutor(db *sqlx.DB, executor DBExecutor, logger QueryLogger) *Storm {
 	storm := &Storm{
 		db:           db,
-		executor:     executor,
+		logger:       logger,
 		repositories: make(map[string]interface{}),
+	}
+
+	if logger != nil {
+		storm.executor = &loggingExecutor{executor: executor, logger: logger}
+	} else {
+		storm.executor = executor
 	}
 
 	storm.initializeRepositories()
 	return storm
+}
+
+// loggingExecutor wraps a DBExecutor to add query logging functionality
+type loggingExecutor struct {
+	executor DBExecutor
+	logger   QueryLogger
+}
+
+func (l *loggingExecutor) ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
+	start := time.Now()
+	result, err := l.executor.ExecContext(ctx, query, args...)
+	duration := time.Since(start)
+	l.logger.LogQuery(query, args, duration, err)
+	return result, err
+}
+
+func (l *loggingExecutor) QueryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error) {
+	start := time.Now()
+	rows, err := l.executor.QueryContext(ctx, query, args...)
+	duration := time.Since(start)
+	l.logger.LogQuery(query, args, duration, err)
+	return rows, err
+}
+
+func (l *loggingExecutor) QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row {
+	start := time.Now()
+	row := l.executor.QueryRowContext(ctx, query, args...)
+	duration := time.Since(start)
+	l.logger.LogQuery(query, args, duration, nil)
+	return row
+}
+
+func (l *loggingExecutor) GetContext(ctx context.Context, dest interface{}, query string, args ...interface{}) error {
+	start := time.Now()
+	err := l.executor.GetContext(ctx, dest, query, args...)
+	duration := time.Since(start)
+	l.logger.LogQuery(query, args, duration, err)
+	return err
+}
+
+func (l *loggingExecutor) SelectContext(ctx context.Context, dest interface{}, query string, args ...interface{}) error {
+	start := time.Now()
+	err := l.executor.SelectContext(ctx, dest, query, args...)
+	duration := time.Since(start)
+	l.logger.LogQuery(query, args, duration, err)
+	return err
+}
+
+func (l *loggingExecutor) QueryxContext(ctx context.Context, query string, args ...interface{}) (*sqlx.Rows, error) {
+	start := time.Now()
+	rows, err := l.executor.QueryxContext(ctx, query, args...)
+	duration := time.Since(start)
+	l.logger.LogQuery(query, args, duration, err)
+	return rows, err
+}
+
+func (l *loggingExecutor) QueryRowxContext(ctx context.Context, query string, args ...interface{}) *sqlx.Row {
+	start := time.Now()
+	row := l.executor.QueryRowxContext(ctx, query, args...)
+	duration := time.Since(start)
+	l.logger.LogQuery(query, args, duration, nil)
+	return row
+}
+
+func (l *loggingExecutor) NamedExecContext(ctx context.Context, query string, arg interface{}) (sql.Result, error) {
+	start := time.Now()
+	result, err := l.executor.NamedExecContext(ctx, query, arg)
+	duration := time.Since(start)
+	l.logger.LogQuery(query, []interface{}{arg}, duration, err)
+	return result, err
+}
+
+func (l *loggingExecutor) BindNamed(query string, arg interface{}) (string, []interface{}, error) {
+	return l.executor.BindNamed(query, arg)
+}
+
+func (l *loggingExecutor) PreparexContext(ctx context.Context, query string) (*sqlx.Stmt, error) {
+	return l.executor.PreparexContext(ctx, query)
+}
+
+func (l *loggingExecutor) PrepareNamedContext(ctx context.Context, query string) (*sqlx.NamedStmt, error) {
+	return l.executor.PrepareNamedContext(ctx, query)
+}
+
+func (l *loggingExecutor) Rebind(query string) string {
+	return l.executor.Rebind(query)
+}
+
+func (l *loggingExecutor) DriverName() string {
+	return l.executor.DriverName()
+}
+
+// isInTransaction checks if the current executor is a transaction
+func (s *Storm) isInTransaction() bool {
+	// Check if executor is directly a transaction
+	if _, isTransaction := s.executor.(*sqlx.Tx); isTransaction {
+		return true
+	}
+	// Check if executor is a logging wrapper around a transaction
+	if loggingExec, ok := s.executor.(*loggingExecutor); ok {
+		if _, isTransaction := loggingExec.executor.(*sqlx.Tx); isTransaction {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Storm) WithTransaction(ctx context.Context, fn func(*Storm) error) error {
-	if _, isTransaction := s.executor.(*sqlx.Tx); isTransaction {
-
+	// Check if we're already in a transaction (either direct tx or wrapped in logging executor)
+	if s.isInTransaction() {
 		return fn(s)
 	}
 
@@ -66,7 +202,7 @@ func (s *Storm) WithTransaction(ctx context.Context, fn func(*Storm) error) erro
 		}
 	}()
 
-	txStorm := newStormWithExecutor(db, tx)
+	txStorm := newStormWithExecutor(db, tx, s.logger)
 	if err := fn(txStorm); err != nil {
 		return err
 	}
@@ -80,8 +216,8 @@ func (s *Storm) WithTransaction(ctx context.Context, fn func(*Storm) error) erro
 }
 
 func (s *Storm) WithTransactionOptions(ctx context.Context, opts *TransactionOptions, fn func(*Storm) error) error {
-	if _, isTransaction := s.executor.(*sqlx.Tx); isTransaction {
-
+	// Check if we're already in a transaction (either direct tx or wrapped in logging executor)
+	if s.isInTransaction() {
 		return fn(s)
 	}
 
@@ -105,7 +241,7 @@ func (s *Storm) WithTransactionOptions(ctx context.Context, opts *TransactionOpt
 		}
 	}()
 
-	txStorm := newStormWithExecutor(db, tx)
+	txStorm := newStormWithExecutor(db, tx, s.logger)
 	if err := fn(txStorm); err != nil {
 		return err
 	}
@@ -147,6 +283,11 @@ func (s *Storm) GetDB() *sqlx.DB {
 		return db
 	}
 	return nil
+}
+
+// GetLogger returns the query logger if set
+func (s *Storm) GetLogger() QueryLogger {
+	return s.logger
 }
 
 func (s *Storm) initializeRepositories() {

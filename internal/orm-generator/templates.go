@@ -676,8 +676,8 @@ type Storm struct {
 	{{end}}
 }
 
-func NewStorm(db *sqlx.DB) *Storm {
-	baseStorm := storm.NewStorm(db)
+func NewStorm(db *sqlx.DB, logger ...storm.QueryLogger) *Storm {
+	baseStorm := storm.NewStorm(db, logger...)
 	
 	storm := &Storm{
 		Storm: baseStorm,

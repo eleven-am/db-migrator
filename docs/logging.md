@@ -141,6 +141,148 @@ logging:
   format: text  # currently only text is supported
 ```
 
+## ORM Query Logging
+
+Storm ORM supports optional query logging to help debug and monitor SQL queries executed by your application.
+
+### Basic Usage
+
+```go
+// Without logging (default behavior)
+storm := models.NewStorm(db)
+
+// With simple built-in logger
+logger := &storm.SimpleQueryLogger{}
+storm := models.NewStorm(db, logger)
+```
+
+### QueryLogger Interface
+
+Implement the `QueryLogger` interface to create custom loggers:
+
+```go
+type QueryLogger interface {
+    LogQuery(query string, args []interface{}, duration time.Duration, err error)
+}
+```
+
+### Built-in SimpleQueryLogger
+
+Storm provides a basic logger that outputs to stdout:
+
+```go
+logger := &storm.SimpleQueryLogger{}
+storm := models.NewStorm(db, logger)
+
+// Output format:
+// [SQL] [2.3ms] [SUCCESS] SELECT * FROM users WHERE id = $1 [123]
+// [SQL] [1.1ms] [ERROR: no rows in result set] SELECT * FROM users WHERE id = $1 [999]
+```
+
+### Using with slog (Structured Logging)
+
+For production applications, integrate with Go's structured logging:
+
+```go
+import "log/slog"
+
+type SlogQueryLogger struct {
+    logger *slog.Logger
+}
+
+func (s *SlogQueryLogger) LogQuery(query string, args []interface{}, duration time.Duration, err error) {
+    attrs := []slog.Attr{
+        slog.String("query", query),
+        slog.Duration("duration", duration),
+        slog.Any("args", args),
+    }
+    
+    if err != nil {
+        attrs = append(attrs, slog.String("error", err.Error()))
+        s.logger.LogAttrs(nil, slog.LevelError, "SQL query failed", attrs...)
+    } else {
+        s.logger.LogAttrs(nil, slog.LevelInfo, "SQL query executed", attrs...)
+    }
+}
+
+// Usage
+jsonLogger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+queryLogger := &SlogQueryLogger{logger: jsonLogger}
+storm := models.NewStorm(db, queryLogger)
+```
+
+### Custom Logger Examples
+
+#### Performance Monitoring Logger
+```go
+type PerformanceLogger struct {
+    slowQueryThreshold time.Duration
+}
+
+func (p *PerformanceLogger) LogQuery(query string, args []interface{}, duration time.Duration, err error) {
+    if duration > p.slowQueryThreshold {
+        log.Printf("SLOW QUERY [%v]: %s", duration, query)
+    }
+    if err != nil {
+        log.Printf("QUERY ERROR [%v]: %s - %v", duration, query, err)
+    }
+}
+```
+
+#### Metrics Logger
+```go
+type MetricsLogger struct {
+    queryCounter prometheus.Counter
+    queryDuration prometheus.Histogram
+}
+
+func (m *MetricsLogger) LogQuery(query string, args []interface{}, duration time.Duration, err error) {
+    m.queryCounter.Inc()
+    m.queryDuration.Observe(duration.Seconds())
+    
+    if err != nil {
+        // Record error metrics
+    }
+}
+```
+
+### Transaction Support
+
+Query logging works seamlessly with transactions:
+
+```go
+storm := models.NewStorm(db, logger)
+
+err := storm.WithTransaction(ctx, func(txStorm *Storm) error {
+    // All queries within this transaction will be logged
+    user, err := txStorm.Users().FindByID(ctx, 123)
+    // ... more operations
+    return nil
+})
+```
+
+### Configuration Tips
+
+1. **Development**: Use `SimpleQueryLogger` or slog with text handler for readable output
+2. **Production**: Use structured logging (slog with JSON) for better monitoring
+3. **Performance**: Implement sampling or filtering in custom loggers for high-traffic applications
+4. **Security**: Be careful logging query arguments that might contain sensitive data
+
+### Output Examples
+
+**SimpleQueryLogger Output:**
+```
+[SQL] [1.2ms] [SUCCESS] SELECT id, name, email FROM users WHERE id = $1 [123]
+[SQL] [0.8ms] [SUCCESS] INSERT INTO users (name, email) VALUES ($1, $2) [John Doe john@example.com]
+[SQL] [2.1ms] [ERROR: duplicate key value violates unique constraint] INSERT INTO users (email) VALUES ($1) [john@example.com]
+```
+
+**Structured JSON Output:**
+```json
+{"time":"2024-01-15T10:30:45Z","level":"INFO","msg":"SQL query executed","query":"SELECT * FROM users WHERE id = $1","duration":"1.2ms","args":[123]}
+{"time":"2024-01-15T10:30:46Z","level":"ERROR","msg":"SQL query failed","query":"INSERT INTO users (email) VALUES ($1)","duration":"0.9ms","args":["john@example.com"],"error":"duplicate key value"}
+```
+
 ## Best Practices
 
 1. Use `--verbose` when debugging issues or wanting to understand what Storm is doing
@@ -148,3 +290,5 @@ logging:
 3. In production, use default settings to only see warnings and errors
 4. Check logs when migrations fail to understand what went wrong
 5. Component-specific logs help identify which part of the system has issues
+6. **Query Logging**: Enable query logging in development to debug SQL issues, use structured logging in production
+7. **Performance**: Monitor query durations to identify slow queries and optimization opportunities
