@@ -4,9 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"time"
+
 	"github.com/Masterminds/squirrel"
-
-
 	"github.com/jmoiron/sqlx"
 )
 
