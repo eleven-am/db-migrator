@@ -296,7 +296,7 @@ func TestMiddlewareUpdateMany(t *testing.T) {
 	})
 
 	// Set up mock expectations for the actual Action-based SQL
-	mock.ExpectExec(`UPDATE users SET users\.is_active = \$1 WHERE \(users\.name LIKE \$2\)`).
+	mock.ExpectExec(`UPDATE users SET is_active = \$1 WHERE \(users\.name LIKE \$2\)`).
 		WithArgs(false, "test%").
 		WillReturnResult(sqlmock.NewResult(0, 3))
 

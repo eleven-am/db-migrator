@@ -448,7 +448,7 @@ func TestQueryUpdate(t *testing.T) {
 
 	t.Run("Query Update without WHERE clause", func(t *testing.T) {
 		// Set up mock expectations - update all records
-		mock.ExpectExec(`UPDATE users SET users\.is_active = \$1`).
+		mock.ExpectExec(`UPDATE users SET is_active = \$1`).
 			WithArgs(false).
 			WillReturnResult(sqlmock.NewResult(0, 10))
 
@@ -465,7 +465,7 @@ func TestQueryUpdate(t *testing.T) {
 
 	t.Run("Query Update with multiple conditions", func(t *testing.T) {
 		// Set up mock expectations
-		mock.ExpectExec(`UPDATE users SET users\.is_active = \$1, users\.name = \$2 WHERE .*`).
+		mock.ExpectExec(`UPDATE users SET is_active = \$1, name = \$2 WHERE .*`).
 			WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).
 			WillReturnResult(sqlmock.NewResult(0, 3))
 
@@ -487,7 +487,7 @@ func TestQueryUpdate(t *testing.T) {
 
 	t.Run("Query Update with no matching records", func(t *testing.T) {
 		// Set up mock expectations - no rows affected
-		mock.ExpectExec(`UPDATE users SET users\.name = \$1 WHERE .*`).
+		mock.ExpectExec(`UPDATE users SET name = \$1 WHERE .*`).
 			WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg()).
 			WillReturnResult(sqlmock.NewResult(0, 0))
 

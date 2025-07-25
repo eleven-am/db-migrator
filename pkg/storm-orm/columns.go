@@ -335,7 +335,7 @@ func (a Action) Value() interface{} {
 func (c Column[T]) Set(value T) Action {
 	return Action{
 		column:     c.String(),
-		expression: c.String() + " = ?",
+		expression: c.Name + " = ?",
 		value:      value,
 	}
 }
@@ -343,7 +343,7 @@ func (c Column[T]) Set(value T) Action {
 func (c Column[T]) SetNull() Action {
 	return Action{
 		column:     c.String(),
-		expression: c.String() + " = NULL",
+		expression: c.Name + " = NULL",
 		value:      nil,
 	}
 }
@@ -351,7 +351,7 @@ func (c Column[T]) SetNull() Action {
 func (c Column[T]) SetDefault() Action {
 	return Action{
 		column:     c.String(),
-		expression: c.String() + " = DEFAULT",
+		expression: c.Name + " = DEFAULT",
 		value:      nil,
 	}
 }
@@ -360,7 +360,7 @@ func (c Column[T]) SetDefault() Action {
 func (c NumericColumn[T]) Increment(amount T) Action {
 	return Action{
 		column:     c.String(),
-		expression: c.String() + " = " + c.String() + " + ?",
+		expression: c.Name + " = " + c.Name + " + ?",
 		value:      amount,
 	}
 }
@@ -368,7 +368,7 @@ func (c NumericColumn[T]) Increment(amount T) Action {
 func (c NumericColumn[T]) Decrement(amount T) Action {
 	return Action{
 		column:     c.String(),
-		expression: c.String() + " = " + c.String() + " - ?",
+		expression: c.Name + " = " + c.Name + " - ?",
 		value:      amount,
 	}
 }
@@ -376,7 +376,7 @@ func (c NumericColumn[T]) Decrement(amount T) Action {
 func (c NumericColumn[T]) Multiply(factor T) Action {
 	return Action{
 		column:     c.String(),
-		expression: c.String() + " = " + c.String() + " * ?",
+		expression: c.Name + " = " + c.Name + " * ?",
 		value:      factor,
 	}
 }
@@ -385,7 +385,7 @@ func (c NumericColumn[T]) Multiply(factor T) Action {
 func (c TimeColumn) SetNow() Action {
 	return Action{
 		column:     c.String(),
-		expression: c.String() + " = NOW()",
+		expression: c.Name + " = NOW()",
 		value:      nil,
 	}
 }
@@ -393,7 +393,7 @@ func (c TimeColumn) SetNow() Action {
 func (c TimeColumn) SetCurrentTimestamp() Action {
 	return Action{
 		column:     c.String(),
-		expression: c.String() + " = CURRENT_TIMESTAMP",
+		expression: c.Name + " = CURRENT_TIMESTAMP",
 		value:      nil,
 	}
 }
@@ -402,7 +402,7 @@ func (c TimeColumn) SetCurrentTimestamp() Action {
 func (c StringColumn) Concat(suffix string) Action {
 	return Action{
 		column:     c.String(),
-		expression: c.String() + " = " + c.String() + " || ?",
+		expression: c.Name + " = " + c.Name + " || ?",
 		value:      suffix,
 	}
 }
@@ -410,7 +410,7 @@ func (c StringColumn) Concat(suffix string) Action {
 func (c StringColumn) Prepend(prefix string) Action {
 	return Action{
 		column:     c.String(),
-		expression: c.String() + " = ? || " + c.String(),
+		expression: c.Name + " = ? || " + c.Name,
 		value:      prefix,
 	}
 }
@@ -418,7 +418,7 @@ func (c StringColumn) Prepend(prefix string) Action {
 func (c StringColumn) Upper() Action {
 	return Action{
 		column:     c.String(),
-		expression: c.String() + " = UPPER(" + c.String() + ")",
+		expression: c.Name + " = UPPER(" + c.Name + ")",
 		value:      nil,
 	}
 }
@@ -426,7 +426,7 @@ func (c StringColumn) Upper() Action {
 func (c StringColumn) Lower() Action {
 	return Action{
 		column:     c.String(),
-		expression: c.String() + " = LOWER(" + c.String() + ")",
+		expression: c.Name + " = LOWER(" + c.Name + ")",
 		value:      nil,
 	}
 }
@@ -435,7 +435,7 @@ func (c StringColumn) Lower() Action {
 func (c ArrayColumn[T]) Append(value T) Action {
 	return Action{
 		column:     c.String(),
-		expression: c.String() + " = array_append(" + c.String() + ", ?)",
+		expression: c.Name + " = array_append(" + c.Name + ", ?)",
 		value:      value,
 	}
 }
@@ -443,7 +443,7 @@ func (c ArrayColumn[T]) Append(value T) Action {
 func (c ArrayColumn[T]) Prepend(value T) Action {
 	return Action{
 		column:     c.String(),
-		expression: c.String() + " = array_prepend(?, " + c.String() + ")",
+		expression: c.Name + " = array_prepend(?, " + c.Name + ")",
 		value:      value,
 	}
 }
@@ -451,7 +451,7 @@ func (c ArrayColumn[T]) Prepend(value T) Action {
 func (c ArrayColumn[T]) Remove(value T) Action {
 	return Action{
 		column:     c.String(),
-		expression: c.String() + " = array_remove(" + c.String() + ", ?)",
+		expression: c.Name + " = array_remove(" + c.Name + ", ?)",
 		value:      value,
 	}
 }
@@ -459,7 +459,7 @@ func (c ArrayColumn[T]) Remove(value T) Action {
 func (c ArrayColumn[T]) Concat(values []T) Action {
 	return Action{
 		column:     c.String(),
-		expression: c.String() + " = " + c.String() + " || ?",
+		expression: c.Name + " = " + c.Name + " || ?",
 		value:      values,
 	}
 }
@@ -468,7 +468,7 @@ func (c ArrayColumn[T]) Concat(values []T) Action {
 func (c JSONBColumn) SetPath(path string, value interface{}) Action {
 	return Action{
 		column:     c.String(),
-		expression: c.String() + " = jsonb_set(" + c.String() + ", ?, ?)",
+		expression: c.Name + " = jsonb_set(" + c.Name + ", ?, ?)",
 		value:      []interface{}{"{" + path + "}", value},
 	}
 }
@@ -476,7 +476,7 @@ func (c JSONBColumn) SetPath(path string, value interface{}) Action {
 func (c JSONBColumn) RemovePath(path string) Action {
 	return Action{
 		column:     c.String(),
-		expression: c.String() + " = " + c.String() + " - ?",
+		expression: c.Name + " = " + c.Name + " - ?",
 		value:      path,
 	}
 }
@@ -484,7 +484,7 @@ func (c JSONBColumn) RemovePath(path string) Action {
 func (c JSONBColumn) Merge(jsonValue interface{}) Action {
 	return Action{
 		column:     c.String(),
-		expression: c.String() + " = " + c.String() + " || ?",
+		expression: c.Name + " = " + c.Name + " || ?",
 		value:      jsonValue,
 	}
 }
