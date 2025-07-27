@@ -132,24 +132,8 @@ func runMigrate(cmd *cobra.Command, args []string) error {
 	}
 
 	if pushToDB {
-		// Check if there are existing migration files to apply
-		pendingMigrations, err := stormClient.Migrator().Pending(ctx)
-		if err == nil && len(pendingMigrations) > 0 {
-			// Apply existing migrations
-			logger.CLI().Info("Found %d pending migration(s) to apply", len(pendingMigrations))
-			for _, migration := range pendingMigrations {
-				logger.CLI().Info("Applying migration: %s", migration.Name)
-				if err := stormClient.Migrator().Apply(ctx, migration); err != nil {
-					return fmt.Errorf("failed to apply migration %s: %w", migration.Name, err)
-				}
-				logger.CLI().Info("Successfully applied: %s", migration.Name)
-			}
-			logger.CLI().Info("All migrations applied successfully!")
-			return nil
-		}
-
-		// No existing migrations, do direct push
-		logger.CLI().Info("No existing migrations found. Generating and applying directly...")
+		// Direct push - generate and apply migration directly to database
+		logger.CLI().Info("Generating and applying migration directly to database...")
 		return executePushMigration(ctx, config, createDBIfNotExists, migratePackagePath)
 	}
 
