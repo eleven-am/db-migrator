@@ -134,7 +134,7 @@ func runMigrate(cmd *cobra.Command, args []string) error {
 	if pushToDB {
 		// Direct push - generate and apply migration directly to database
 		logger.CLI().Info("Generating and applying migration directly to database...")
-		return executePushMigration(ctx, config, createDBIfNotExists, migratePackagePath)
+		return executePushMigration(ctx, config, createDBIfNotExists, allowDestructive, migratePackagePath)
 	}
 
 	// Generate migration files only (no push)
@@ -236,7 +236,7 @@ func quoteIdentifierCLI(name string) string {
 }
 
 // executePushMigration executes migration directly using Atlas migrator
-func executePushMigration(ctx context.Context, config *storm.Config, createDBIfNotExists bool, packagePath string) error {
+func executePushMigration(ctx context.Context, config *storm.Config, createDBIfNotExists bool, allowDestructive bool, packagePath string) error {
 	logger.CLI().Info("Executing push migration...")
 
 	// Create database connection
@@ -259,7 +259,7 @@ func executePushMigration(ctx context.Context, config *storm.Config, createDBIfN
 		PackagePath:         packagePath,
 		OutputDir:           "", // No file output for push
 		DryRun:              false,
-		AllowDestructive:    false,
+		AllowDestructive:    allowDestructive,
 		PushToDB:            true, // This is the key difference
 		CreateDBIfNotExists: createDBIfNotExists,
 	}
